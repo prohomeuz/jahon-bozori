@@ -1,4 +1,4 @@
-import { useRef, useState, useMemo } from 'react'
+import { useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router'
 import { usePan } from '@/pages/home/lib/usePan'
 import { useZoom } from '@/pages/home/lib/useZoom'
@@ -8,6 +8,8 @@ import { B_FLOOR1_OVERLAYS } from '../config/bFloor1Overlays'
 import { B_FLOOR2_OVERLAYS } from '../config/bFloor2Overlays'
 import { C_FLOOR1_OVERLAYS } from '../config/cFloor1Overlays'
 import { C_FLOOR2_OVERLAYS } from '../config/cFloor2Overlays'
+import BLOCKS_DATA from '../config/blocks'
+import { ApartmentModal } from './ApartmentModal'
 
 const aImages1 = import.meta.glob('@/assets/blocks/A/1/*.jpg', { eager: true })
 const aImages2 = import.meta.glob('@/assets/blocks/A/2/*.png', { eager: true })
@@ -21,30 +23,29 @@ function getImg(map, num) {
   return entry ? entry[1].default : null
 }
 
-const COLORS = [
-  'rgba(255,120,120,0.45)',  // och qizil
-  'rgba(120,210,120,0.45)',  // och yashil
-]
 
-function PanZoomPane({ src, alt, overlay }) {
+const STATUS_COLOR = {
+  EMPTY:    { base: 'rgba(34,197,94,0.5)',  hover: 'rgba(34,197,94,0.8)'  },
+  SOLD:     { base: 'rgba(239,68,68,0.5)',  hover: 'rgba(239,68,68,0.8)'  },
+  RESERVED: { base: 'rgba(251,146,60,0.5)', hover: 'rgba(251,146,60,0.8)' },
+}
+const DEFAULT_COLOR = { base: 'rgba(148,163,184,0.4)', hover: 'rgba(148,163,184,0.7)' }
+
+function PanZoomPane({ src, alt, overlay, apartments, onSelect }) {
   const ref = useRef(null)
   const { scale } = useZoom(ref)
   const { pos } = usePan(ref)
   const [hovered, setHovered] = useState(null)
   const [copied, setCopied] = useState(null)
 
-  const polyColors = useMemo(() => {
-    if (!overlay) return []
-    return overlay.polygons.map((_, i) => COLORS[(i * 3 + Math.floor(i / 2)) % 2])
-  }, [overlay])
-
-  function handlePolyClick(p) {
-    const color = p.color
-    if (!color) return
-    navigator.clipboard.writeText(color).then(() => {
-      setCopied(color)
-      setTimeout(() => setCopied(null), 1500)
-    })
+  function handlePolyClick(p, i) {
+    if (p.color) {
+      navigator.clipboard.writeText(p.color).then(() => {
+        setCopied(p.color)
+        setTimeout(() => setCopied(null), 1500)
+      })
+    }
+    onSelect?.(i)
   }
 
   return (
@@ -69,32 +70,23 @@ function PanZoomPane({ src, alt, overlay }) {
       >
         {src ? (
           <div className="relative inline-block">
-            <img
-              src={src}
-              alt={alt}
-              draggable={false}
-              className="block max-w-full max-h-full object-contain select-none"
-            />
+            <img src={src} alt={alt} draggable={false} className="block max-w-full max-h-full object-contain select-none" />
             {overlay && (
-              <svg
-                viewBox={overlay.viewBox}
-                preserveAspectRatio="none"
-                className="absolute inset-0 w-full h-full"
-              >
+              <svg viewBox={overlay.viewBox} preserveAspectRatio="none" className="absolute inset-0 w-full h-full">
                 {overlay.polygons.map((p, i) => {
-                  const fill = p.color
-                    ? hovered === i ? p.color + 'cc' : p.color + '88'
-                    : hovered === i ? polyColors[i].replace('0.45', '0.75') : polyColors[i]
+                  const status = apartments?.[i]?.status
+                  const colors = STATUS_COLOR[status] ?? DEFAULT_COLOR
+                  const fill = hovered === i ? colors.hover : colors.base
                   return (
                     <polygon
                       key={i}
                       points={p.points}
                       fill={fill}
                       stroke="none"
-                      style={{ cursor: p.color ? 'pointer' : 'default', animationDelay: p.delay }}
+                      style={{ cursor: 'pointer' }}
                       onMouseEnter={() => setHovered(i)}
                       onMouseLeave={() => setHovered(null)}
-                      onClick={() => handlePolyClick(p)}
+                      onClick={() => handlePolyClick(p, i)}
                     />
                   )
                 })}
@@ -112,6 +104,7 @@ function PanZoomPane({ src, alt, overlay }) {
 export default function BolimPage() {
   const { blockId, num } = useParams()
   const navigate = useNavigate()
+  const [modal, setModal] = useState(null)
 
   const bolimNum = parseInt(num)
   const [map1, map2] =
@@ -127,6 +120,16 @@ export default function BolimPage() {
   const overlay1 = ovSrc1.find(o => o.bolim === bolimNum) ?? null
   const overlay2 = ovSrc2.find(o => o.bolim === bolimNum) ?? null
 
+  const apts1 = BLOCKS_DATA[blockId]?.['1-FLOOR']?.[bolimNum] ?? []
+  const apts2 = BLOCKS_DATA[blockId]?.['2-FLOOR']?.[bolimNum] ?? []
+
+  function handleSelect(floor) {
+    return (index) => {
+      const apt = (floor === 1 ? apts1 : apts2)[index]
+      if (apt) setModal({ apartment: apt, floor })
+    }
+  }
+
   return (
     <div className="fixed inset-0 flex flex-col bg-background">
       {/* Header */}
@@ -140,26 +143,39 @@ export default function BolimPage() {
         <span className="text-foreground font-semibold text-base">
           {blockId?.toUpperCase()}-BLOK — {bolimNum}-BO'LIM
         </span>
+        <div className="flex items-center gap-3 ml-auto text-xs text-muted-foreground">
+          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-green-500/70 inline-block" />Bo'sh</span>
+          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-orange-400/70 inline-block" />Bron</span>
+          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-red-500/70 inline-block" />Sotilgan</span>
+        </div>
       </div>
 
       {/* Two halves */}
       <div className="flex flex-1 min-h-0">
-        {/* 1-qavat */}
         <div className="flex flex-col flex-1 min-w-0 border-r border-primary">
           <div className="px-4 py-3 text-sm font-semibold text-primary-foreground bg-primary tracking-widest uppercase select-none shrink-0">
             1-Qavat
           </div>
-          <PanZoomPane src={img1} alt={`${bolimNum}-bo'lim 1-qavat`} overlay={overlay1} />
+          <PanZoomPane src={img1} alt={`${bolimNum}-bo'lim 1-qavat`} overlay={overlay1} apartments={apts1} onSelect={handleSelect(1)} />
         </div>
 
-        {/* 2-qavat */}
         <div className="flex flex-col flex-1 min-w-0">
           <div className="px-4 py-3 text-sm font-semibold text-primary-foreground bg-primary tracking-widest uppercase select-none shrink-0">
             2-Qavat
           </div>
-          <PanZoomPane src={img2} alt={`${bolimNum}-bo'lim 2-qavat`} overlay={overlay2} />
+          <PanZoomPane src={img2} alt={`${bolimNum}-bo'lim 2-qavat`} overlay={overlay2} apartments={apts2} onSelect={handleSelect(2)} />
         </div>
       </div>
+
+      {modal && (
+        <ApartmentModal
+          apartment={modal.apartment}
+          floor={modal.floor}
+          blockId={blockId?.toUpperCase()}
+          bolimNum={bolimNum}
+          onClose={() => setModal(null)}
+        />
+      )}
     </div>
   )
 }
