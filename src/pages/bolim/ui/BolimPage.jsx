@@ -3,20 +3,14 @@ import { useNavigate, useParams } from 'react-router'
 import { usePan } from '@/pages/home/lib/usePan'
 import { useZoom } from '@/pages/home/lib/useZoom'
 import { FLOOR1_OVERLAYS } from '../config/floor1Overlays'
-import { FLOOR2_OVERLAYS } from '../config/floor2Overlays'
 import { B_FLOOR1_OVERLAYS } from '../config/bFloor1Overlays'
-import { B_FLOOR2_OVERLAYS } from '../config/bFloor2Overlays'
 import { C_FLOOR1_OVERLAYS } from '../config/cFloor1Overlays'
-import { C_FLOOR2_OVERLAYS } from '../config/cFloor2Overlays'
 import BLOCKS_DATA from '../config/blocks'
 import { ApartmentModal } from './ApartmentModal'
 
 const aImages1 = import.meta.glob('@/assets/blocks/A/1/*.jpg', { eager: true })
-const aImages2 = import.meta.glob('@/assets/blocks/A/2/*.png', { eager: true })
 const bImages1 = import.meta.glob('@/assets/blocks/B/1/*.png', { eager: true })
-const bImages2 = import.meta.glob('@/assets/blocks/B/2/*.png', { eager: true })
 const cImages1 = import.meta.glob('@/assets/blocks/C/1/*.jpg', { eager: true })
-const cImages2 = import.meta.glob('@/assets/blocks/C/2/*.jpg', { eager: true })
 
 function getImg(map, num) {
   const entry = Object.entries(map).find(([k]) => k.split('/').pop().split('.')[0] === String(num))
@@ -94,7 +88,7 @@ function PanZoomPane({ src, alt, overlay, apartments, onSelect }) {
             )}
           </div>
         ) : (
-          <span className="text-muted-foreground text-sm">Rasm topilmadi</span>
+          <span className="text-muted-foreground text-sm">Tez kunda</span>
         )}
       </div>
     </div>
@@ -107,27 +101,24 @@ export default function BolimPage() {
   const [modal, setModal] = useState(null)
 
   const bolimNum = parseInt(num)
-  const [map1, map2] =
-    blockId === 'B' ? [bImages1, bImages2] :
-    blockId === 'C' ? [cImages1, cImages2] :
-    [aImages1, aImages2]
+
+  const map1 =
+    blockId === 'B' ? bImages1 :
+    blockId === 'C' ? cImages1 :
+    aImages1
   const img1 = getImg(map1, bolimNum)
-  const img2 = getImg(map2, bolimNum)
-  const [ovSrc1, ovSrc2] =
-    blockId === 'B' ? [B_FLOOR1_OVERLAYS, B_FLOOR2_OVERLAYS] :
-    blockId === 'C' ? [C_FLOOR1_OVERLAYS, C_FLOOR2_OVERLAYS] :
-    [FLOOR1_OVERLAYS, FLOOR2_OVERLAYS]
+
+  const ovSrc1 =
+    blockId === 'B' ? B_FLOOR1_OVERLAYS :
+    blockId === 'C' ? C_FLOOR1_OVERLAYS :
+    FLOOR1_OVERLAYS
   const overlay1 = ovSrc1.find(o => o.bolim === bolimNum) ?? null
-  const overlay2 = ovSrc2.find(o => o.bolim === bolimNum) ?? null
 
   const apts1 = BLOCKS_DATA[blockId]?.['1-FLOOR']?.[bolimNum] ?? []
-  const apts2 = BLOCKS_DATA[blockId]?.['2-FLOOR']?.[bolimNum] ?? []
 
-  function handleSelect(floor) {
-    return (index) => {
-      const apt = (floor === 1 ? apts1 : apts2)[index]
-      if (apt) setModal({ apartment: apt, floor })
-    }
+  function handleSelect(index) {
+    const apt = apts1[index]
+    if (apt) setModal({ apartment: apt, floor: 1 })
   }
 
   return (
@@ -150,27 +141,18 @@ export default function BolimPage() {
         </div>
       </div>
 
-      {/* Two halves */}
-      <div className="flex flex-1 min-h-0">
-        <div className="flex flex-col flex-1 min-w-0 border-r border-primary">
-          <div className="px-4 py-3 text-sm font-semibold text-primary-foreground bg-primary tracking-widest uppercase select-none shrink-0">
-            1-Qavat
-          </div>
-          <PanZoomPane src={img1} alt={`${bolimNum}-bo'lim 1-qavat`} overlay={overlay1} apartments={apts1} onSelect={handleSelect(1)} />
+      {/* Floor 1 — full width */}
+      <div className="flex flex-col flex-1 min-h-0">
+        <div className="px-4 py-3 text-sm font-semibold text-primary-foreground bg-primary tracking-widest uppercase select-none shrink-0">
+          1-Qavat
         </div>
-
-        <div className="flex flex-col flex-1 min-w-0">
-          <div className="px-4 py-3 text-sm font-semibold text-primary-foreground bg-primary tracking-widest uppercase select-none shrink-0">
-            2-Qavat
-          </div>
-          <PanZoomPane src={img2} alt={`${bolimNum}-bo'lim 2-qavat`} overlay={overlay2} apartments={apts2} onSelect={handleSelect(2)} />
-        </div>
+        <PanZoomPane src={img1} alt={`${bolimNum}-bo'lim 1-qavat`} overlay={overlay1} apartments={apts1} onSelect={handleSelect} />
       </div>
 
       {modal && (
         <ApartmentModal
           apartment={modal.apartment}
-          floor={modal.floor}
+          floor={1}
           blockId={blockId?.toUpperCase()}
           bolimNum={bolimNum}
           onClose={() => setModal(null)}
