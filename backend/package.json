@@ -1,0 +1,17 @@
+{
+  "name": "jahon-bozori-backend",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch --disable-warning=ExperimentalWarning src/index.js",
+    "start": "node --disable-warning=ExperimentalWarning src/index.js",
+    "seed": "node --disable-warning=ExperimentalWarning seed.js"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.14.4",
+    "dotenv": "^16.5.0",
+    "hono": "^4.7.11",
+    "node-fetch": "^3.3.2",
+    "socks-proxy-agent": "^10.0.0"
+  }
+}

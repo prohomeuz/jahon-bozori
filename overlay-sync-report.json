@@ -1,0 +1,376 @@
+{
+  "updated": [
+    {
+      "file": "src/pages/bolim/config/aRectOverlays.js",
+      "section": 4,
+      "html": "src/assets/blocks/A/1/overlay/4.html"
+    },
+    {
+      "file": "src/pages/bolim/config/aRectOverlays.js",
+      "section": 5,
+      "html": "src/assets/blocks/A/1/overlay/5.html"
+    },
+    {
+      "file": "src/pages/bolim/config/aRectOverlays.js",
+      "section": 6,
+      "html": "src/assets/blocks/A/1/overlay/6.html"
+    },
+    {
+      "file": "src/pages/bolim/config/aRectOverlays.js",
+      "section": 7,
+      "html": "src/assets/blocks/A/1/overlay/7.html"
+    },
+    {
+      "file": "src/pages/bolim/config/aRectOverlays.js",
+      "section": 8,
+      "html": "src/assets/blocks/A/1/overlay/8.html"
+    },
+    {
+      "file": "src/pages/bolim/config/aRectOverlays.js",
+      "section": 9,
+      "html": "src/assets/blocks/A/1/overlay/9.html"
+    },
+    {
+      "file": "src/pages/bolim/config/aRectOverlays.js",
+      "section": 10,
+      "html": "src/assets/blocks/A/1/overlay/10.html"
+    },
+    {
+      "file": "src/pages/bolim/config/aRectOverlays.js",
+      "section": 11,
+      "html": "src/assets/blocks/A/1/overlay/11.html"
+    },
+    {
+      "file": "src/pages/bolim/config/aFloor2RectOverlays.js",
+      "section": 4,
+      "html": "src/assets/blocks/A/2/overlays/4.html"
+    },
+    {
+      "file": "src/pages/bolim/config/aFloor2RectOverlays.js",
+      "section": 5,
+      "html": "src/assets/blocks/A/2/overlays/5.html"
+    },
+    {
+      "file": "src/pages/bolim/config/aFloor2RectOverlays.js",
+      "section": 6,
+      "html": "src/assets/blocks/A/2/overlays/6.html"
+    },
+    {
+      "file": "src/pages/bolim/config/aFloor2RectOverlays.js",
+      "section": 7,
+      "html": "src/assets/blocks/A/2/overlays/7.html"
+    },
+    {
+      "file": "src/pages/bolim/config/aFloor2RectOverlays.js",
+      "section": 8,
+      "html": "src/assets/blocks/A/2/overlays/8.html"
+    },
+    {
+      "file": "src/pages/bolim/config/bRectOverlays.js",
+      "section": 4,
+      "html": "src/assets/blocks/B/1/overlays/4.html"
+    },
+    {
+      "file": "src/pages/bolim/config/bFloor2RectOverlays.js",
+      "section": 4,
+      "html": "src/assets/blocks/B/2/overlays/4.html"
+    },
+    {
+      "file": "src/pages/bolim/config/bFloor2RectOverlays.js",
+      "section": 8,
+      "html": "src/assets/blocks/B/2/overlays/8.html"
+    },
+    {
+      "file": "src/pages/bolim/config/bFloor2RectOverlays.js",
+      "section": 10,
+      "html": "src/assets/blocks/B/2/overlays/10.html"
+    },
+    {
+      "file": "src/pages/bolim/config/cRectOverlays.js",
+      "section": 2,
+      "html": "src/assets/blocks/C/1/overlays/2.html"
+    },
+    {
+      "file": "src/pages/bolim/config/cRectOverlays.js",
+      "section": 4,
+      "html": "src/assets/blocks/C/1/overlays/4.html"
+    },
+    {
+      "file": "src/pages/bolim/config/cRectOverlays.js",
+      "section": 5,
+      "html": "src/assets/blocks/C/1/overlays/5.html"
+    },
+    {
+      "file": "src/pages/bolim/config/cRectOverlays.js",
+      "section": 6,
+      "html": "src/assets/blocks/C/1/overlays/6.html"
+    },
+    {
+      "file": "src/pages/bolim/config/cRectOverlays.js",
+      "section": 7,
+      "html": "src/assets/blocks/C/1/overlays/7.html"
+    },
+    {
+      "file": "src/pages/bolim/config/cRectOverlays.js",
+      "section": 8,
+      "html": "src/assets/blocks/C/1/overlays/8.html"
+    },
+    {
+      "file": "src/pages/bolim/config/cRectOverlays.js",
+      "section": 10,
+      "html": "src/assets/blocks/C/1/overlays/10.html"
+    },
+    {
+      "file": "src/pages/bolim/config/cRectOverlays.js",
+      "section": 11,
+      "html": "src/assets/blocks/C/1/overlays/11.html"
+    }
+  ],
+  "skipped": [
+    {
+      "file": "src/pages/bolim/config/aRectOverlays.js",
+      "section": 1,
+      "reason": "protected section (1/3)"
+    },
+    {
+      "file": "src/pages/bolim/config/aRectOverlays.js",
+      "section": 2,
+      "reason": "not in approved update list"
+    },
+    {
+      "file": "src/pages/bolim/config/aRectOverlays.js",
+      "section": 3,
+      "reason": "protected section (1/3)"
+    },
+    {
+      "file": "src/pages/bolim/config/aFloor2RectOverlays.js",
+      "section": 1,
+      "reason": "protected section (1/3)"
+    },
+    {
+      "file": "src/pages/bolim/config/aFloor2RectOverlays.js",
+      "section": 2,
+      "reason": "not in approved update list"
+    },
+    {
+      "file": "src/pages/bolim/config/aFloor2RectOverlays.js",
+      "section": 3,
+      "reason": "protected section (1/3)"
+    },
+    {
+      "file": "src/pages/bolim/config/aFloor2RectOverlays.js",
+      "section": 9,
+      "reason": "missing id in html: A-9-201"
+    },
+    {
+      "file": "src/pages/bolim/config/aFloor2RectOverlays.js",
+      "section": 10,
+      "reason": "not in approved update list"
+    },
+    {
+      "file": "src/pages/bolim/config/aFloor2RectOverlays.js",
+      "section": 11,
+      "reason": "not in approved update list"
+    },
+    {
+      "file": "src/pages/bolim/config/bRectOverlays.js",
+      "section": 1,
+      "reason": "protected section (1/3)"
+    },
+    {
+      "file": "src/pages/bolim/config/bRectOverlays.js",
+      "section": 2,
+      "reason": "not in approved update list"
+    },
+    {
+      "file": "src/pages/bolim/config/bRectOverlays.js",
+      "section": 3,
+      "reason": "protected section (1/3)"
+    },
+    {
+      "file": "src/pages/bolim/config/bRectOverlays.js",
+      "section": 5,
+      "reason": "not in approved update list"
+    },
+    {
+      "file": "src/pages/bolim/config/bRectOverlays.js",
+      "section": 6,
+      "reason": "not in approved update list"
+    },
+    {
+      "file": "src/pages/bolim/config/bRectOverlays.js",
+      "section": 7,
+      "reason": "not in approved update list"
+    },
+    {
+      "file": "src/pages/bolim/config/bRectOverlays.js",
+      "section": 8,
+      "reason": "not in approved update list"
+    },
+    {
+      "file": "src/pages/bolim/config/bRectOverlays.js",
+      "section": 9,
+      "reason": "not in approved update list"
+    },
+    {
+      "file": "src/pages/bolim/config/bRectOverlays.js",
+      "section": 10,
+      "reason": "not in approved update list"
+    },
+    {
+      "file": "src/pages/bolim/config/bRectOverlays.js",
+      "section": 11,
+      "reason": "not in approved update list"
+    },
+    {
+      "file": "src/pages/bolim/config/bRectOverlays.js",
+      "section": 12,
+      "reason": "not in approved update list"
+    },
+    {
+      "file": "src/pages/bolim/config/bRectOverlays.js",
+      "section": 13,
+      "reason": "not in approved update list"
+    },
+    {
+      "file": "src/pages/bolim/config/bFloor2RectOverlays.js",
+      "section": 1,
+      "reason": "protected section (1/3)"
+    },
+    {
+      "file": "src/pages/bolim/config/bFloor2RectOverlays.js",
+      "section": 2,
+      "reason": "not in approved update list"
+    },
+    {
+      "file": "src/pages/bolim/config/bFloor2RectOverlays.js",
+      "section": 3,
+      "reason": "protected section (1/3)"
+    },
+    {
+      "file": "src/pages/bolim/config/bFloor2RectOverlays.js",
+      "section": 5,
+      "reason": "not in approved update list"
+    },
+    {
+      "file": "src/pages/bolim/config/bFloor2RectOverlays.js",
+      "section": 6,
+      "reason": "not in approved update list"
+    },
+    {
+      "file": "src/pages/bolim/config/bFloor2RectOverlays.js",
+      "section": 7,
+      "reason": "not in approved update list"
+    },
+    {
+      "file": "src/pages/bolim/config/bFloor2RectOverlays.js",
+      "section": 9,
+      "reason": "not in approved update list"
+    },
+    {
+      "file": "src/pages/bolim/config/bFloor2RectOverlays.js",
+      "section": 11,
+      "reason": "not in approved update list"
+    },
+    {
+      "file": "src/pages/bolim/config/bFloor2RectOverlays.js",
+      "section": 12,
+      "reason": "not in approved update list"
+    },
+    {
+      "file": "src/pages/bolim/config/bFloor2RectOverlays.js",
+      "section": 13,
+      "reason": "not in approved update list"
+    },
+    {
+      "file": "src/pages/bolim/config/cRectOverlays.js",
+      "section": 1,
+      "reason": "protected section (1/3)"
+    },
+    {
+      "file": "src/pages/bolim/config/cRectOverlays.js",
+      "section": 3,
+      "reason": "protected section (1/3)"
+    },
+    {
+      "file": "src/pages/bolim/config/cRectOverlays.js",
+      "section": 9,
+      "reason": "not in approved update list"
+    },
+    {
+      "file": "src/pages/bolim/config/cRectOverlays.js",
+      "section": 12,
+      "reason": "not in approved update list"
+    },
+    {
+      "file": "src/pages/bolim/config/cRectOverlays.js",
+      "section": 13,
+      "reason": "not in approved update list"
+    },
+    {
+      "file": "src/pages/bolim/config/cFloor2RectOverlays.js",
+      "section": 1,
+      "reason": "protected section (1/3)"
+    },
+    {
+      "file": "src/pages/bolim/config/cFloor2RectOverlays.js",
+      "section": 2,
+      "reason": "not in approved update list"
+    },
+    {
+      "file": "src/pages/bolim/config/cFloor2RectOverlays.js",
+      "section": 3,
+      "reason": "protected section (1/3)"
+    },
+    {
+      "file": "src/pages/bolim/config/cFloor2RectOverlays.js",
+      "section": 4,
+      "reason": "not in approved update list"
+    },
+    {
+      "file": "src/pages/bolim/config/cFloor2RectOverlays.js",
+      "section": 5,
+      "reason": "not in approved update list"
+    },
+    {
+      "file": "src/pages/bolim/config/cFloor2RectOverlays.js",
+      "section": 6,
+      "reason": "not in approved update list"
+    },
+    {
+      "file": "src/pages/bolim/config/cFloor2RectOverlays.js",
+      "section": 7,
+      "reason": "not in approved update list"
+    },
+    {
+      "file": "src/pages/bolim/config/cFloor2RectOverlays.js",
+      "section": 8,
+      "reason": "not in approved update list"
+    },
+    {
+      "file": "src/pages/bolim/config/cFloor2RectOverlays.js",
+      "section": 9,
+      "reason": "not in approved update list"
+    },
+    {
+      "file": "src/pages/bolim/config/cFloor2RectOverlays.js",
+      "section": 10,
+      "reason": "not in approved update list"
+    },
+    {
+      "file": "src/pages/bolim/config/cFloor2RectOverlays.js",
+      "section": 11,
+      "reason": "not in approved update list"
+    },
+    {
+      "file": "src/pages/bolim/config/cFloor2RectOverlays.js",
+      "section": 12,
+      "reason": "not in approved update list"
+    },
+    {
+      "file": "src/pages/bolim/config/cFloor2RectOverlays.js",
+      "section": 13,
+      "reason": "not in approved update list"
+    }
+  ]
+}

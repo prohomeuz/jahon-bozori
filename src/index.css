@@ -1,17 +1,24 @@
 @import "tailwindcss";
 
+/* Hide scrollbar globally for no-scrollbar utility */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { scrollbar-width: none; ms-overflow-style: none; }
+
+@keyframes flash-row {
+  0%, 100% { background-color: transparent; }
+  50%       { background-color: rgb(253 230 138 / 0.7); }
+}
+
 @keyframes block-pulse {
-  0%, 100% { opacity: 0.2;  }
-  50%       { opacity: 0.55; }
+  0%, 100% { fill-opacity: 0.08; }
+  50%       { fill-opacity: 0.32; }
 }
 .block-pulse {
-  animation: block-pulse 4s ease-in-out infinite backwards;
+  animation: block-pulse 2s ease-in-out infinite backwards;
 }
 .floor-pulse {
   animation: block-pulse 2.5s ease-in-out infinite;
 }
-@import "tw-animate-css";
-@import "shadcn/tailwind.css";
 @import "@fontsource-variable/geist";
 
 @custom-variant dark (&:is(.dark *));
@@ -73,15 +80,6 @@
   }
   html {
     @apply font-sans;
-  }
-}
-
-@layer base {
-  * {
-    @apply border-border;
-  }
-  body {
-    @apply bg-background text-foreground;
   }
 }
 

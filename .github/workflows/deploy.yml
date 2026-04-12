@@ -1,0 +1,38 @@
+name: Deploy to Production
+
+# main branchga push yoki PR merge bo'lganda ishga tushadi
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    name: Deploy to Cantabo Server
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host:     ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key:      ${{ secrets.SSH_PRIVATE_KEY }}
+          port:     ${{ secrets.SERVER_PORT || 22 }}
+          script: |
+            set -e
+
+            echo "📦 Loyiha papkasiga o'tish..."
+            cd ${{ secrets.DEPLOY_PATH }}
+
+            echo "⬇️  Yangi kodni olish..."
+            git pull origin main
+
+            echo "🐳 Docker image build va restart..."
+            docker compose up --build -d --remove-orphans
+
+            echo "🧹 Eski image'larni tozalash..."
+            docker image prune -f
+
+            echo "✅ Deploy muvaffaqiyatli tugadi!"
+            docker compose ps

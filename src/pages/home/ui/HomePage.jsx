@@ -1,11 +1,11 @@
 import GENPLAN from '@/assets/genplan.jpg'
-import { useCallback, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { imgCache } from '@/shared/lib/imgCache'
 import { useNavigate } from 'react-router'
 import { usePan } from '../lib/usePan'
-import { useZoom } from '../lib/useZoom'
-import { Joystick } from './Joystick'
-import { ZoomControls } from './ZoomControls'
+import { useGlobalZoom } from '@/shared/hooks/useGlobalZoom'
+import { useGestureGuard } from '@/shared/hooks/useGestureGuard'
+import { AdminButton } from '@/shared/ui/AdminButton'
 
 const BLOCKS = [
   {
@@ -39,12 +39,9 @@ export default function HomePage() {
   const [imgLoaded, setImgLoaded] = useState(() => imgCache.has('genplan'))
   const navigate = useNavigate()
 
-  const { scale, zoomIn, zoomOut } = useZoom(containerRef)
-  const { pos, applyDelta } = usePan(containerRef)
-
-  const onJoystickMove = useCallback((dx, dy) => {
-    applyDelta(-dx, -dy)
-  }, [applyDelta])
+  const { scale } = useGlobalZoom(containerRef)
+  const { pos } = usePan(containerRef)
+  const gesturedRef = useGestureGuard(containerRef)
 
   return (
     <div
@@ -52,6 +49,9 @@ export default function HomePage() {
       className="fixed inset-0 overflow-hidden bg-black"
       style={{ touchAction: 'none', cursor: 'grab' }}
     >
+      <div className="fixed top-6 right-6 z-10">
+        <AdminButton />
+      </div>
       <div
         className="relative w-full h-full"
         style={{
@@ -78,61 +78,64 @@ export default function HomePage() {
         >
           {BLOCKS.map((block) => (
             <g key={block.id}>
+              {/* Oq tashqi stroke — natural building edge highlight */}
               <polygon
                 points={block.points}
-                fill="rgba(10,10,15,0.75)"
-                stroke="rgba(30,30,30,0.7)"
-                strokeWidth={14}
+                fill="none"
+                stroke="rgba(255,255,255,0.45)"
+                strokeWidth={10}
+                strokeLinejoin="round"
+                pointerEvents="none"
+              />
+              {/* Qora ichki stroke — ingichka, aniq chegara + fill animation */}
+              <polygon
+                points={block.points}
+                fill="black"
+                stroke="rgba(0,0,0,0.75)"
+                strokeOpacity={1}
+                strokeWidth={2}
+                strokeLinejoin="round"
                 className="block-pulse"
                 style={{ cursor: 'pointer', animationDelay: block.delay }}
-                onClick={() => navigate(`/block/${block.id}`)}
+                onClick={() => { if (!gesturedRef.current) navigate(`/block/${block.id}`) }}
               />
-
-              {[6, 5, 4, 3, 2, 1].map((d) => (
-                <text
-                  key={d}
-                  x={block.textX + d * 1.2}
-                  y={block.textY + d * 1.2}
-                  textAnchor="middle"
-                  dominantBaseline="middle"
-                  fontSize={116}
-                  fontWeight="bold"
-                  fill={`rgba(0,0,0,${0.45 - d * 0.05})`}
-                  pointerEvents="none"
-                >
-                  {block.label}
-                </text>
-              ))}
-
+              {/* Tashqi oq halqa — ajralib ko'rinish uchun */}
+              <circle
+                cx={block.textX}
+                cy={block.textY}
+                r={152}
+                fill="none"
+                stroke="white"
+                strokeWidth={10}
+                opacity={0.9}
+                pointerEvents="none"
+              />
+              {/* Ichki to'q doira */}
+              <circle
+                cx={block.textX}
+                cy={block.textY}
+                r={138}
+                fill="rgba(0,0,0,0.82)"
+                pointerEvents="none"
+              />
               <text
                 x={block.textX}
                 y={block.textY}
                 textAnchor="middle"
                 dominantBaseline="middle"
-                fontSize={116}
+                fontSize={120}
                 fontWeight="bold"
+                fontFamily="ui-monospace, monospace"
                 fill="white"
-                stroke="rgba(0,0,0,0.55)"
-                strokeWidth={20}
-                strokeLinejoin="round"
-                paintOrder="stroke"
                 pointerEvents="none"
-                style={{ filter: 'drop-shadow(0 2px 6px rgba(0,0,0,0.8))' }}
               >
-                {block.label}
+                {block.id}
               </text>
             </g>
           ))}
         </svg>
       </div>
 
-      <div className="fixed bottom-6 left-6 z-10">
-        <Joystick onMove={onJoystickMove} />
-      </div>
-
-      <div className="fixed bottom-6 right-6 z-10">
-        <ZoomControls onZoomIn={zoomIn} onZoomOut={zoomOut} />
-      </div>
     </div>
   )
 }

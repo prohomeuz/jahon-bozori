@@ -1,0 +1,35 @@
+# ── Git ───────────────────────────────────────────────────────────────────────
+.git
+.github
+.gitignore
+
+# ── Dependencies — har bir stage o'zi install qiladi ─────────────────────────
+node_modules
+backend/node_modules
+
+# ── Build output — builder stage o'zi yaratadi ───────────────────────────────
+dist
+
+# ── Database — volume orqali mount bo'ladi, image ichiga kirmasin ─────────────
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+*.sqlite.backup_*
+data/
+
+# ── Environment — sever sirlar image'ga kirmaydi ─────────────────────────────
+.env
+.env.*
+backend/.env
+
+# ── Dev fayllar ───────────────────────────────────────────────────────────────
+*.local
+.DS_Store
+*.log
+
+# ── Docs va text fayllar ──────────────────────────────────────────────────────
+*.md
+CLAUDE.md
+
+# ── Python scripts ────────────────────────────────────────────────────────────
+*.py

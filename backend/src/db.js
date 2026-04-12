@@ -1,0 +1,121 @@
+import { DatabaseSync } from 'node:sqlite'
+import { join, dirname } from 'path'
+import { fileURLToPath } from 'url'
+
+const __dirname = dirname(fileURLToPath(import.meta.url))
+const dbPath = process.env.DB_PATH ?? join(__dirname, '../../db.sqlite')
+export const db = new DatabaseSync(dbPath)
+
+db.exec(`PRAGMA journal_mode = WAL`)
+db.exec(`PRAGMA foreign_keys = ON`)
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS users (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    username   TEXT NOT NULL UNIQUE,
+    password   TEXT NOT NULL,
+    role       TEXT NOT NULL CHECK(role IN ('admin', 'salesmanager')),
+    name       TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS apartments (
+    id      TEXT PRIMARY KEY,
+    block   TEXT NOT NULL,
+    bolim   INTEGER NOT NULL,
+    floor   INTEGER NOT NULL,
+    size    REAL NOT NULL,
+    status  TEXT NOT NULL DEFAULT 'EMPTY',
+    notes   TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS bookings (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    apartment_id TEXT NOT NULL REFERENCES apartments(id),
+    user_id      INTEGER REFERENCES users(id),
+    type         TEXT NOT NULL CHECK(type IN ('bron', 'sotish')),
+    ism          TEXT NOT NULL,
+    familiya     TEXT NOT NULL,
+    boshlangich  TEXT NOT NULL,
+    oylar        INTEGER NOT NULL,
+    passport     TEXT,
+    manzil       TEXT,
+    created_at   TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+`)
+
+// Add telegram_id to users if missing (migration)
+try { db.exec(`ALTER TABLE users ADD COLUMN telegram_id TEXT`) } catch {}
+// Add user_id to bookings if missing (migration)
+try { db.exec(`ALTER TABLE bookings ADD COLUMN user_id INTEGER REFERENCES users(id)`) } catch {}
+// Add notes to apartments if missing (migration)
+try { db.exec(`ALTER TABLE apartments ADD COLUMN notes TEXT`) } catch {}
+// Add cancelled_at to bookings if missing (migration)
+try { db.exec(`ALTER TABLE bookings ADD COLUMN cancelled_at TEXT`) } catch {}
+// Add phone and passport_place to bookings if missing (migration)
+try { db.exec(`ALTER TABLE bookings ADD COLUMN phone TEXT`) } catch {}
+try { db.exec(`ALTER TABLE bookings ADD COLUMN passport_place TEXT`) } catch {}
+// Add umumiy to bookings if missing (migration)
+try { db.exec(`ALTER TABLE bookings ADD COLUMN umumiy TEXT`) } catch {}
+
+export const q = {
+  // users
+  userByUsername: db.prepare('SELECT * FROM users WHERE username=:username'),
+  userById:       db.prepare('SELECT id, username, role, name, created_at FROM users WHERE id=:id'),
+  insertUser:     db.prepare('INSERT INTO users (username, password, role, name, telegram_id) VALUES (:username, :password, :role, :name, :telegram_id)'),
+  allUsers:       db.prepare("SELECT id, username, role, name, telegram_id, created_at FROM users WHERE role='salesmanager' ORDER BY created_at DESC"),
+  userTelegramId: db.prepare('SELECT telegram_id FROM users WHERE id=:id'),
+
+  // apartments
+  apartments:   db.prepare('SELECT id AS address, size, status, notes FROM apartments WHERE block=:block AND bolim=:bolim AND floor=:floor ORDER BY id'),
+  bolims:       db.prepare('SELECT DISTINCT bolim FROM apartments WHERE block=:block ORDER BY bolim'),
+  updateStatus: db.prepare('UPDATE apartments SET status=:status WHERE id=:id'),
+  count:        db.prepare('SELECT COUNT(*) AS n FROM apartments'),
+
+  // bookings
+  insertBooking:  db.prepare('INSERT INTO bookings (apartment_id,user_id,type,ism,familiya,boshlangich,oylar,umumiy,passport,manzil,phone,passport_place) VALUES (:apartment_id,:user_id,:type,:ism,:familiya,:boshlangich,:oylar,:umumiy,:passport,:manzil,:phone,:passport_place)'),
+  lastBooking:    db.prepare('SELECT b.*, u.name AS manager_name, u.username FROM bookings b LEFT JOIN users u ON b.user_id=u.id WHERE b.id=last_insert_rowid()'),
+  bookingById:    db.prepare('SELECT b.*, u.telegram_id AS manager_tg_id, u.name AS manager_name, u.username FROM bookings b LEFT JOIN users u ON b.user_id=u.id WHERE b.id=:id'),
+  allBookings:    db.prepare('SELECT b.*, u.name AS manager_name, u.username FROM bookings b LEFT JOIN users u ON b.user_id=u.id WHERE b.cancelled_at IS NULL ORDER BY b.created_at DESC LIMIT :limit OFFSET :offset'),
+  allCancelled:   db.prepare('SELECT b.*, u.name AS manager_name, u.username FROM bookings b LEFT JOIN users u ON b.user_id=u.id WHERE b.cancelled_at IS NOT NULL ORDER BY b.cancelled_at DESC LIMIT :limit OFFSET :offset'),
+  myBookings:     db.prepare('SELECT b.*, u.name AS manager_name, u.username FROM bookings b LEFT JOIN users u ON b.user_id=u.id WHERE b.user_id=:user_id AND b.cancelled_at IS NULL ORDER BY b.created_at DESC LIMIT :limit OFFSET :offset'),
+  myCancelled:    db.prepare('SELECT b.*, u.name AS manager_name, u.username FROM bookings b LEFT JOIN users u ON b.user_id=u.id WHERE b.user_id=:user_id AND b.cancelled_at IS NOT NULL ORDER BY b.cancelled_at DESC LIMIT :limit OFFSET :offset'),
+  aptBookings:    db.prepare('SELECT b.*, u.name AS manager_name, u.username FROM bookings b LEFT JOIN users u ON b.user_id=u.id WHERE b.apartment_id=:apartment_id ORDER BY b.created_at DESC'),
+  cancelBooking:  db.prepare("UPDATE bookings SET cancelled_at=datetime('now') WHERE apartment_id=:apartment_id AND cancelled_at IS NULL"),
+
+  // dashboard stats
+  statsAll:       db.prepare("SELECT block, status, COUNT(*) AS n FROM apartments GROUP BY block, status"),
+  blockStats:     db.prepare("SELECT status, COUNT(*) AS n FROM apartments WHERE block=:block GROUP BY status"),
+  bolimStats:     db.prepare("SELECT status, COUNT(*) AS n FROM apartments WHERE block=:block AND bolim=:bolim GROUP BY status"),
+  statsUser:      db.prepare("SELECT type, COUNT(*) AS n FROM bookings WHERE user_id=:user_id GROUP BY type"),
+  bookingsCount:  db.prepare('SELECT COUNT(*) AS n FROM bookings WHERE user_id=:user_id'),
+  totalBookings:  db.prepare('SELECT COUNT(*) AS n FROM bookings'),
+
+  // detailed stats
+  statsByBolim:    db.prepare("SELECT block, bolim, status, COUNT(*) AS n FROM apartments GROUP BY block, bolim, status ORDER BY block, bolim"),
+  statsByFloor:    db.prepare("SELECT block, floor, status, COUNT(*) AS n FROM apartments GROUP BY block, floor, status ORDER BY block, floor"),
+  bookingsByDate:  db.prepare("SELECT date(created_at) AS date, block, COUNT(*) AS n FROM bookings b JOIN apartments a ON a.id=b.apartment_id WHERE b.cancelled_at IS NULL GROUP BY date, block ORDER BY date ASC LIMIT 180"),
+  managerStats:    db.prepare(`
+    SELECT u.id, u.name, u.username,
+      SUM(CASE WHEN b.type='sotish' THEN 1 ELSE 0 END) AS sotish,
+      SUM(CASE WHEN b.type='bron'   THEN 1 ELSE 0 END) AS bron,
+      COUNT(*) AS total,
+      MAX(b.created_at) AS last_at
+    FROM bookings b
+    JOIN users u ON u.id = b.user_id
+    WHERE b.cancelled_at IS NULL
+      AND (:from = '' OR b.created_at >= :from)
+      AND (:to   = '' OR b.created_at <= :to || ' 23:59:59')
+    GROUP BY b.user_id
+    ORDER BY total DESC
+  `),
+  totalByBlock:    db.prepare("SELECT COUNT(*) AS n FROM apartments WHERE block=:block"),
+  snapshotByBlock: db.prepare(`
+    SELECT
+      SUM(CASE WHEN b.type='sotish' AND b.created_at <= :endDate AND (b.cancelled_at IS NULL OR b.cancelled_at > :endDate) THEN 1 ELSE 0 END) AS sold,
+      SUM(CASE WHEN b.type='bron'   AND b.created_at <= :endDate AND (b.cancelled_at IS NULL OR b.cancelled_at > :endDate) THEN 1 ELSE 0 END) AS reserved
+    FROM bookings b
+    JOIN apartments a ON a.id = b.apartment_id
+    WHERE a.block = :block
+  `),
+}

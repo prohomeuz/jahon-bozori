@@ -1,20 +1,16 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 
-const MIN = 0.5
-const MAX = 5
 const STEP = 0.18
 const LERP = 0.07
 
-export function useZoom(containerRef) {
-  const scaleRef = useRef(1)
-  const targetRef = useRef(1)
+export function useZoom(containerRef, { initialScale = 1, onSettle } = {}) {
+  const scaleRef = useRef(initialScale)
+  const targetRef = useRef(initialScale)
   const rafRef = useRef(null)
-  const [scale, setScale] = useState(1)
-
-  const clamp = (v) => Math.min(MAX, Math.max(MIN, v))
+  const [scale, setScale] = useState(initialScale)
 
   const animateTo = useCallback((target) => {
-    targetRef.current = clamp(target)
+    targetRef.current = Math.max(0.01, target)
     if (rafRef.current) return
     const tick = () => {
       const diff = targetRef.current - scaleRef.current
@@ -22,6 +18,7 @@ export function useZoom(containerRef) {
         scaleRef.current = targetRef.current
         setScale(targetRef.current)
         rafRef.current = null
+        onSettle?.(targetRef.current)
         return
       }
       scaleRef.current += diff * LERP

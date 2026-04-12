@@ -1,0 +1,44 @@
+services:
+
+  # ── Backend: Hono.js API ───────────────────────────────────────────────────
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: jahon-bozori-backend
+    restart: unless-stopped
+    env_file: backend/.env          # JWT_SECRET, TELEGRAM_BOT_TOKEN, va boshqalar
+    environment:
+      - DB_PATH=/data/db.sqlite     # SQLite fayli saqlanadigan joy
+    volumes:
+      - ./data:/data                # ← MA'LUMOTLAR SAQLANADIGAN PAPKA (host bind mount)
+    networks:
+      - jahon-bozori-net
+    # Backend tashqariga ochilmaydi — faqat frontend container ko'radi
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3001/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # ── Frontend: React (Nginx static) ────────────────────────────────────────
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: jahon-bozori-frontend
+    restart: unless-stopped
+    ports:
+      - "8080:80"                   # Nginx Proxy Manager bu portga ulanadi
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - jahon-bozori-net
+
+# ── Network: izolyatsiya ────────────────────────────────────────────────────
+networks:
+  jahon-bozori-net:
+    driver: bridge
+    # Boshqa loyihalarga ta'sir qilmaydi — alohida network
