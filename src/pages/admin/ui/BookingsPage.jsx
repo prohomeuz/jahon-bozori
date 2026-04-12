@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { getUser, apiFetch } from '@/shared/lib/auth'
 import { useRealtimeApts } from '@/shared/hooks/useRealtimeApts'
 import { Search, Download, X, FileText } from 'lucide-react'
+import { ContractPDF } from '@/pages/bolim/ui/ContractPDF'
 
 const allBlockImgs = import.meta.glob('@/assets/blocks/**/*.{png,jpg}', { eager: true })
 
@@ -87,13 +88,8 @@ async function downloadBookingPDF(b) {
   const bolimNum = parseInt(bolimStr)
   const floor = aptStr ? parseInt(aptStr[0]) : 1
 
-  const pdfPath = import.meta.env.DEV
-    ? `../../bolim/ui/ContractPDF.jsx?t=${Date.now()}`
-    : '../../bolim/ui/ContractPDF'
-
-  const [{ pdf }, { ContractPDF }, aptRes] = await Promise.all([
+  const [{ pdf }, aptRes] = await Promise.all([
     import('@react-pdf/renderer'),
-    import(/* @vite-ignore */ pdfPath),
     apiFetch(`/api/apartments?block=${blockId}&bolim=${bolimNum}&floor=${floor}`).then(r => r.json()),
   ])
 

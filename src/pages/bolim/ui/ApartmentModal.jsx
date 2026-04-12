@@ -1,6 +1,7 @@
 import { Loader2, Mic, RotateCcw, FileText, CheckCircle } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { apiFetch, getUser } from '@/shared/lib/auth'
+import { ContractPDF } from './ContractPDF'
 
 const allBlockImgs = import.meta.glob('@/assets/blocks/**/*.{png,jpg}', { eager: true })
 
@@ -107,13 +108,7 @@ async function drawHighlight(imgSrc, rect, viewBox) {
 }
 
 async function downloadContractPDF({ apartment, floor, blockId, bolimNum, form, type, managerName }) {
-  const pdfPath = import.meta.env.DEV
-    ? `./ContractPDF.jsx?t=${Date.now()}`
-    : './ContractPDF'
-  const [{ pdf }, { ContractPDF }] = await Promise.all([
-    import('@react-pdf/renderer'),
-    import(/* @vite-ignore */ pdfPath),
-  ])
+  const { pdf } = await import('@react-pdf/renderer')
 
   // Floor plan image: blocks/{BLOCK}/{FLOOR}/{BOLIM}.png
   const rawFloorImg = loadImg(blockId, floor, bolimNum)
