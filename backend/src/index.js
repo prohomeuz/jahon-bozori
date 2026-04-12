@@ -253,8 +253,20 @@ app.post('/api/bookings/send-pdf', requireAuth, async (c) => {
     }).catch(() => {})
   }
 
-  if (booking.manager_tg_id) await sendDoc(booking.manager_tg_id)
-  if (adminTgId && adminTgId !== String(booking.manager_tg_id)) await sendDoc(adminTgId)
+  // Barcha salesmanagerlar + admin ga yuborish
+  const allManagers = q.allUsers.all()
+  const sent = new Set()
+
+  for (const manager of allManagers) {
+    if (manager.telegram_id && !sent.has(manager.telegram_id)) {
+      await sendDoc(manager.telegram_id)
+      sent.add(manager.telegram_id)
+    }
+  }
+
+  if (adminTgId && !sent.has(String(adminTgId))) {
+    await sendDoc(adminTgId)
+  }
 
   return c.json({ ok: true })
 })
