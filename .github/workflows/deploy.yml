@@ -26,7 +26,8 @@ jobs:
             cd ${{ secrets.DEPLOY_PATH }}
 
             echo "⬇️  Yangi kodni olish..."
-            git pull origin main
+            git fetch origin main
+            git reset --hard origin/main
 
             echo "🐳 Docker image build va restart..."
             docker compose build --no-cache
