@@ -29,7 +29,8 @@ jobs:
             git pull origin main
 
             echo "🐳 Docker image build va restart..."
-            docker compose up --build -d --remove-orphans
+            docker compose build --no-cache
+            docker compose up -d --remove-orphans
 
             echo "🧹 Eski image'larni tozalash..."
             docker image prune -f
