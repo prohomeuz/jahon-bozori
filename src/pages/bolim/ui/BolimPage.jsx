@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useRef, useState, useEffect } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router'
 import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import { usePan } from '@/pages/home/lib/usePan'
@@ -15,12 +15,12 @@ import { AdminButton } from '@/shared/ui/AdminButton'
 import { useRealtimeApts } from '@/shared/hooks/useRealtimeApts'
 import { apiFetch } from '@/shared/lib/auth'
 
-const aImages1 = import.meta.glob('@/assets/blocks/A/1/*.png', { eager: true })
-const aImages2 = import.meta.glob('@/assets/blocks/A/2/*.png', { eager: true })
-const bImages1 = import.meta.glob('@/assets/blocks/B/1/*.png', { eager: true })
-const bImages2 = import.meta.glob('@/assets/blocks/B/2/*.png', { eager: true })
-const cImages1 = import.meta.glob('@/assets/blocks/C/1/*.png', { eager: true })
-const cImages2 = import.meta.glob('@/assets/blocks/C/2/*.png', { eager: true })
+const aImages1 = import.meta.glob('@/assets/blocks/A/1/*.webp', { eager: true })
+const aImages2 = import.meta.glob('@/assets/blocks/A/2/*.webp', { eager: true })
+const bImages1 = import.meta.glob('@/assets/blocks/B/1/*.webp', { eager: true })
+const bImages2 = import.meta.glob('@/assets/blocks/B/2/*.webp', { eager: true })
+const cImages1 = import.meta.glob('@/assets/blocks/C/1/*.webp', { eager: true })
+const cImages2 = import.meta.glob('@/assets/blocks/C/2/*.webp', { eager: true })
 
 function getImg(map, num) {
   const entry = Object.entries(map).find(([k]) => k.split('/').pop().split('.')[0] === String(num))
@@ -33,6 +33,10 @@ function PanZoomPane({ src, alt, overlay, aptByAddress, onSelect }) {
   const { pos } = usePan(ref)
   const gesturedRef = useGestureGuard(ref)
   const [hovered, setHovered] = useState(null)
+  const [imgLoaded, setImgLoaded] = useState(false)
+
+  // Reset loading state when image source changes
+  useEffect(() => { setImgLoaded(false) }, [src])
 
   const DOT_SPACING = 28
   const offsetX = ((pos.x % DOT_SPACING) + DOT_SPACING) % DOT_SPACING
@@ -55,6 +59,20 @@ function PanZoomPane({ src, alt, overlay, aptByAddress, onSelect }) {
           willChange: 'transform',
         }}
       />
+
+      {/* Loading skeleton — rasm yuklanguncha */}
+      {src && !imgLoaded && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 pointer-events-none">
+          <div className="rounded-2xl bg-muted animate-pulse" style={{ width: '70vw', height: '55vh', maxWidth: 900 }} />
+          <div className="flex items-center gap-2 text-muted-foreground text-sm">
+            <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
+              <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="31.4" strokeDashoffset="10" strokeLinecap="round"/>
+            </svg>
+            Yuklanmoqda...
+          </div>
+        </div>
+      )}
+
       <div
         className="absolute inset-0 flex items-center justify-center"
         style={{
@@ -64,9 +82,19 @@ function PanZoomPane({ src, alt, overlay, aptByAddress, onSelect }) {
         }}
       >
         {src ? (
-          <div className="relative inline-block">
-            <img src={src} alt={alt} draggable={false} className="block max-w-full max-h-full object-contain select-none" />
-            {overlay && (
+          <div
+            className="relative inline-block transition-opacity duration-300"
+            style={{ opacity: imgLoaded ? 1 : 0 }}
+          >
+            <img
+              src={src}
+              alt={alt}
+              draggable={false}
+              className="block max-w-full max-h-full object-contain select-none"
+              onLoad={() => setImgLoaded(true)}
+            />
+            {/* Overlay faqat rasm yuklangandan keyin */}
+            {imgLoaded && overlay && (
               <svg viewBox={overlay.viewBox} preserveAspectRatio="none" className="absolute inset-0 w-full h-full">
                 {overlay.rects.map((r) => {
                   const apt = aptByAddress[r.id]

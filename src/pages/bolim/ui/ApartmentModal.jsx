@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { apiFetch, getUser } from '@/shared/lib/auth'
 import { ContractPDF } from './ContractPDF'
 
-const allBlockImgs = import.meta.glob('@/assets/blocks/**/*.{png,jpg}', { eager: true })
+const allBlockImgs = import.meta.glob('@/assets/blocks/**/*.webp', { eager: true })
 
 function loadImg(blockId, floor, bolimNum) {
   const filename = String(bolimNum)
