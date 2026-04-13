@@ -2055,6 +2055,9 @@ export default {
       ],
     },
     '2-FLOOR': {
+      2: [
+        { address: 'C-2-201', size: 18.98, status: 'EMPTY' },
+      ],
       1: [
         { address: 'C-2-101/1', size: 19.57, status: 'EMPTY' },
         { address: 'C-2-101/2', size: 19.57, status: 'EMPTY' },

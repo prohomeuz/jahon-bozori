@@ -1,4 +1,4 @@
-import { Loader2, Mic, RotateCcw, FileText, CheckCircle } from 'lucide-react'
+import { Loader2, Mic, RotateCcw, FileText, CheckCircle, Lock, ShoppingBag, Ruler, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { apiFetch, getUser } from '@/shared/lib/auth'
 import { ContractPDF } from './ContractPDF'
@@ -491,6 +491,68 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
       <Field label="Manzil" placeholder="Toshkent, Chilonzor" value={sotishForm.manzil} onChange={setSotish('manzil')} />
     </div>
   )
+
+  // RESERVED yoki SOLD bo'lsa — faqat xabar ko'rsat, form ko'rsatma
+  if (apartment.status === 'RESERVED' || apartment.status === 'SOLD') {
+    const isReserved = apartment.status === 'RESERVED'
+    const Icon = isReserved ? Lock : ShoppingBag
+    const accent = isReserved
+      ? { bg: 'bg-amber-50', ring: 'ring-amber-200', icon: 'text-amber-500', badge: 'bg-amber-100 text-amber-700 border-amber-200', label: "Bron qilingan" }
+      : { bg: 'bg-red-50',   ring: 'ring-red-200',   icon: 'text-red-500',   badge: 'bg-red-100   text-red-700   border-red-200',   label: "Sotilgan" }
+    return (
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60"
+        style={{ backdropFilter: 'blur(4px)' }}
+        onClick={(e) => e.target === e.currentTarget && onClose()}
+      >
+        <div className="relative bg-background rounded-3xl shadow-2xl border border-border flex flex-col items-center gap-5 px-8 py-10 w-full max-w-xs text-center">
+          {/* Yopish tugmasi */}
+          <button
+            onClick={onClose}
+            className="absolute top-4 right-4 w-8 h-8 rounded-full flex items-center justify-center text-muted-foreground hover:bg-muted transition-colors"
+          >
+            <X size={18} />
+          </button>
+
+          {/* Icon */}
+          <div className={`w-20 h-20 rounded-2xl flex items-center justify-center ${accent.bg} ring-2 ${accent.ring}`}>
+            <Icon size={36} className={accent.icon} strokeWidth={1.75} />
+          </div>
+
+          {/* Manzil */}
+          <div className="flex flex-col items-center gap-2">
+            <span className="text-2xl font-bold text-foreground tracking-tight">{apartment.address}</span>
+            <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${accent.badge}`}>
+              {accent.label}
+            </span>
+          </div>
+
+          {/* Maydon */}
+          {apartment.size > 0 && (
+            <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+              <Ruler size={14} />
+              <span>{apartment.size} m²</span>
+            </div>
+          )}
+
+          {/* Notes */}
+          {apartment.notes && (
+            <span className="px-3 py-1 rounded-full bg-amber-100 text-amber-800 text-xs font-semibold border border-amber-200">
+              {apartment.notes}
+            </span>
+          )}
+
+          {/* Yopish */}
+          <button
+            onClick={onClose}
+            className="w-full mt-1 py-3.5 rounded-2xl bg-muted text-sm font-semibold text-foreground hover:bg-muted/80 active:scale-[0.98] transition-all"
+          >
+            Yopish
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   if (booked) {
     return (

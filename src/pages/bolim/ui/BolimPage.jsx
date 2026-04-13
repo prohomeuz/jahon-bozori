@@ -92,10 +92,10 @@ function PanZoomPane({ src, alt, overlay, aptByAddress, onSelect }) {
                     fill: isHovered ? hoverColor : baseColor,
                     stroke: strokeColor,
                     strokeWidth: 4,
-                    style: { cursor: apt && status === 'EMPTY' ? 'pointer' : 'default' },
+                    style: { cursor: apt ? 'pointer' : 'default' },
                     onMouseEnter: () => setHovered(r.id),
                     onMouseLeave: () => setHovered(null),
-                    onClick: () => !gesturedRef.current && apt && status === 'EMPTY' && onSelect?.(apt),
+                    onClick: () => !gesturedRef.current && apt && onSelect?.(apt),
                   }
                   return r.d
                     ? <path {...sharedProps} d={r.d} />

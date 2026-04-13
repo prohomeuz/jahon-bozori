@@ -37,6 +37,7 @@ export const C_FLOOR2_RECT_OVERLAYS = {
   2: {
     viewBox: "0 0 1817 502",
     rects: [
+    { id: "C-2-201", d: "M 72,286 L 112,286 L 109,26 L 18,26 L 15,220 L 72,220 Z" },
     { id: "C-2-202", x: 115, y: 25, width: 106, height: 261 },
     { id: "C-2-203", x: 222, y: 25, width: 96, height: 182 },
     { id: "C-2-204", x: 314, y: 22, width: 100, height: 182 },

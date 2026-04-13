@@ -57,6 +57,15 @@ try { db.exec(`ALTER TABLE bookings ADD COLUMN phone TEXT`) } catch {}
 try { db.exec(`ALTER TABLE bookings ADD COLUMN passport_place TEXT`) } catch {}
 // Add umumiy to bookings if missing (migration)
 try { db.exec(`ALTER TABLE bookings ADD COLUMN umumiy TEXT`) } catch {}
+// New apartments migration — INSERT OR IGNORE, mavjud bo'lsa o'zgarmaydi
+try { db.exec(`INSERT OR IGNORE INTO apartments (id, block, bolim, floor, size, status) VALUES ('C-2-201', 'C', 2, 2, 18.98, 'EMPTY')`) } catch {}
+// Translate Chinese notes → Uzbek
+try { db.exec(`UPDATE apartments SET notes = 'Ko''cha bo''yi'           WHERE notes = '临街铺'`) } catch {}
+try { db.exec(`UPDATE apartments SET notes = 'Ko''cha bo''yi'           WHERE notes = '临街商铺'`) } catch {}
+try { db.exec(`UPDATE apartments SET notes = 'Hojatxona'               WHERE notes = '卫生间'`) } catch {}
+try { db.exec(`UPDATE apartments SET notes = 'Burchak'                  WHERE notes = '端头路口'`) } catch {}
+try { db.exec(`UPDATE apartments SET notes = 'Ko''cha bo''yi, Burchak'  WHERE notes = '临街铺、端头路口'`) } catch {}
+try { db.exec(`UPDATE apartments SET notes = 'Ko''cha bo''yi, Burchak'  WHERE notes = '临街商铺、端头路口'`) } catch {}
 
 export const q = {
   // users

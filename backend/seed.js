@@ -32,6 +32,6 @@ console.log(`Seeded ${total} apartments.`)
 
 // Default admin user
 try {
-  q.insertUser.run({ username: 'admin', password: hashPassword('admin123'), role: 'admin', name: 'Administrator' })
-  console.log('Admin user created: admin / admin123')
+  q.insertUser.run({ username: 'hengtai', password: hashPassword('hengtai6666'), role: 'admin', name: 'Admin', telegram_id: null })
+  console.log('Admin user created: hengtai / hengtai6666')
 } catch { console.log('Admin user already exists.') }
