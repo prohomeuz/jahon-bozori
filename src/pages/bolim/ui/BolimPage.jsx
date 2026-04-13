@@ -14,6 +14,7 @@ import { ApartmentModal } from './ApartmentModal'
 import { AdminButton } from '@/shared/ui/AdminButton'
 import { useRealtimeApts } from '@/shared/hooks/useRealtimeApts'
 import { apiFetch } from '@/shared/lib/auth'
+import { imgCache } from '@/shared/lib/imgCache'
 
 const aImages1 = import.meta.glob('@/assets/blocks/A/1/*.webp', { eager: true })
 const aImages2 = import.meta.glob('@/assets/blocks/A/2/*.webp', { eager: true })
@@ -27,16 +28,12 @@ function getImg(map, num) {
   return entry ? entry[1].default : null
 }
 
-function PanZoomPane({ src, alt, overlay, aptByAddress, onSelect }) {
+function PanZoomPane({ src, alt, overlay, aptByAddress, onSelect, ready }) {
   const ref = useRef(null)
   const { scale } = useGlobalZoom(ref)
   const { pos } = usePan(ref)
   const gesturedRef = useGestureGuard(ref)
   const [hovered, setHovered] = useState(null)
-  const [imgLoaded, setImgLoaded] = useState(false)
-
-  // Reset loading state when image source changes
-  useEffect(() => { setImgLoaded(false) }, [src])
 
   const DOT_SPACING = 28
   const offsetX = ((pos.x % DOT_SPACING) + DOT_SPACING) % DOT_SPACING
@@ -46,7 +43,7 @@ function PanZoomPane({ src, alt, overlay, aptByAddress, onSelect }) {
     <div
       ref={ref}
       className="relative flex-1 overflow-hidden bg-background"
-      style={{ touchAction: 'none', cursor: 'grab' }}
+      style={{ touchAction: 'none', cursor: ready ? 'grab' : 'default' }}
     >
       <div
         aria-hidden
@@ -60,41 +57,25 @@ function PanZoomPane({ src, alt, overlay, aptByAddress, onSelect }) {
         }}
       />
 
-      {/* Loading skeleton — rasm yuklanguncha */}
-      {src && !imgLoaded && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 pointer-events-none">
-          <div className="rounded-2xl bg-muted animate-pulse" style={{ width: '70vw', height: '55vh', maxWidth: 900 }} />
-          <div className="flex items-center gap-2 text-muted-foreground text-sm">
-            <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
-              <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="31.4" strokeDashoffset="10" strokeLinecap="round"/>
-            </svg>
-            Yuklanmoqda...
-          </div>
-        </div>
-      )}
-
       <div
         className="absolute inset-0 flex items-center justify-center"
         style={{
           transform: `translate(${pos.x}px, ${pos.y}px) scale(${scale})`,
           transformOrigin: 'center center',
           willChange: 'transform',
+          opacity: ready ? 1 : 0,
+          transition: 'opacity 0.25s ease',
         }}
       >
         {src ? (
-          <div
-            className="relative inline-block transition-opacity duration-300"
-            style={{ opacity: imgLoaded ? 1 : 0 }}
-          >
+          <div className="relative inline-block">
             <img
               src={src}
               alt={alt}
               draggable={false}
               className="block max-w-full max-h-full object-contain select-none"
-              onLoad={() => setImgLoaded(true)}
             />
-            {/* Overlay faqat rasm yuklangandan keyin */}
-            {imgLoaded && overlay && (
+            {overlay && (
               <svg viewBox={overlay.viewBox} preserveAspectRatio="none" className="absolute inset-0 w-full h-full">
                 {overlay.rects.map((r) => {
                   const apt = aptByAddress[r.id]
@@ -140,17 +121,43 @@ function PanZoomPane({ src, alt, overlay, aptByAddress, onSelect }) {
   )
 }
 
+// Rasm oldindan yuklab, cache'ga qo'shadi. Allaqachon yuklangan bo'lsa resolve qiladi.
+function preloadImage(src) {
+  if (!src || imgCache.has(src)) return Promise.resolve()
+  return new Promise((resolve) => {
+    const img = new Image()
+    img.onload = () => { imgCache.add(src); resolve() }
+    img.onerror = resolve
+    img.src = src
+  })
+}
+
 export default function BolimPage() {
   const { blockId, num } = useParams()
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const queryClient = useQueryClient()
   const [modal, setModal] = useState(null)
+  const [imgLoaded, setImgLoaded] = useState(false)
   const activeFloor = parseInt(searchParams.get('floor') ?? '1') === 2 ? 2 : 1
   const setActiveFloor = (f) => setSearchParams({ floor: f }, { replace: true })
   useRealtimeApts()
 
   const bolimNum = parseInt(num)
+
+  const imgMap1 = blockId === 'B' ? bImages1 : blockId === 'C' ? cImages1 : aImages1
+  const imgMap2 = blockId === 'B' ? bImages2 : blockId === 'C' ? cImages2 : aImages2
+  const img1 = getImg(imgMap1, bolimNum)
+  const img2 = getImg(imgMap2, bolimNum)
+  const currentSrc = activeFloor === 1 ? img1 : img2
+
+  // Rasm yuklash: allaqachon cache'da bo'lsa — darhol tayyor
+  useEffect(() => {
+    if (!currentSrc) { setImgLoaded(true); return }
+    if (imgCache.has(currentSrc)) { setImgLoaded(true); return }
+    setImgLoaded(false)
+    preloadImage(currentSrc).then(() => setImgLoaded(true))
+  }, [currentSrc])
 
   const { data: bolimList = [] } = useQuery({
     queryKey: ['bolims', blockId],
@@ -161,7 +168,7 @@ export default function BolimPage() {
   const prevBolim = currentIdx > 0 ? bolimList[currentIdx - 1] : null
   const nextBolim = currentIdx < bolimList.length - 1 ? bolimList[currentIdx + 1] : null
 
-  const { data: apts = [] } = useQuery({
+  const { data: apts = [], isLoading: aptsLoading } = useQuery({
     queryKey: ['apartments', blockId, bolimNum, activeFloor],
     queryFn: () => apiFetch(`/api/apartments?block=${blockId}&bolim=${bolimNum}&floor=${activeFloor}`).then(r => r.json()),
     placeholderData: keepPreviousData,
@@ -174,14 +181,12 @@ export default function BolimPage() {
     staleTime: 30_000,
   })
 
+  // Ikkalasi ham tayyor bo'lganda ko'rsatamiz
+  const ready = imgLoaded && !aptsLoading
+
   function goBolim(n) {
     navigate(`/block/${blockId}/bolim/${n}?floor=${activeFloor}`)
   }
-
-  const imgMap1 = blockId === 'B' ? bImages1 : blockId === 'C' ? cImages1 : aImages1
-  const imgMap2 = blockId === 'B' ? bImages2 : blockId === 'C' ? cImages2 : aImages2
-  const img1 = getImg(imgMap1, bolimNum)
-  const img2 = getImg(imgMap2, bolimNum)
 
   const overlay1 =
     blockId === 'A' ? (A_RECT_OVERLAYS[bolimNum] ?? null) :
@@ -204,7 +209,10 @@ export default function BolimPage() {
           onClick={() => navigate(`/block/${blockId}`)}
           className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-border text-foreground text-sm font-medium hover:bg-accent transition-colors"
         >
-          ←
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M19 12H5M12 5l-7 7 7 7"/>
+          </svg>
+          Orqaga
         </button>
         <span className="text-foreground font-semibold text-base">
           {blockId?.toUpperCase()}-BLOK — {bolimNum}-BO'LIM
@@ -217,9 +225,9 @@ export default function BolimPage() {
       {/* Legend */}
       <div className="fixed top-20 right-5 z-40 flex flex-col gap-1.5 bg-background/90 backdrop-blur-sm border border-border rounded-xl px-4 py-3 shadow-lg">
         {[
-          { color: 'bg-green-500', label: "Bo'sh",    key: 'EMPTY'    },
-          { color: 'bg-yellow-400', label: 'Bron',    key: 'RESERVED' },
-          { color: 'bg-red-500',   label: 'Sotilgan', key: 'SOLD'     },
+          { color: 'bg-green-500',  label: "Bo'sh",    key: 'EMPTY'    },
+          { color: 'bg-yellow-400', label: 'Bron',     key: 'RESERVED' },
+          { color: 'bg-red-500',    label: 'Sotilgan', key: 'SOLD'     },
         ].map(({ color, label, key }) => (
           <div key={label} className="flex items-center gap-2.5">
             <span className={`w-3.5 h-3.5 rounded-sm ${color} opacity-70 shrink-0`} />
@@ -241,7 +249,7 @@ export default function BolimPage() {
         )}
       </div>
 
-      {/* Bo'lim navigatsiya — pastda chap tomonda fixed */}
+      {/* Bo'lim navigatsiya */}
       <div className="fixed bottom-8 left-8 z-50 flex items-center rounded-2xl overflow-hidden shadow-xl border border-border bg-background">
         <button
           onClick={() => prevBolim && goBolim(prevBolim)}
@@ -262,7 +270,7 @@ export default function BolimPage() {
         </button>
       </div>
 
-      {/* Qavat tanlash — pastda o'ng tomonda fixed */}
+      {/* Qavat tanlash */}
       <div className="fixed bottom-8 right-8 z-50 flex rounded-2xl overflow-hidden shadow-xl border border-border bg-background">
         <button
           onClick={() => setActiveFloor(1)}
@@ -301,15 +309,19 @@ export default function BolimPage() {
         )}
       </div>
 
-      {/* Kontent */}
-      <PanZoomPane
-        key={activeFloor}
-        src={activeFloor === 1 ? img1 : img2}
-        alt={`${bolimNum}-bo'lim ${activeFloor}-qavat`}
-        overlay={activeFloor === 1 ? overlay1 : overlay2}
-        aptByAddress={aptByAddress}
-        onSelect={(apt) => setModal({ apartment: apt, floor: activeFloor })}
-      />
+      {/* Kontent: skeleton yoki PanZoomPane */}
+      <div className="relative flex flex-col flex-1 overflow-hidden bg-background">
+        {/* PanZoomPane — har doim mount qilingan, lekin tayyor bo'lguncha ko'rinmaydi */}
+        <PanZoomPane
+          key={activeFloor}
+          src={currentSrc}
+          alt={`${bolimNum}-bo'lim ${activeFloor}-qavat`}
+          overlay={activeFloor === 1 ? overlay1 : overlay2}
+          aptByAddress={aptByAddress}
+          onSelect={(apt) => setModal({ apartment: apt, floor: activeFloor })}
+          ready={ready}
+        />
+      </div>
 
       {modal && (
         <ApartmentModal

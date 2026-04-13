@@ -12,7 +12,31 @@ const BookingsPage  = lazy(() => import('@/pages/admin/ui/BookingsPage'))
 const ManagersPage  = lazy(() => import('@/pages/admin/ui/ManagersPage'))
 
 function Loader() {
-  return <div className="fixed inset-0 bg-black" />
+  return (
+    <div className="fixed inset-0 bg-white flex flex-col items-center justify-center gap-6">
+      <div className="text-black text-2xl font-bold tracking-[0.25em] select-none">
+        JAHON BOZORI
+      </div>
+      <div className="flex items-center gap-2">
+        {[0, 1, 2].map((i) => (
+          <div
+            key={i}
+            className="w-2 h-2 rounded-full bg-black/40"
+            style={{
+              animation: 'loader-dot 1.2s ease-in-out infinite',
+              animationDelay: `${i * 0.2}s`,
+            }}
+          />
+        ))}
+      </div>
+      <style>{`
+        @keyframes loader-dot {
+          0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+          40% { transform: scale(1); opacity: 1; }
+        }
+      `}</style>
+    </div>
+  )
 }
 
 export default function Router() {

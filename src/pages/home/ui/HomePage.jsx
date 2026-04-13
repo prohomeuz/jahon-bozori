@@ -1,4 +1,4 @@
-import GENPLAN from '@/assets/genplan.jpg'
+import GENPLAN from '@/assets/genplan.webp'
 import { useRef, useState } from 'react'
 import { imgCache } from '@/shared/lib/imgCache'
 import { useNavigate } from 'react-router'
@@ -36,7 +36,7 @@ const BLOCKS = [
 
 export default function HomePage() {
   const containerRef = useRef(null)
-  const [imgLoaded, setImgLoaded] = useState(() => imgCache.has('genplan'))
+  const [imgLoaded, setImgLoaded] = useState(() => imgCache.has(GENPLAN))
   const navigate = useNavigate()
 
   const { scale } = useGlobalZoom(containerRef)
@@ -52,6 +52,7 @@ export default function HomePage() {
       <div className="fixed top-6 right-6 z-10">
         <AdminButton />
       </div>
+
       <div
         className="relative w-full h-full"
         style={{
@@ -64,7 +65,8 @@ export default function HomePage() {
           src={GENPLAN}
           className="absolute inset-0 w-full h-full object-contain"
           draggable={false}
-          onLoad={() => { imgCache.add('genplan'); setImgLoaded(true) }}
+          fetchpriority="high"
+          onLoad={() => { imgCache.add(GENPLAN); setImgLoaded(true) }}
           style={{
             filter: imgLoaded ? 'blur(0px)' : 'blur(20px)',
             opacity: imgLoaded ? 1 : 0.4,
@@ -78,7 +80,6 @@ export default function HomePage() {
         >
           {BLOCKS.map((block) => (
             <g key={block.id}>
-              {/* Oq tashqi stroke — natural building edge highlight */}
               <polygon
                 points={block.points}
                 fill="none"
@@ -87,7 +88,6 @@ export default function HomePage() {
                 strokeLinejoin="round"
                 pointerEvents="none"
               />
-              {/* Qora ichki stroke — ingichka, aniq chegara + fill animation */}
               <polygon
                 points={block.points}
                 fill="black"
@@ -99,7 +99,6 @@ export default function HomePage() {
                 style={{ cursor: 'pointer', animationDelay: block.delay }}
                 onClick={() => { if (!gesturedRef.current) navigate(`/block/${block.id}`) }}
               />
-              {/* Tashqi oq halqa — ajralib ko'rinish uchun */}
               <circle
                 cx={block.textX}
                 cy={block.textY}
@@ -110,7 +109,6 @@ export default function HomePage() {
                 opacity={0.9}
                 pointerEvents="none"
               />
-              {/* Ichki to'q doira */}
               <circle
                 cx={block.textX}
                 cy={block.textY}
@@ -135,7 +133,6 @@ export default function HomePage() {
           ))}
         </svg>
       </div>
-
     </div>
   )
 }

@@ -21,10 +21,9 @@ export default function BlockPage() {
   const navigate = useNavigate()
   const containerRef = useRef(null)
   const blockId = id?.toUpperCase()
-  const [imgLoaded, setImgLoaded] = useState(() => imgCache.has(blockId))
-  const [hovered, setHovered] = useState(null)
-
   const meta = BLOCK_META[blockId]
+  const [imgLoaded, setImgLoaded] = useState(() => imgCache.has(meta?.image))
+  const [hovered, setHovered] = useState(null)
   const buildings = BLOCK_BUILDINGS[blockId] ?? []
   const viewBox = BLOCK_VIEW_BOX[blockId] ?? '0 0 1597 672'
 
@@ -55,7 +54,8 @@ export default function BlockPage() {
           src={meta.image}
           className="absolute inset-0 w-full h-full object-contain"
           draggable={false}
-          onLoad={() => { imgCache.add(blockId); setImgLoaded(true) }}
+          fetchpriority="high"
+          onLoad={() => { imgCache.add(meta.image); setImgLoaded(true) }}
           style={{
             filter: imgLoaded ? 'blur(0px)' : 'blur(20px)',
             opacity: imgLoaded ? 1 : 0.4,
@@ -67,12 +67,10 @@ export default function BlockPage() {
           preserveAspectRatio="xMidYMid meet"
           className="absolute inset-0 w-full h-full"
         >
-
           {buildings.map((b) => {
             const num = parseInt(b.label)
             return (
               <g key={b.id}>
-                {/* Oq tashqi stroke — natural building edge highlight */}
                 <polygon
                   points={b.points}
                   fill="none"
@@ -81,7 +79,6 @@ export default function BlockPage() {
                   strokeLinejoin="round"
                   pointerEvents="none"
                 />
-                {/* Qora ichki stroke — ingichka, aniq chegara + fill animation */}
                 <polygon
                   points={b.points}
                   fill={hovered === b.id ? 'white' : 'black'}
@@ -126,26 +123,30 @@ export default function BlockPage() {
 
       <button
         onClick={() => navigate('/')}
-        className="fixed top-6 left-6 z-10 flex items-center justify-center w-12 h-12 rounded-xl bg-black/80 text-white text-lg shadow-lg backdrop-blur-sm active:scale-95 transition-transform"
+        className="fixed top-6 left-6 z-10 flex items-center gap-2 px-4 py-3 rounded-xl bg-black/80 text-white text-sm font-medium shadow-lg backdrop-blur-sm active:scale-95 transition-transform"
       >
-        ←
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M19 12H5M12 5l-7 7 7 7"/>
+        </svg>
+        Orqaga
       </button>
+
       <div className="fixed top-6 right-6 z-10">
         <AdminButton />
       </div>
 
       <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-10 flex items-center gap-3">
-        {['A', 'B', 'C'].map((id) => (
+        {['A', 'B', 'C'].map((bid) => (
           <button
-            key={id}
-            onClick={() => navigate(`/block/${id}`)}
+            key={bid}
+            onClick={() => navigate(`/block/${bid}`)}
             className={`w-16 h-16 rounded-2xl text-xl font-bold shadow-xl transition-all active:scale-95
-              ${blockId === id
+              ${blockId === bid
                 ? 'bg-white text-black scale-110 shadow-white/20'
                 : 'bg-black/80 text-white backdrop-blur-sm'
               }`}
           >
-            {id}
+            {bid}
           </button>
         ))}
       </div>

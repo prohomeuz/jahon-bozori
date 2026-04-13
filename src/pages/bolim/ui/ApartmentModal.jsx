@@ -374,6 +374,8 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
   const [flash, setFlash] = useState(new Set())
   const [booked, setBooked] = useState(null) // { form, type }
   const [pdfLoading, setPdfLoading] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState(null)
 
   useEffect(() => {
     const handler = (e) => { if (e.key === 'Escape') onClose() }
@@ -404,39 +406,52 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
   }
 
   async function submitBooking(type) {
+    setSubmitting(true)
+    setSubmitError(null)
     const form = type === 'bron' ? bronForm : sotishForm
-    const res = await apiFetch('/api/bookings', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        apartment_id: apartment.address,
-        type,
-        ism: form.ism,
-        familiya: form.familiya,
-        boshlangich: form.boshlangich,
-        oylar: parseInt(form.oylar),
-        umumiy: form.umumiy || null,
-        phone: form.telefon || null,
-        passport: form.passport || null,
-        passport_place: form.passport_place || null,
-        manzil: form.manzil || null,
-      }),
-    })
-    const booking = await res.json()
-    onBooked?.()
-    setBooked({ form, type, bookingId: booking.id })
+    try {
+      const res = await apiFetch('/api/bookings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          apartment_id: apartment.address,
+          type,
+          ism: form.ism,
+          familiya: form.familiya,
+          boshlangich: form.boshlangich,
+          oylar: parseInt(form.oylar),
+          umumiy: form.umumiy || null,
+          phone: form.telefon || null,
+          passport: form.passport || null,
+          passport_place: form.passport_place || null,
+          manzil: form.manzil || null,
+        }),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        setSubmitError(data.error || 'Xatolik yuz berdi. Qayta urinib ko\'ring.')
+        return
+      }
+      const booking = await res.json()
+      onBooked?.()
+      setBooked({ form, type, bookingId: booking.id })
 
-    // Faqat bron uchun Telegramga PDF yuborish (background)
-    if (type === 'bron' && booking.id) {
-      const managerName = getUser()?.name ?? ''
-      downloadContractPDF({ apartment, floor, blockId, bolimNum, form, type, managerName })
-        .then(blob => {
-          const fd = new FormData()
-          fd.append('pdf', blob, `shartnoma-${apartment.address}.pdf`)
-          fd.append('booking_id', String(booking.id))
-          apiFetch('/api/bookings/send-pdf', { method: 'POST', body: fd }).catch(() => {})
-        })
-        .catch(() => {})
+      // Faqat bron uchun Telegramga PDF yuborish (background)
+      if (type === 'bron' && booking.id) {
+        const managerName = getUser()?.name ?? ''
+        downloadContractPDF({ apartment, floor, blockId, bolimNum, form, type, managerName })
+          .then(blob => {
+            const fd = new FormData()
+            fd.append('pdf', blob, `shartnoma-${apartment.address}.pdf`)
+            fd.append('booking_id', String(booking.id))
+            apiFetch('/api/bookings/send-pdf', { method: 'POST', body: fd }).catch(() => {})
+          })
+          .catch(() => {})
+      }
+    } catch {
+      setSubmitError('Internet aloqasi uzildi. Qayta urinib ko\'ring.')
+    } finally {
+      setSubmitting(false)
     }
   }
 
@@ -634,40 +649,54 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
           )}
 
           {/* Pastki bar */}
-          <div className="px-5 pb-5 pt-3 shrink-0 border-t border-border flex items-stretch gap-3">
-            <div className="flex p-1 bg-muted rounded-xl gap-1 min-w-72">
-              {[['bron', 'Bron qilish'], ['sotish', 'Sotish']].map(([key, label]) => (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => setTab(key)}
-                  className={`flex-1 px-4 py-3 rounded-lg text-sm font-semibold transition-colors ${
-                    tab === key
-                      ? 'bg-background text-foreground shadow-sm'
-                      : 'text-muted-foreground hover:text-foreground'
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-            {tab === 'bron' ? (
-              <button
-                type="submit"
-                form="bron-form"
-                className="flex-1 py-4 rounded-xl text-white font-semibold text-base active:scale-[0.98] transition-all bg-amber-500 hover:bg-amber-600"
-              >
-                Bron qilish
-              </button>
-            ) : (
-              <button
-                type="submit"
-                form="sotish-form"
-                className="flex-1 py-4 rounded-xl text-white font-semibold text-base active:scale-[0.98] transition-all bg-green-600 hover:bg-green-700"
-              >
-                Sotish
-              </button>
+          <div className="px-5 pb-5 pt-3 shrink-0 border-t border-border flex flex-col gap-2">
+            {submitError && (
+              <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm font-medium">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+                  <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+                </svg>
+                {submitError}
+              </div>
             )}
+            <div className="flex items-stretch gap-3">
+              <div className="flex p-1 bg-muted rounded-xl gap-1 min-w-72">
+                {[['bron', 'Bron qilish'], ['sotish', 'Sotish']].map(([key, label]) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => { setTab(key); setSubmitError(null) }}
+                    className={`flex-1 px-4 py-3 rounded-lg text-sm font-semibold transition-colors ${
+                      tab === key
+                        ? 'bg-background text-foreground shadow-sm'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              {tab === 'bron' ? (
+                <button
+                  type="submit"
+                  form="bron-form"
+                  disabled={submitting}
+                  className="flex-1 py-4 rounded-xl text-white font-semibold text-base active:scale-[0.98] transition-all bg-amber-500 hover:bg-amber-600 disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {submitting && <Loader2 size={18} className="animate-spin" />}
+                  {submitting ? 'Saqlanmoqda...' : 'Bron qilish'}
+                </button>
+              ) : (
+                <button
+                  type="submit"
+                  form="sotish-form"
+                  disabled={submitting}
+                  className="flex-1 py-4 rounded-xl text-white font-semibold text-base active:scale-[0.98] transition-all bg-green-600 hover:bg-green-700 disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {submitting && <Loader2 size={18} className="animate-spin" />}
+                  {submitting ? 'Saqlanmoqda...' : 'Sotish'}
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </div>

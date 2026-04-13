@@ -16,4 +16,22 @@ export default defineConfig({
       '/api': 'http://localhost:3001',
     },
   },
+  build: {
+    chunkSizeWarningLimit: 600,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules/react/') || id.includes('node_modules/react-dom/')) {
+            return 'vendor-react'
+          }
+          if (id.includes('node_modules/react-router/')) {
+            return 'vendor-router'
+          }
+          if (id.includes('node_modules/@tanstack/')) {
+            return 'vendor-query'
+          }
+        },
+      },
+    },
+  },
 })

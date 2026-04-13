@@ -134,6 +134,7 @@ app.post('/api/users', requireAuth, requireAdmin, async (c) => {
 app.get('/api/bolims', (c) => {
   const block = c.req.query('block')
   if (!block) return c.json({ error: 'block required' }, 400)
+  c.header('Cache-Control', 'public, max-age=300, stale-while-revalidate=600')
   return c.json(q.bolims.all({ block }).map(r => r.bolim))
 })
 
@@ -146,6 +147,7 @@ app.get('/api/apartments/stats', (c) => {
     : q.blockStats.all({ block })
   const result = { EMPTY: 0, RESERVED: 0, SOLD: 0 }
   rows.forEach(r => { result[r.status] = r.n })
+  c.header('Cache-Control', 'public, max-age=5, stale-while-revalidate=30')
   return c.json(result)
 })
 

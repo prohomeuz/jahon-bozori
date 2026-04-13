@@ -1,3 +1,4 @@
+@import "@fontsource-variable/geist";
 @import "tailwindcss";
 
 /* Hide scrollbar globally for no-scrollbar utility */
@@ -19,8 +20,6 @@
 .floor-pulse {
   animation: block-pulse 2.5s ease-in-out infinite;
 }
-@import "@fontsource-variable/geist";
-
 @custom-variant dark (&:is(.dark *));
 
 @layer base {
@@ -193,4 +192,15 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .block-pulse, .floor-pulse {
+    animation: none;
+    fill-opacity: 0.18;
+  }
+  * {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }
