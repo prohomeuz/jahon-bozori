@@ -57,8 +57,8 @@ try { db.exec(`ALTER TABLE bookings ADD COLUMN phone TEXT`) } catch {}
 try { db.exec(`ALTER TABLE bookings ADD COLUMN passport_place TEXT`) } catch {}
 // Add umumiy to bookings if missing (migration)
 try { db.exec(`ALTER TABLE bookings ADD COLUMN umumiy TEXT`) } catch {}
-// New apartments migration — INSERT OR IGNORE, mavjud bo'lsa o'zgarmaydi
-try { db.exec(`INSERT OR IGNORE INTO apartments (id, block, bolim, floor, size, status) VALUES ('C-2-201', 'C', 2, 2, 18.98, 'EMPTY')`) } catch {}
+// Telegram subscribers — /start bosgan har kim
+try { db.exec(`CREATE TABLE IF NOT EXISTS telegram_subscribers (chat_id TEXT PRIMARY KEY, first_name TEXT, joined_at TEXT NOT NULL DEFAULT (datetime('now')))`) } catch {}
 // Translate Chinese notes → Uzbek
 try { db.exec(`UPDATE apartments SET notes = 'Ko''cha bo''yi'           WHERE notes = '临街铺'`) } catch {}
 try { db.exec(`UPDATE apartments SET notes = 'Ko''cha bo''yi'           WHERE notes = '临街商铺'`) } catch {}
@@ -74,6 +74,10 @@ export const q = {
   insertUser:     db.prepare('INSERT INTO users (username, password, role, name, telegram_id) VALUES (:username, :password, :role, :name, :telegram_id)'),
   allUsers:       db.prepare("SELECT id, username, role, name, telegram_id, created_at FROM users WHERE role='salesmanager' ORDER BY created_at DESC"),
   userTelegramId: db.prepare('SELECT telegram_id FROM users WHERE id=:id'),
+
+  // telegram subscribers
+  upsertSubscriber:  db.prepare("INSERT OR REPLACE INTO telegram_subscribers (chat_id, first_name) VALUES (:chat_id, :first_name)"),
+  allSubscribers:    db.prepare("SELECT chat_id FROM telegram_subscribers"),
 
   // apartments
   apartments:   db.prepare('SELECT id AS address, size, status, notes FROM apartments WHERE block=:block AND bolim=:bolim AND floor=:floor ORDER BY id'),

@@ -24,19 +24,14 @@ app.post('/api/telegram/webhook', async (c) => {
   if (!token) return c.json({ ok: true })
 
   if (text === '/start') {
+    q.upsertSubscriber.run({ chat_id: String(chatId), first_name: firstName })
     await proxiedFetch(`https://api.telegram.org/bot${token}/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         chat_id: chatId,
-        text: `Tizimga xush kelibsiz, <b>${firstName}</b>!\n\nSizning Telegram ID:\n<code>${telegramId}</code>`,
+        text: `Tizimga xush kelibsiz, <b>${firstName}</b>!\n\nEndi siz barcha shartnomalardan xabardor bo'lasiz.`,
         parse_mode: 'HTML',
-        reply_markup: {
-          inline_keyboard: [[{
-            text: '📋 ID nusxalash',
-            copy_text: { text: String(telegramId) },
-          }]],
-        },
       }),
     }).catch(() => {})
   }
@@ -118,15 +113,39 @@ app.get('/api/users', requireAuth, requireAdmin, (c) => {
 })
 
 app.post('/api/users', requireAuth, requireAdmin, async (c) => {
-  const { username, password, name, telegram_id } = await c.req.json()
-  if (!username || !password || !name || !telegram_id) return c.json({ error: 'username, password, name, telegram_id majburiy' }, 400)
+  const { username, password, name } = await c.req.json()
+  if (!username || !password || !name) return c.json({ error: 'username, password, name majburiy' }, 400)
   try {
-    q.insertUser.run({ username, password: hashPassword(password), role: 'salesmanager', name, telegram_id: telegram_id ? String(telegram_id) : null })
+    q.insertUser.run({ username, password: hashPassword(password), role: 'salesmanager', name, telegram_id: null })
     return c.json({ ok: true }, 201)
   } catch (e) {
     if (e.message.includes('UNIQUE')) return c.json({ error: 'Bu username band' }, 409)
     return c.json({ error: e.message }, 500)
   }
+})
+
+app.patch('/api/users/:id', requireAuth, requireAdmin, async (c) => {
+  const id = parseInt(c.req.param('id'))
+  const { name, username, password } = await c.req.json()
+  if (!name || !username) return c.json({ error: 'name va username majburiy' }, 400)
+  try {
+    if (password) {
+      db.prepare('UPDATE users SET name=?, username=?, password=? WHERE id=?').run(name, username, hashPassword(password), id)
+    } else {
+      db.prepare('UPDATE users SET name=?, username=? WHERE id=?').run(name, username, id)
+    }
+    return c.json({ ok: true })
+  } catch (e) {
+    if (e.message.includes('UNIQUE')) return c.json({ error: 'Bu username band' }, 409)
+    return c.json({ error: e.message }, 500)
+  }
+})
+
+app.delete('/api/users/:id', requireAuth, requireAdmin, (c) => {
+  const id = parseInt(c.req.param('id'))
+  db.prepare('UPDATE bookings SET user_id=NULL WHERE user_id=?').run(id)
+  db.prepare("DELETE FROM users WHERE id=? AND role='salesmanager'").run(id)
+  return c.json({ ok: true })
 })
 
 // ─── APARTMENTS ───────────────────────────────────────────────────────────────
@@ -255,11 +274,10 @@ app.post('/api/bookings/send-pdf', requireAuth, async (c) => {
     }).catch(() => {})
   }
 
-  // Barcha salesmanagerlar + admin ga yuborish
-  const allManagers = q.allUsers.all()
+  // Barcha chat_idlar: managers + admin + subscribers
   const sent = new Set()
 
-  for (const manager of allManagers) {
+  for (const manager of q.allUsers.all()) {
     if (manager.telegram_id && !sent.has(manager.telegram_id)) {
       await sendDoc(manager.telegram_id)
       sent.add(manager.telegram_id)
@@ -267,7 +285,15 @@ app.post('/api/bookings/send-pdf', requireAuth, async (c) => {
   }
 
   if (adminTgId && !sent.has(String(adminTgId))) {
-    await sendDoc(adminTgId)
+    await sendDoc(String(adminTgId))
+    sent.add(String(adminTgId))
+  }
+
+  for (const sub of q.allSubscribers.all()) {
+    if (!sent.has(sub.chat_id)) {
+      await sendDoc(sub.chat_id)
+      sent.add(sub.chat_id)
+    }
   }
 
   return c.json({ ok: true })

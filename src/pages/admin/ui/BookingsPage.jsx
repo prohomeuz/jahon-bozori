@@ -5,7 +5,7 @@ import { useRealtimeApts } from '@/shared/hooks/useRealtimeApts'
 import { Search, Download, X, FileText } from 'lucide-react'
 import { ContractPDF } from '@/pages/bolim/ui/ContractPDF'
 
-const allBlockImgs = import.meta.glob('@/assets/blocks/**/*.{png,jpg}', { eager: true })
+const allBlockImgs = import.meta.glob('@/assets/blocks/**/*.{png,jpg,webp}', { eager: true })
 
 function loadImg(blockId, floor, bolimNum) {
   const filename = String(bolimNum)
