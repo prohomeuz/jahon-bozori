@@ -302,7 +302,8 @@ function VoiceRecorder({ onExtracted }) {
 
   async function startRecording(e) {
     e.preventDefault()
-    try { e.currentTarget.setPointerCapture(e.pointerId) } catch {}
+    // Agar yozilayotgan bo'lsa — to'xtatamiz (toggle)
+    if (status === 'recording') { stopRecording(); return }
     if (status !== 'idle' && status !== 'error') return
     setErrorMsg('')
 
@@ -378,12 +379,10 @@ function VoiceRecorder({ onExtracted }) {
     <div className="flex flex-col items-center gap-3 px-4">
       <button
         type="button"
-        onPointerDown={startRecording}
-        onPointerUp={stopRecording}
-        onPointerCancel={stopRecording}
+        onClick={startRecording}
         onContextMenu={(e) => e.preventDefault()}
         disabled={status === 'processing'}
-        style={{ touchAction: 'none', WebkitUserSelect: 'none', userSelect: 'none', WebkitTouchCallout: 'none' }}
+        style={{ touchAction: 'manipulation', WebkitUserSelect: 'none', userSelect: 'none', WebkitTouchCallout: 'none' }}
         className={`w-24 h-24 rounded-full flex items-center justify-center transition-all select-none ${
           status === 'recording'
             ? 'bg-red-500 text-white scale-110 shadow-xl shadow-red-200'
@@ -401,7 +400,7 @@ function VoiceRecorder({ onExtracted }) {
       <p className="text-sm text-center leading-tight min-h-[20px]">
         {status === 'recording'   && <span className="text-red-500 font-medium">Yozilmoqda...</span>}
         {status === 'processing'  && <span className="text-muted-foreground">Tahlil qilinmoqda...</span>}
-        {status === 'idle'        && <span className="text-muted-foreground">Bosib turing</span>}
+        {status === 'idle'        && <span className="text-muted-foreground">Bosing → gapiring → qayta bosing</span>}
         {status === 'error'       && <span className="text-red-500 text-xs">{errorMsg}</span>}
       </p>
     </div>
