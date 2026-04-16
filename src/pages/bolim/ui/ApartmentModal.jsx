@@ -394,7 +394,9 @@ function VoiceRecorder({ onExtracted }) {
             : 'bg-muted text-muted-foreground hover:bg-secondary active:scale-95'
         }`}
       >
-        {status === 'processing' ? <Loader2 size={40} className="animate-spin" /> : <Mic size={40} />}
+        {status === 'processing'
+          ? <Loader2 size={40} className="animate-spin" style={{ pointerEvents: 'none' }} />
+          : <Mic size={40} style={{ pointerEvents: 'none' }} />}
       </button>
       <p className="text-sm text-center leading-tight min-h-[20px]">
         {status === 'recording'   && <span className="text-red-500 font-medium">Yozilmoqda...</span>}

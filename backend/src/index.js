@@ -385,11 +385,15 @@ app.post('/api/voice/transcribe', async (c) => {
   const mime = file.type || 'audio/webm'
   const ext = mime.includes('mp4') || mime.includes('aac') ? 'mp4'
     : mime.includes('ogg') ? 'ogg' : 'webm'
+  // File'ni avval buffer'ga o'qib, keyin Blob sifatida yuboramiz
+  // (Hono File object'i node-fetch/native fetch bilan moslik muammosi)
+  const arrayBuf = await file.arrayBuffer()
+  const blob = new Blob([arrayBuf], { type: mime })
   const fd = new FormData()
-  fd.append('file', file, `voice.${ext}`)
+  fd.append('file', blob, `voice.${ext}`)
   fd.append('enable_diarization', 'false')
   try {
-    console.log('[voice] transcribe start, mime:', mime, 'ext:', ext, 'size:', file.size, 'UV_KEY set:', !!process.env.UV_KEY)
+    console.log('[voice] transcribe start, mime:', mime, 'ext:', ext, 'size:', blob.size, 'UV_KEY set:', !!process.env.UV_KEY)
     const res = await proxiedFetch('https://back.uzbekvoice.ai/api/v1/stt', {
       method: 'POST',
       headers: { Authorization: `Bearer ${process.env.UV_KEY}` },
@@ -398,6 +402,7 @@ app.post('/api/voice/transcribe', async (c) => {
     console.log('[voice] uzbekvoice status:', res.status)
     const raw = await res.text()
     console.log('[voice] uzbekvoice response:', raw.slice(0, 300))
+    if (!res.ok) return c.json({ error: 'transcribe_failed', text: '' }, 503)
     const data = JSON.parse(raw)
     return c.json({ text: (data?.result?.text ?? '').trim() })
   } catch (e) {
