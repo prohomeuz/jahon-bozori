@@ -105,6 +105,20 @@ async function downloadBookingPDF(b) {
     } catch { floorImgSrc = null }
   }
 
+  let logoSrc = null
+  try {
+    const res = await fetch('/logo.png')
+    if (res.ok) {
+      const blob2 = await res.blob()
+      logoSrc = await new Promise(resolve => {
+        const fr = new FileReader()
+        fr.onload = () => resolve(fr.result)
+        fr.onerror = () => resolve(null)
+        fr.readAsDataURL(blob2)
+      })
+    }
+  } catch {}
+
   const form = {
     ism: b.ism,
     familiya: b.familiya,
@@ -112,6 +126,7 @@ async function downloadBookingPDF(b) {
     boshlangich: b.boshlangich,
     oylar: String(b.oylar),
     umumiy: b.umumiy || '',
+    narx_m2: b.narx_m2 || '',
     passport: b.passport || '',
     passport_place: b.passport_place || '',
     manzil: b.manzil || '',
@@ -128,6 +143,7 @@ async function downloadBookingPDF(b) {
       type={b.type}
       date={date}
       floorImgSrc={floorImgSrc}
+      logoSrc={logoSrc}
     />
   ).toBlob()
   const url = URL.createObjectURL(blob)
@@ -145,8 +161,9 @@ const TYPE_BADGE = {
 const TYPE_LABEL = { bron: 'Bron', sotish: 'Sotish' }
 
 function BookingRow({ b, isAdmin, cancelled, onReset, scrolled }) {
-  const [loading, setLoading]       = useState(false)
-  const [pdfLoading, setPdfLoading] = useState(false)
+  const [loading, setLoading]         = useState(false)
+  const [pdfLoading, setPdfLoading]   = useState(false)
+  const [showConfirm, setShowConfirm] = useState(false)
 
   const [block, bolim, aptStr] = b.apartment_id.split('-')
   const floor = aptStr ? aptStr[0] : '?'
@@ -157,7 +174,7 @@ function BookingRow({ b, isAdmin, cancelled, onReset, scrolled }) {
   }
 
   async function handleReset() {
-    if (!confirm(`${b.apartment_id} ni bekor qilasizmi?`)) return
+    setShowConfirm(false)
     setLoading(true)
     await apiFetch(`/api/apartments/${b.apartment_id}/status`, {
       method: 'PATCH',
@@ -193,7 +210,7 @@ function BookingRow({ b, isAdmin, cancelled, onReset, scrolled }) {
       {/* Manager — faqat admin */}
       {isAdmin && (
         <td className="px-4 py-3 text-sm text-muted-foreground whitespace-nowrap">
-          {b.manager_name || b.username || '—'}
+          {b.manager_name || '—'}
         </td>
       )}
 
@@ -227,7 +244,7 @@ function BookingRow({ b, isAdmin, cancelled, onReset, scrolled }) {
           </button>
           {isAdmin && !cancelled && (
             <button
-              onClick={handleReset}
+              onClick={() => setShowConfirm(true)}
               disabled={loading}
               title="Bitimni bekor qilish"
               className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border border-border text-muted-foreground hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors disabled:opacity-40"
@@ -238,6 +255,30 @@ function BookingRow({ b, isAdmin, cancelled, onReset, scrolled }) {
           )}
         </div>
       </td>
+
+      {showConfirm && (
+        <td className="p-0 border-0">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+            onClick={e => e.target === e.currentTarget && setShowConfirm(false)}>
+            <div className="bg-background border border-border rounded-2xl p-6 w-full max-w-sm shadow-2xl">
+              <h3 className="text-lg font-bold mb-2">Bitimni bekor qilish</h3>
+              <p className="text-sm text-muted-foreground mb-6">
+                <span className="font-semibold text-foreground">{b.apartment_id}</span> xonadonining bitimi bekor qilinadi. Bu amalni qaytarib bo'lmaydi.
+              </p>
+              <div className="flex gap-2">
+                <button onClick={() => setShowConfirm(false)}
+                  className="flex-1 py-3 rounded-xl border border-border text-sm font-medium hover:bg-muted transition-colors">
+                  Bekor
+                </button>
+                <button onClick={handleReset} disabled={loading}
+                  className="flex-1 py-3 rounded-xl bg-red-600 text-white text-sm font-semibold hover:bg-red-700 transition-colors disabled:opacity-50">
+                  {loading ? 'Bekor qilinmoqda...' : 'Ha, bekor qilish'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </td>
+      )}
     </tr>
   )
 }

@@ -94,21 +94,47 @@ app.get('/api/events', async (c) => {
   )
 })
 
+// ─── ADMIN SEED ──────────────────────────────────────────────────────────────
+{
+  const admin = db.prepare("SELECT * FROM users WHERE role='admin'").get()
+  if (!admin || !admin.plain_password || admin.plain_password.length !== 8) {
+    db.exec("UPDATE bookings SET user_id=NULL")
+    db.exec("DELETE FROM users")
+    db.prepare("INSERT INTO users (username, password, plain_password, role, name, telegram_id) VALUES (?,?,?,'admin',?,NULL)")
+      .run('00001111', hashPassword('00001111'), '00001111', 'Raxmatulloh Boqijonov')
+    console.log('[seed] Admin yaratildi: Raxmatulloh Boqijonov (parol: 00001111)')
+  }
+}
+
 // ─── AUTH ────────────────────────────────────────────────────────────────────
 
 app.post('/api/auth/login', async (c) => {
-  const { username, password } = await c.req.json()
-  const user = q.userByUsername.get({ username })
-  if (!user || !verifyPassword(password, user.password))
-    return c.json({ error: "Username yoki parol noto'g'ri" }, 401)
+  const { password } = await c.req.json()
+  if (!password || password.length !== 8 || !/^\d+$/.test(password))
+    return c.json({ error: "Parol 8 ta raqamdan iborat bo'lishi kerak" }, 400)
+  const user = q.userByPlainPassword.get({ plain_password: password })
+  if (!user) return c.json({ error: "Parol noto'g'ri" }, 401)
   const token = await createToken(user)
-  return c.json({ token, user: { id: user.id, username: user.username, role: user.role, name: user.name } })
+  return c.json({ token, user: { id: user.id, role: user.role, name: user.name } })
 })
 
 app.get('/api/auth/me', requireAuth, (c) => {
-  const { sub: id, role, name } = c.get('user')
+  const { sub: id } = c.get('user')
   const user = q.userById.get({ id })
   return c.json(user ?? { error: 'Not found' })
+})
+
+app.patch('/api/auth/change-password', requireAuth, async (c) => {
+  const { sub: id, role } = c.get('user')
+  if (role === 'admin') return c.json({ error: 'Admin paroli faqat dasturchi tomonidan o\'zgartiriladi' }, 403)
+  const { currentPassword, newPassword } = await c.req.json()
+  if (!currentPassword || !newPassword) return c.json({ error: 'Maydonlar to\'ldirilmagan' }, 400)
+  if (newPassword.length !== 8 || !/^\d+$/.test(newPassword)) return c.json({ error: 'Yangi parol 8 ta raqamdan iborat bo\'lishi kerak' }, 400)
+  const user = db.prepare('SELECT * FROM users WHERE id=?').get(id)
+  if (!user || user.plain_password !== currentPassword) return c.json({ error: 'Joriy parol noto\'g\'ri' }, 400)
+  db.prepare('UPDATE users SET password=?, plain_password=?, username=? WHERE id=?')
+    .run(hashPassword(newPassword), newPassword, newPassword, id)
+  return c.json({ ok: true })
 })
 
 // ─── USERS (admin only) ───────────────────────────────────────────────────────
@@ -123,30 +149,34 @@ app.get('/api/managers', requireAuth, (c) => {
 })
 
 app.post('/api/users', requireAuth, requireAdmin, async (c) => {
-  const { username, password, name } = await c.req.json()
-  if (!username || !password || !name) return c.json({ error: 'username, password, name majburiy' }, 400)
+  const { name, password } = await c.req.json()
+  if (!name || !password) return c.json({ error: 'ism-familiya va parol majburiy' }, 400)
+  if (password.length !== 8 || !/^\d+$/.test(password)) return c.json({ error: 'Parol 8 ta raqamdan iborat bo\'lishi kerak' }, 400)
   try {
-    q.insertUser.run({ username, password: hashPassword(password), role: 'salesmanager', name, telegram_id: null })
+    q.insertUser.run({ plain_password: password, password: hashPassword(password), role: 'salesmanager', name })
     return c.json({ ok: true }, 201)
   } catch (e) {
-    if (e.message.includes('UNIQUE')) return c.json({ error: 'Bu username band' }, 409)
+    if (e.message.includes('UNIQUE')) return c.json({ error: 'Bu parol allaqachon mavjud' }, 409)
     return c.json({ error: e.message }, 500)
   }
 })
 
 app.patch('/api/users/:id', requireAuth, requireAdmin, async (c) => {
   const id = parseInt(c.req.param('id'))
-  const { name, username, password } = await c.req.json()
-  if (!name || !username) return c.json({ error: 'name va username majburiy' }, 400)
+  const { name, password } = await c.req.json()
+  if (!name) return c.json({ error: 'ism-familiya majburiy' }, 400)
   try {
     if (password) {
-      db.prepare('UPDATE users SET name=?, username=?, password=? WHERE id=?').run(name, username, hashPassword(password), id)
+      if (password.length !== 8 || !/^\d+$/.test(password)) return c.json({ error: 'Parol 8 ta raqamdan iborat bo\'lishi kerak' }, 400)
+      db.prepare('UPDATE users SET name=?, username=?, password=?, plain_password=? WHERE id=?')
+        .run(name, password, hashPassword(password), password, id)
     } else {
-      db.prepare('UPDATE users SET name=?, username=? WHERE id=?').run(name, username, id)
+      db.prepare('UPDATE users SET name=? WHERE id=?').run(name, id)
     }
+    broadcast('user_invalidated', { id })
     return c.json({ ok: true })
   } catch (e) {
-    if (e.message.includes('UNIQUE')) return c.json({ error: 'Bu username band' }, 409)
+    if (e.message.includes('UNIQUE')) return c.json({ error: 'Bu parol allaqachon mavjud' }, 409)
     return c.json({ error: e.message }, 500)
   }
 })
@@ -155,6 +185,7 @@ app.delete('/api/users/:id', requireAuth, requireAdmin, (c) => {
   const id = parseInt(c.req.param('id'))
   db.prepare('UPDATE bookings SET user_id=NULL WHERE user_id=?').run(id)
   db.prepare("DELETE FROM users WHERE id=? AND role='salesmanager'").run(id)
+  broadcast('user_invalidated', { id })
   return c.json({ ok: true })
 })
 
@@ -281,13 +312,23 @@ app.post('/api/bookings/send-pdf', requireAuth, async (c) => {
     fd.append('document', new Blob([buffer], { type: 'application/pdf' }), filename)
     fd.append('caption', caption)
     fd.append('parse_mode', 'HTML')
-    await proxiedFetch(`https://api.telegram.org/bot${token}/sendDocument`, {
-      method: 'POST', body: fd,
-    }).catch(() => {})
+    try {
+      const res = await proxiedFetch(`https://api.telegram.org/bot${token}/sendDocument`, {
+        method: 'POST', body: fd,
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!json.ok) console.error('[sendDoc] Telegram xato:', JSON.stringify(json), 'chatId:', chatId)
+      else console.log('[sendDoc] OK → chatId:', chatId)
+    } catch (e) {
+      console.error('[sendDoc] fetch xato:', e?.message, 'chatId:', chatId)
+    }
   }
 
   // Barcha chat_idlar: managers + admin + subscribers
   const sent = new Set()
+
+  const subscribers = q.allSubscribers.all()
+  console.log('[send-pdf] subscribers:', subscribers.length, '| adminTgId:', adminTgId)
 
   for (const manager of q.allUsers.all()) {
     if (manager.telegram_id && !sent.has(manager.telegram_id)) {
@@ -301,13 +342,14 @@ app.post('/api/bookings/send-pdf', requireAuth, async (c) => {
     sent.add(String(adminTgId))
   }
 
-  for (const sub of q.allSubscribers.all()) {
+  for (const sub of subscribers) {
     if (!sent.has(sub.chat_id)) {
       await sendDoc(sub.chat_id)
       sent.add(sub.chat_id)
     }
   }
 
+  console.log('[send-pdf] yuborildi:', sent.size, 'ta')
   return c.json({ ok: true })
 })
 
@@ -447,38 +489,14 @@ app.post('/api/voice/extract', async (c) => {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${process.env.GPT_KEY}` },
     body: JSON.stringify({
-      model: 'gpt-4o-mini',
+      model: 'gpt-4.1-nano',
       response_format: { type: 'json_object' },
+      temperature: 0,
+      max_tokens: 60,
       messages: [
         {
           role: 'system',
-          content: `Siz o'zbek tilida aytilgan ovozli matndan faqat 3 ta ma'lumot ajratuvchi yordamchisiz: ism, familiya, telefon raqam. Natijani JSON formatida qaytaring.
-
-QOIDALAR:
-
-1. TUZATISH: Agar inson "adashdim", "yo'q", "bunday emas", "ey bunday edi", "to'g'rilash", "xato" yoki shunga o'xshash so'zlar aytsa — o'sha maydon uchun OXIRGI aytilgan qiymatni qabul qil, avvalgisini butunlay e'tiborsiz qoldir.
-
-2. ISM VA FAMILIYA: Istalgan tartibda aytilishi mumkin. Kontekstdan aniqlashga harakat qil. O'zbek ismlari va familiyalarini to'g'ri ajrat.
-
-3. TELEFON RAQAM — quyidagi barcha formatlarni qabul qil:
-   - "90 123 45 67" → "901234567"
-   - "998 90 123 45 67" yoki "+998 90 123 45 67" → "901234567"
-   - "nol to'qson bir ikki uch..." (so'z bilan) → raqamga o'tkazib ajrat
-   - Avval operator kodi keyin raqam YOKI avval raqam keyin kod — ikkalasi ham to'g'ri
-   - Natijada faqat 9 ta raqam qaytar (998 prefikssiz), masalan: "901234567"
-
-4. FAQAT uchta kalit qaytargin: ism, familiya, telefon
-   - Topilmagan maydon uchun null qaytar
-   - Boshqa hech qanday ma'lumot (pul, muddat, manzil va h.k.) qabul qilma
-
-Misol kirish: "ismim Abdulloh, familiyam Karimov, telefon raqamim 90 123 45 67"
-Misol chiqish: {"ism": "Abdulloh", "familiya": "Karimov", "telefon": "901234567"}
-
-Misol kirish: "Telefon 998901234567, Karimov Abdulloh"
-Misol chiqish: {"ism": "Abdulloh", "familiya": "Karimov", "telefon": "901234567"}
-
-Misol kirish: "ismim Jasur, adashdim, Sardor Toshmatov, raqam 93 456 78 90"
-Misol chiqish: {"ism": "Sardor", "familiya": "Toshmatov", "telefon": "934567890"}`,
+          content: `O'zbek ovozli matndan ism va familiya ajrat. JSON: {"ism":"...","familiya":"..."}. Topilmasa "". "Adashdim/xato" desa oxirgi aytilgan qiymat to'g'ri.`,
         },
         { role: 'user', content: String(text) },
       ],

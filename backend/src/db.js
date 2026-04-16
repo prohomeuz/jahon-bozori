@@ -46,6 +46,8 @@ db.exec(`
 
 // Add telegram_id to users if missing (migration)
 try { db.exec(`ALTER TABLE users ADD COLUMN telegram_id TEXT`) } catch {}
+// Add plain_password to users if missing (migration)
+try { db.exec(`ALTER TABLE users ADD COLUMN plain_password TEXT`) } catch {}
 // Add user_id to bookings if missing (migration)
 try { db.exec(`ALTER TABLE bookings ADD COLUMN user_id INTEGER REFERENCES users(id)`) } catch {}
 // Add notes to apartments if missing (migration)
@@ -71,11 +73,11 @@ try { db.exec(`UPDATE apartments SET notes = 'Ko''cha bo''yi, Burchak'  WHERE no
 
 export const q = {
   // users
-  userByUsername: db.prepare('SELECT * FROM users WHERE username=:username'),
-  userById:       db.prepare('SELECT id, username, role, name, created_at FROM users WHERE id=:id'),
-  insertUser:     db.prepare('INSERT INTO users (username, password, role, name, telegram_id) VALUES (:username, :password, :role, :name, :telegram_id)'),
-  allUsers:       db.prepare("SELECT id, username, role, name, telegram_id, created_at FROM users WHERE role='salesmanager' ORDER BY created_at DESC"),
-  userTelegramId: db.prepare('SELECT telegram_id FROM users WHERE id=:id'),
+  userByPlainPassword: db.prepare('SELECT * FROM users WHERE plain_password=:plain_password'),
+  userById:            db.prepare('SELECT id, role, name, created_at FROM users WHERE id=:id'),
+  insertUser:          db.prepare('INSERT INTO users (username, password, plain_password, role, name, telegram_id) VALUES (:plain_password, :password, :plain_password, :role, :name, NULL)'),
+  allUsers:            db.prepare("SELECT id, name, plain_password, role, created_at FROM users WHERE role='salesmanager' ORDER BY created_at DESC"),
+  userTelegramId:      db.prepare('SELECT telegram_id FROM users WHERE id=:id'),
 
   // telegram subscribers
   upsertSubscriber:  db.prepare("INSERT OR REPLACE INTO telegram_subscribers (chat_id, first_name) VALUES (:chat_id, :first_name)"),
@@ -89,13 +91,13 @@ export const q = {
 
   // bookings
   insertBooking:  db.prepare('INSERT INTO bookings (apartment_id,user_id,type,ism,familiya,boshlangich,oylar,umumiy,passport,manzil,phone,passport_place,narx_m2) VALUES (:apartment_id,:user_id,:type,:ism,:familiya,:boshlangich,:oylar,:umumiy,:passport,:manzil,:phone,:passport_place,:narx_m2)'),
-  lastBooking:    db.prepare('SELECT b.*, u.name AS manager_name, u.username FROM bookings b LEFT JOIN users u ON b.user_id=u.id WHERE b.id=last_insert_rowid()'),
-  bookingById:    db.prepare('SELECT b.*, u.telegram_id AS manager_tg_id, u.name AS manager_name, u.username FROM bookings b LEFT JOIN users u ON b.user_id=u.id WHERE b.id=:id'),
-  allBookings:    db.prepare('SELECT b.*, u.name AS manager_name, u.username FROM bookings b LEFT JOIN users u ON b.user_id=u.id WHERE b.cancelled_at IS NULL ORDER BY b.created_at DESC LIMIT :limit OFFSET :offset'),
-  allCancelled:   db.prepare('SELECT b.*, u.name AS manager_name, u.username FROM bookings b LEFT JOIN users u ON b.user_id=u.id WHERE b.cancelled_at IS NOT NULL ORDER BY b.cancelled_at DESC LIMIT :limit OFFSET :offset'),
-  myBookings:     db.prepare('SELECT b.*, u.name AS manager_name, u.username FROM bookings b LEFT JOIN users u ON b.user_id=u.id WHERE b.user_id=:user_id AND b.cancelled_at IS NULL ORDER BY b.created_at DESC LIMIT :limit OFFSET :offset'),
-  myCancelled:    db.prepare('SELECT b.*, u.name AS manager_name, u.username FROM bookings b LEFT JOIN users u ON b.user_id=u.id WHERE b.user_id=:user_id AND b.cancelled_at IS NOT NULL ORDER BY b.cancelled_at DESC LIMIT :limit OFFSET :offset'),
-  aptBookings:    db.prepare('SELECT b.*, u.name AS manager_name, u.username FROM bookings b LEFT JOIN users u ON b.user_id=u.id WHERE b.apartment_id=:apartment_id ORDER BY b.created_at DESC'),
+  lastBooking:    db.prepare('SELECT b.*, u.name AS manager_name FROM bookings b LEFT JOIN users u ON b.user_id=u.id WHERE b.id=last_insert_rowid()'),
+  bookingById:    db.prepare('SELECT b.*, u.telegram_id AS manager_tg_id, u.name AS manager_name FROM bookings b LEFT JOIN users u ON b.user_id=u.id WHERE b.id=:id'),
+  allBookings:    db.prepare('SELECT b.*, u.name AS manager_name FROM bookings b LEFT JOIN users u ON b.user_id=u.id WHERE b.cancelled_at IS NULL ORDER BY b.created_at DESC LIMIT :limit OFFSET :offset'),
+  allCancelled:   db.prepare('SELECT b.*, u.name AS manager_name FROM bookings b LEFT JOIN users u ON b.user_id=u.id WHERE b.cancelled_at IS NOT NULL ORDER BY b.cancelled_at DESC LIMIT :limit OFFSET :offset'),
+  myBookings:     db.prepare('SELECT b.*, u.name AS manager_name FROM bookings b LEFT JOIN users u ON b.user_id=u.id WHERE b.user_id=:user_id AND b.cancelled_at IS NULL ORDER BY b.created_at DESC LIMIT :limit OFFSET :offset'),
+  myCancelled:    db.prepare('SELECT b.*, u.name AS manager_name FROM bookings b LEFT JOIN users u ON b.user_id=u.id WHERE b.user_id=:user_id AND b.cancelled_at IS NOT NULL ORDER BY b.cancelled_at DESC LIMIT :limit OFFSET :offset'),
+  aptBookings:    db.prepare('SELECT b.*, u.name AS manager_name FROM bookings b LEFT JOIN users u ON b.user_id=u.id WHERE b.apartment_id=:apartment_id ORDER BY b.created_at DESC'),
   cancelBooking:  db.prepare("UPDATE bookings SET cancelled_at=datetime('now') WHERE apartment_id=:apartment_id AND cancelled_at IS NULL"),
 
   // dashboard stats
@@ -111,7 +113,7 @@ export const q = {
   statsByFloor:    db.prepare("SELECT block, floor, status, COUNT(*) AS n FROM apartments GROUP BY block, floor, status ORDER BY block, floor"),
   bookingsByDate:  db.prepare("SELECT date(created_at) AS date, block, COUNT(*) AS n FROM bookings b JOIN apartments a ON a.id=b.apartment_id WHERE b.cancelled_at IS NULL GROUP BY date, block ORDER BY date ASC LIMIT 180"),
   managerStats:    db.prepare(`
-    SELECT u.id, u.name, u.username,
+    SELECT u.id, u.name,
       SUM(CASE WHEN b.type='sotish' THEN 1 ELSE 0 END) AS sotish,
       SUM(CASE WHEN b.type='bron'   THEN 1 ELSE 0 END) AS bron,
       COUNT(*) AS total,

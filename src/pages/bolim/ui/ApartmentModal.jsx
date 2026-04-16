@@ -107,13 +107,29 @@ async function drawHighlight(imgSrc, rect, viewBox) {
   return cropped.toDataURL('image/png')
 }
 
+async function imgToDataUrl(url) {
+  try {
+    const res = await fetch(url)
+    if (!res.ok) return null
+    const blob = await res.blob()
+    return new Promise(resolve => {
+      const fr = new FileReader()
+      fr.onload = () => resolve(fr.result)
+      fr.onerror = () => resolve(null)
+      fr.readAsDataURL(blob)
+    })
+  } catch { return null }
+}
+
 async function downloadContractPDF({ apartment, floor, blockId, bolimNum, form, type, managerName }) {
   const { pdf } = await import('@react-pdf/renderer')
   const qrImg = await import('@/assets/qrcode.png')
   const qrDataUrl = qrImg.default
 
-  // Floor plan image: blocks/{BLOCK}/{FLOOR}/{BOLIM}.png
-  const rawFloorImg = loadImg(blockId, floor, bolimNum)
+  const [logoSrc, rawFloorImg] = await Promise.all([
+    imgToDataUrl('/logo.png'),
+    Promise.resolve(loadImg(blockId, floor, bolimNum)),
+  ])
 
   // Highlight apartment on floor plan; always convert to data URL for PDF renderer
   let floorImgSrc = null
@@ -137,6 +153,7 @@ async function downloadContractPDF({ apartment, floor, blockId, bolimNum, form, 
       floorImgSrc={floorImgSrc}
       managerName={managerName}
       qrDataUrl={qrDataUrl}
+      logoSrc={logoSrc}
     />
   ).toBlob()
   return blob
@@ -243,23 +260,70 @@ function Field({ label, flash, ...props }) {
   )
 }
 
-function PhoneField({ label, value, onChange, flash }) {
-  function handleChange(e) {
-    onChange(formatUzPhone(e.target.value))
-  }
+function PhoneField({ label, value, flash, onOpenNumpad, isOpen }) {
   return (
     <div>
       <label className={LABEL}>{label}</label>
       <input
         type="tel"
-        inputMode="numeric"
-        className={INPUT + (flash ? FLASH_CLASS : '')}
-        style={FLASH_STYLE}
+        readOnly
+        className={INPUT + (flash ? FLASH_CLASS : '') + (isOpen ? ' ring-2 ring-ring border-ring' : '')}
+        style={{ ...FLASH_STYLE, cursor: 'pointer' }}
         value={value}
-        onChange={handleChange}
         placeholder="+998 90 123 45 67"
-        autoComplete="tel"
+        onPointerDown={e => { e.preventDefault(); onOpenNumpad() }}
       />
+    </div>
+  )
+}
+
+const PHONE_KEYS = ['1','2','3','4','5','6','7','8','9','','0','⌫']
+
+function getRawDigits(val) {
+  let d = String(val ?? '').replace(/\D/g, '')
+  if (d.startsWith('998')) d = d.slice(3)
+  else if (d.startsWith('0')) d = d.slice(1)
+  return d.slice(0, 9)
+}
+
+function FullPhoneNumpad({ value, onChange, onClose }) {
+  function press(k) {
+    const raw = getRawDigits(value)
+    if (k === '⌫') { onChange(formatUzPhone(raw.slice(0, -1))); return }
+    if (raw.length >= 9) return
+    const next = raw + k
+    onChange(formatUzPhone(next))
+    if (next.length === 9) onClose()
+  }
+
+  return (
+    <div className="flex flex-col h-full w-full p-3 gap-2">
+      <div className="flex items-center justify-between shrink-0">
+        <span className="text-xs font-medium text-muted-foreground">Telefon raqam</span>
+        <button type="button" onClick={onClose}
+          className="text-xs text-muted-foreground hover:text-foreground transition-colors px-1">✕</button>
+      </div>
+      <div className="flex-1 grid grid-cols-3 gap-2" style={{ gridTemplateRows: 'repeat(4, 1fr)' }}>
+        {PHONE_KEYS.map((k, i) =>
+          k === '' ? <div key={i} /> :
+          k === '⌫' ? (
+            <button key={i} type="button"
+              onPointerDown={e => { e.preventDefault(); press('⌫') }}
+              className="rounded-2xl bg-muted/60 text-muted-foreground flex items-center justify-center active:scale-95 transition-transform select-none touch-manipulation">
+              <svg width="20" height="15" viewBox="0 0 24 18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 3H20a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H9L3 9z"/>
+                <line x1="13" y1="7" x2="17" y2="11"/><line x1="17" y1="7" x2="13" y2="11"/>
+              </svg>
+            </button>
+          ) : (
+            <button key={i} type="button"
+              onPointerDown={e => { e.preventDefault(); press(k) }}
+              className="rounded-2xl bg-muted/60 text-foreground text-xl font-semibold flex items-center justify-center active:scale-95 transition-transform select-none touch-manipulation hover:bg-muted">
+              {k}
+            </button>
+          )
+        )}
+      </div>
     </div>
   )
 }
@@ -460,6 +524,7 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
   const [confirmPending, setConfirmPending] = useState(null) // 'bron' | 'sotish'
   const [showCalc, setShowCalc] = useState(false)
   const [calc, setCalc] = useState({ narxM2: '', boshlangich: '', oylar: '12', focus: 'narxM2' })
+  const [phoneTarget, setPhoneTarget] = useState(null) // null | 'bron' | 'sotish'
 
   useEffect(() => {
     apiFetch('/api/managers').then(r => r.json()).then(list => {
@@ -699,7 +764,11 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
         <div className="flex flex-col gap-4 px-5 py-4 overflow-y-auto border-r border-border" style={{ flex: '0 0 70%' }}>
           <Field label="Ism" placeholder="Abdulloh" value={bronForm.ism} onChange={setBronCap('ism')} required autoComplete="given-name" flash={flash.has('ism')} />
           <Field label="Familiya" placeholder="Karimov" value={bronForm.familiya} onChange={setBronCap('familiya')} required autoComplete="family-name" flash={flash.has('familiya')} />
-          <PhoneField label="Telefon raqam" value={bronForm.telefon} onChange={(v) => setBronForm((f) => ({ ...f, telefon: v }))} flash={flash.has('telefon')} />
+          <PhoneField label="Telefon raqam" value={bronForm.telefon}
+            flash={flash.has('telefon')}
+            isOpen={phoneTarget === 'bron'}
+            onOpenNumpad={() => setPhoneTarget(t => t === 'bron' ? null : 'bron')}
+          />
           {(bronForm.boshlangich || bronForm.narx_m2) ? (
             <div className="flex-1 rounded-2xl border-2 border-amber-200 bg-amber-50 px-5 py-4 flex flex-col justify-between">
               <div className="grid grid-cols-3 gap-4">
@@ -725,19 +794,32 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
           ) : null}
         </div>
       )}
-      <div className={`flex ${showCalc ? 'items-stretch' : 'items-center justify-center'}`} style={{ flex: '0 0 30%' }}>
-        {showCalc ? calcKeypad() : <VoiceRecorder onExtracted={handleExtracted} />}
+      <div className={`flex ${showCalc || phoneTarget === 'bron' ? 'items-stretch' : 'items-center justify-center'}`} style={{ flex: '0 0 30%' }}>
+        {showCalc
+          ? calcKeypad()
+          : phoneTarget === 'bron'
+          ? <FullPhoneNumpad
+              value={bronForm.telefon}
+              onChange={(v) => setBronForm(f => ({ ...f, telefon: v }))}
+              onClose={() => setPhoneTarget(null)}
+            />
+          : <VoiceRecorder onExtracted={handleExtracted} />
+        }
       </div>
     </div>
   )
 
   const sotishFields = (
-    <div className="flex flex-col gap-4 px-5 py-4 overflow-y-auto flex-1 min-h-0">
+    <div className="flex flex-1 min-h-0">
+      <div className="flex flex-col gap-4 px-5 py-4 overflow-y-auto border-r border-border" style={{ flex: '0 0 70%' }}>
       <div className="grid grid-cols-2 gap-4">
         <Field label="Ism" placeholder="Abdulloh" value={sotishForm.ism} onChange={setSotishCap('ism')} required autoComplete="given-name" />
         <Field label="Familiya" placeholder="Karimov" value={sotishForm.familiya} onChange={setSotishCap('familiya')} required autoComplete="family-name" />
       </div>
-      <PhoneField label="Telefon raqam" value={sotishForm.telefon} onChange={(v) => setSotishForm((f) => ({ ...f, telefon: v }))} />
+      <PhoneField label="Telefon raqam" value={sotishForm.telefon}
+        isOpen={phoneTarget === 'sotish'}
+        onOpenNumpad={() => setPhoneTarget(t => t === 'sotish' ? null : 'sotish')}
+      />
       <div className="grid grid-cols-2 gap-4">
         <MoneyField label="Boshlang'ich to'lov" value={sotishForm.boshlangich} onChange={(v) => setSotishForm((f) => ({ ...f, boshlangich: v }))} />
         <MonthsField value={sotishForm.oylar} onChange={(v) => setSotishForm((f) => ({ ...f, oylar: v }))} />
@@ -748,6 +830,16 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
         <Field label="Passport berilgan joy" placeholder="Toshkent sh. IIB" value={sotishForm.passport_place} onChange={setSotish('passport_place')} />
       </div>
       <Field label="Manzil" placeholder="Toshkent, Chilonzor" value={sotishForm.manzil} onChange={setSotish('manzil')} />
+      </div>
+      <div className="flex items-stretch" style={{ flex: '0 0 30%' }}>
+        {phoneTarget === 'sotish' && (
+          <FullPhoneNumpad
+            value={sotishForm.telefon}
+            onChange={(v) => setSotishForm(f => ({ ...f, telefon: v }))}
+            onClose={() => setPhoneTarget(null)}
+          />
+        )}
+      </div>
     </div>
   )
 

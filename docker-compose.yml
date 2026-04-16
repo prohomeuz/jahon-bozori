@@ -12,6 +12,8 @@ services:
       - DB_PATH=/data/db.sqlite     # SQLite fayli saqlanadigan joy
     volumes:
       - ./data:/data                # ← MA'LUMOTLAR SAQLANADIGAN PAPKA (host bind mount)
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     dns:
       - 8.8.8.8
       - 1.1.1.1

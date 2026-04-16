@@ -61,6 +61,10 @@ export function useRealtimeApts() {
         queryClient.invalidateQueries({ queryKey: ['bookings'] })
         queryClient.invalidateQueries({ queryKey: ['dashboard'] })
       }
+
+      if (event === 'user_invalidated') {
+        window.dispatchEvent(new CustomEvent('user-invalidated', { detail: JSON.parse(rawData) }))
+      }
     }
 
     async function loop() {

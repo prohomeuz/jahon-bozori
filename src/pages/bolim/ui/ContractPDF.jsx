@@ -73,7 +73,7 @@ const s = StyleSheet.create({
   /* Breadcrumb */
   breadcrumb: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' },
   crumbText: {
-    fontFamily: 'Courier-Bold',
+    fontFamily: 'Helvetica-Bold',
     fontSize: 16,
     color: P.fg,
     letterSpacing: 0.5,
@@ -182,34 +182,37 @@ const s = StyleSheet.create({
   },
   benefitsTitle: {
     fontFamily: 'Helvetica-Bold',
-    fontSize: 8,
+    fontSize: 13,
     color: P.fg,
     marginBottom: 4,
   },
   benefitRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
+    alignItems: 'flex-start',
+    gap: 8,
+    minHeight: 20,
   },
   benefitNum: {
-    width: 14,
-    height: 14,
-    borderRadius: 7,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
     backgroundColor: P.amber,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
+    marginTop: 1,
   },
   benefitNumText: {
     fontFamily: 'Helvetica-Bold',
-    fontSize: 6.5,
+    fontSize: 9,
     color: P.white,
   },
   benefitText: {
     flex: 1,
-    fontSize: 7.5,
+    fontSize: 12,
     color: P.fg,
     lineHeight: 1.5,
+    paddingTop: 2,
   },
   benefitBold: {
     fontFamily: 'Helvetica-Bold',
@@ -255,7 +258,7 @@ function Cell({ label, value, last = false, top = false }) {
 /* ── Main component ───────────────────────────────────── */
 export function ContractPDF({
   apartment, floor, blockId, bolimNum,
-  form, type, date, floorImgSrc, managerName, qrDataUrl,
+  form, type, date, floorImgSrc, managerName, qrDataUrl, logoSrc,
 }) {
   const [, , apt] = (apartment.address ?? '').split('-')
   const aptNum = apt ?? apartment.address
@@ -266,9 +269,15 @@ export function ContractPDF({
     : '—'
 
   const rawUmumiy = String(form.umumiy || '').replace(/\s/g, '')
+  const rawNarxM2 = String(form.narx_m2 || '').replace(/\s/g, '')
+  const calcUmumiy = !rawUmumiy && rawNarxM2 && apartment.size > 0
+    ? Math.round(Number(rawNarxM2) * apartment.size)
+    : null
   const umumiyFmt = rawUmumiy
     ? Number(rawUmumiy).toLocaleString('ru-RU') + ' USD'
-    : '—'
+    : calcUmumiy
+      ? calcUmumiy.toLocaleString('ru-RU') + ' USD'
+      : '—'
 
   const narxPerM2 =
     rawNum && apartment.size > 0
@@ -319,12 +328,10 @@ export function ContractPDF({
             <Text style={s.benefitsTitle}>Agar JAHON BOZORIdan do'kon xarid qilsam nimalar yutaman?</Text>
             {[
               ['Ajoyib joylashuv', 'Viloyat va vodiyning markazi'],
-              ['Keng qamrovli transport tarmog\'i', 'Logistika arteriyasi'],
-              ['Xitoyga to\'g\'ridan-to\'g\'ri ulanish', null],
-              ['Keng avto turargohlar', 'tirbandlik bilan xayrlashing'],
+              ['Keng qamrovli transport tarmog\'i', 'Logistika markazi'],
+              ['Yevropa va Osiyoga to\'g\'ridan to\'g\'ri ulanish', 'Import va Export'],
               ['Xavfsiz va qulay harakatlanish kafolati', null],
-              ['Yong\'indan mutlaq himoya', null],
-              ['Devalvatsiyaga qarshi kurashish va ijara egalari bilan xayrlashish uchun do\'kon sotib oling', null],
+              ['Yong\'indan mutlaq himoya', 'hududda yong\'indan himoyalanish uchun barcha choralar ko\'rilgan'],
             ].map(([bold, rest], i) => (
               <View key={i} style={s.benefitRow}>
                 <View style={s.benefitNum}>
@@ -345,7 +352,10 @@ export function ContractPDF({
 
           {/* Brand */}
           <View>
-            <Text style={s.logoName}>JAHON BOZORI</Text>
+            {logoSrc
+              ? <Image src={logoSrc} style={{ width: 138, height: 90, objectFit: 'contain' }} />
+              : <Text style={s.logoName}>JAHON BOZORI</Text>
+            }
           </View>
 
           <View style={s.divider} />
