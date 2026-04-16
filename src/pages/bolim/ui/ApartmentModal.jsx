@@ -383,7 +383,7 @@ function VoiceRecorder({ onExtracted }) {
         onPointerCancel={stopRecording}
         onContextMenu={(e) => e.preventDefault()}
         disabled={status === 'processing'}
-        style={{ touchAction: 'none', WebkitUserSelect: 'none', userSelect: 'none' }}
+        style={{ touchAction: 'none', WebkitUserSelect: 'none', userSelect: 'none', WebkitTouchCallout: 'none' }}
         className={`w-24 h-24 rounded-full flex items-center justify-center transition-all select-none ${
           status === 'recording'
             ? 'bg-red-500 text-white scale-110 shadow-xl shadow-red-200'

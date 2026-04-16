@@ -390,14 +390,15 @@ app.post('/api/voice/transcribe', async (c) => {
   fd.append('enable_diarization', 'false')
   try {
     console.log('[voice] transcribe start, mime:', mime, 'ext:', ext, 'size:', file.size, 'UV_KEY set:', !!process.env.UV_KEY)
-    const res = await proxiedFetch('https://uzbekvoice.ai/api/v1/stt', {
+    const res = await proxiedFetch('https://back.uzbekvoice.ai/api/v1/stt', {
       method: 'POST',
       headers: { Authorization: `Bearer ${process.env.UV_KEY}` },
       body: fd,
     })
     console.log('[voice] uzbekvoice status:', res.status)
-    const data = await res.json()
-    console.log('[voice] uzbekvoice response:', JSON.stringify(data).slice(0, 200))
+    const raw = await res.text()
+    console.log('[voice] uzbekvoice response:', raw.slice(0, 300))
+    const data = JSON.parse(raw)
     return c.json({ text: (data?.result?.text ?? '').trim() })
   } catch (e) {
     console.error('[voice] transcribe error:', e.message)
