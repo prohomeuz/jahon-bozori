@@ -382,18 +382,25 @@ app.post('/api/voice/transcribe', async (c) => {
   if (process.env.DEV_MOCK === 'true') {
     return c.json({ text: 'ismim Sardor, familiyam Toshmatov, telefon raqamim 90 123 45 67' })
   }
+  const mime = file.type || 'audio/webm'
+  const ext = mime.includes('mp4') || mime.includes('aac') ? 'mp4'
+    : mime.includes('ogg') ? 'ogg' : 'webm'
   const fd = new FormData()
-  fd.append('file', file, 'voice.webm')
+  fd.append('file', file, `voice.${ext}`)
   fd.append('enable_diarization', 'false')
   try {
+    console.log('[voice] transcribe start, mime:', mime, 'ext:', ext, 'size:', file.size, 'UV_KEY set:', !!process.env.UV_KEY)
     const res = await proxiedFetch('https://uzbekvoice.ai/api/v1/stt', {
       method: 'POST',
       headers: { Authorization: `Bearer ${process.env.UV_KEY}` },
       body: fd,
     })
+    console.log('[voice] uzbekvoice status:', res.status)
     const data = await res.json()
+    console.log('[voice] uzbekvoice response:', JSON.stringify(data).slice(0, 200))
     return c.json({ text: (data?.result?.text ?? '').trim() })
   } catch (e) {
+    console.error('[voice] transcribe error:', e.message)
     return c.json({ error: 'transcribe_failed', text: '' }, 503)
   }
 })
