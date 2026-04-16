@@ -394,7 +394,7 @@ app.post('/api/voice/transcribe', async (c) => {
   fd.append('enable_diarization', 'false')
   try {
     console.log('[voice] transcribe start, mime:', mime, 'ext:', ext, 'size:', blob.size, 'UV_KEY set:', !!process.env.UV_KEY)
-    const res = await proxiedFetch('https://back.uzbekvoice.ai/api/v1/stt', {
+    const res = await proxiedFetch('https://uzbekvoice.ai/api/v1/stt', {
       method: 'POST',
       headers: { Authorization: `Bearer ${process.env.UV_KEY}` },
       body: fd,
