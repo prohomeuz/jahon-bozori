@@ -144,22 +144,12 @@ const TYPE_BADGE = {
 }
 const TYPE_LABEL = { bron: 'Bron', sotish: 'Sotish' }
 
-function BookingRow({ b, isAdmin, cancelled, onReset, flashId, scrolled }) {
+function BookingRow({ b, isAdmin, cancelled, onReset, scrolled }) {
   const [loading, setLoading]       = useState(false)
   const [pdfLoading, setPdfLoading] = useState(false)
-  const [flashing, setFlashing]     = useState(false)
-  const rowRef = useRef(null)
 
   const [block, bolim, aptStr] = b.apartment_id.split('-')
   const floor = aptStr ? aptStr[0] : '?'
-
-  useEffect(() => {
-    if (flashId !== b.id) return
-    setFlashing(true)
-    rowRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-    const t = setTimeout(() => setFlashing(false), 2000)
-    return () => clearTimeout(t)
-  }, [flashId, b.id])
 
   async function handleDownloadPDF() {
     setPdfLoading(true)
@@ -180,16 +170,13 @@ function BookingRow({ b, isAdmin, cancelled, onReset, flashId, scrolled }) {
 
   return (
     <tr
-      ref={rowRef}
       className={`border-t border-border transition-colors duration-300 ${
-        flashing    ? 'bg-amber-50 dark:bg-amber-950/40' :
-        cancelled   ? 'opacity-55' :
-        'hover:bg-muted/40'
+        cancelled ? 'opacity-55' : 'hover:bg-muted/40'
       }`}
     >
       {/* Xonadon — sticky left */}
       <td className={`px-4 py-3 whitespace-nowrap sticky left-0 transition-shadow ${
-        flashing ? 'bg-amber-50 dark:bg-amber-950/40' : cancelled ? 'bg-card opacity-100' : 'bg-card'
+        cancelled ? 'bg-card opacity-100' : 'bg-card'
       } ${scrolled ? 'shadow-[4px_0_12px_-2px_rgba(0,0,0,0.08)]' : ''}`}>
         <p className="font-mono font-bold text-sm">{b.apartment_id}</p>
         <p className="text-xs text-muted-foreground mt-0.5">
@@ -255,7 +242,7 @@ function BookingRow({ b, isAdmin, cancelled, onReset, flashId, scrolled }) {
   )
 }
 
-function BookingsTable({ cancelled, isAdmin, onReset, flashId, search, typeFilter }) {
+function BookingsTable({ cancelled, isAdmin, onReset, search, typeFilter }) {
   const [page, setPage]       = useState(0)
   const [scrolled, setScrolled] = useState(false)
   const scrollRef = useRef(null)
@@ -337,7 +324,6 @@ function BookingsTable({ cancelled, isAdmin, onReset, flashId, search, typeFilte
                       isAdmin={isAdmin}
                       cancelled={cancelled}
                       onReset={onReset}
-                      flashId={flashId}
                       scrolled={scrolled}
                     />
                   ))
@@ -377,19 +363,8 @@ export default function BookingsPage() {
   const isAdmin = user?.role === 'admin'
   const queryClient = useQueryClient()
   const [tab, setTab]               = useState('active')
-  const [flashId, setFlashId]       = useState(null)
   const [search, setSearch]         = useState('')
   const [typeFilter, setTypeFilter] = useState('all')
-
-  useEffect(() => {
-    function handler(e) {
-      setTab('active')
-      setFlashId(e.detail.id)
-      setTimeout(() => setFlashId(null), 2500)
-    }
-    window.addEventListener('flash-booking', handler)
-    return () => window.removeEventListener('flash-booking', handler)
-  }, [])
 
   function onReset() {
     queryClient.invalidateQueries({ queryKey: ['bookings'] })
@@ -463,7 +438,6 @@ export default function BookingsPage() {
         cancelled={tab === 'cancelled'}
         isAdmin={isAdmin}
         onReset={onReset}
-        flashId={flashId}
         search={search}
         typeFilter={typeFilter}
       />

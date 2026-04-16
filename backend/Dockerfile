@@ -4,11 +4,9 @@ FROM node:22-alpine
 
 WORKDIR /app
 
-# Faqat package fayllarni avval ko'chirish — layer cache uchun
+# Package fayllari va node_modules ni hostdan ko'chirish (internet kerak emas)
 COPY backend/package*.json ./
-
-# Production dependency'lar — dev tools kerak emas
-RUN npm ci --omit=dev && npm cache clean --force
+COPY backend/node_modules ./node_modules
 
 # Backend source kodni ko'chirish
 COPY backend/src ./src
@@ -18,8 +16,4 @@ RUN mkdir -p /data
 
 EXPOSE 3001
 
-# Graceful shutdown uchun dumb-init ishlatish (signal forwarding)
-RUN apk add --no-cache dumb-init
-
-ENTRYPOINT ["dumb-init", "--"]
 CMD ["node", "--disable-warning=ExperimentalWarning", "src/index.js"]

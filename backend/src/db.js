@@ -57,6 +57,8 @@ try { db.exec(`ALTER TABLE bookings ADD COLUMN phone TEXT`) } catch {}
 try { db.exec(`ALTER TABLE bookings ADD COLUMN passport_place TEXT`) } catch {}
 // Add umumiy to bookings if missing (migration)
 try { db.exec(`ALTER TABLE bookings ADD COLUMN umumiy TEXT`) } catch {}
+// Add narx_m2 to bookings if missing (migration)
+try { db.exec(`ALTER TABLE bookings ADD COLUMN narx_m2 TEXT`) } catch {}
 // Telegram subscribers — /start bosgan har kim
 try { db.exec(`CREATE TABLE IF NOT EXISTS telegram_subscribers (chat_id TEXT PRIMARY KEY, first_name TEXT, joined_at TEXT NOT NULL DEFAULT (datetime('now')))`) } catch {}
 // Translate Chinese notes → Uzbek
@@ -86,7 +88,7 @@ export const q = {
   count:        db.prepare('SELECT COUNT(*) AS n FROM apartments'),
 
   // bookings
-  insertBooking:  db.prepare('INSERT INTO bookings (apartment_id,user_id,type,ism,familiya,boshlangich,oylar,umumiy,passport,manzil,phone,passport_place) VALUES (:apartment_id,:user_id,:type,:ism,:familiya,:boshlangich,:oylar,:umumiy,:passport,:manzil,:phone,:passport_place)'),
+  insertBooking:  db.prepare('INSERT INTO bookings (apartment_id,user_id,type,ism,familiya,boshlangich,oylar,umumiy,passport,manzil,phone,passport_place,narx_m2) VALUES (:apartment_id,:user_id,:type,:ism,:familiya,:boshlangich,:oylar,:umumiy,:passport,:manzil,:phone,:passport_place,:narx_m2)'),
   lastBooking:    db.prepare('SELECT b.*, u.name AS manager_name, u.username FROM bookings b LEFT JOIN users u ON b.user_id=u.id WHERE b.id=last_insert_rowid()'),
   bookingById:    db.prepare('SELECT b.*, u.telegram_id AS manager_tg_id, u.name AS manager_name, u.username FROM bookings b LEFT JOIN users u ON b.user_id=u.id WHERE b.id=:id'),
   allBookings:    db.prepare('SELECT b.*, u.name AS manager_name, u.username FROM bookings b LEFT JOIN users u ON b.user_id=u.id WHERE b.cancelled_at IS NULL ORDER BY b.created_at DESC LIMIT :limit OFFSET :offset'),

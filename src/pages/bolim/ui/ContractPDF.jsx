@@ -100,18 +100,18 @@ const s = StyleSheet.create({
   cellVal:   { fontFamily: 'Helvetica-Bold', fontSize: 13, color: P.fg },
   cellValM:  { fontFamily: 'Helvetica-Bold', fontSize: 13, color: P.mutedLt },
 
-  /* Image — max 260pt so everything fits on 1 A4 page */
+  /* Image — reduced to fit benefits section on 1 A4 page */
   imgBox: {
     borderWidth: 1,
     borderColor: P.border,
     borderRadius: 6,
     overflow: 'hidden',
     backgroundColor: P.bg,
-    height: 260,
+    height: 200,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  img: { width: '100%', height: 260, objectFit: 'contain' },
+  img: { width: '100%', height: 200, objectFit: 'contain' },
   imgPlaceholder: { color: P.mutedLt, fontSize: 7, padding: 20 },
 
   /* Note */
@@ -169,6 +169,51 @@ const s = StyleSheet.create({
     marginTop: 4,
   },
   qrText: { fontSize: 6, color: P.mutedLt, textAlign: 'center' },
+
+  /* Benefits section */
+  benefits: {
+    borderWidth: 1,
+    borderColor: P.border,
+    borderRadius: 8,
+    overflow: 'hidden',
+    backgroundColor: '#f8fafc',
+    padding: 10,
+    gap: 5,
+  },
+  benefitsTitle: {
+    fontFamily: 'Helvetica-Bold',
+    fontSize: 8,
+    color: P.fg,
+    marginBottom: 4,
+  },
+  benefitRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  benefitNum: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: P.amber,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  benefitNumText: {
+    fontFamily: 'Helvetica-Bold',
+    fontSize: 6.5,
+    color: P.white,
+  },
+  benefitText: {
+    flex: 1,
+    fontSize: 7.5,
+    color: P.fg,
+    lineHeight: 1.5,
+  },
+  benefitBold: {
+    fontFamily: 'Helvetica-Bold',
+  },
 })
 
 /* ── Logo mark SVG ────────────────────────────────────── */
@@ -210,7 +255,7 @@ function Cell({ label, value, last = false, top = false }) {
 /* ── Main component ───────────────────────────────────── */
 export function ContractPDF({
   apartment, floor, blockId, bolimNum,
-  form, type, date, floorImgSrc, managerName,
+  form, type, date, floorImgSrc, managerName, qrDataUrl,
 }) {
   const [, , apt] = (apartment.address ?? '').split('-')
   const aptNum = apt ?? apartment.address
@@ -267,6 +312,30 @@ export function ContractPDF({
               ? <Image src={floorImgSrc} style={s.img} />
               : <Text style={s.imgPlaceholder}>Reja rasmi mavjud emas</Text>
             }
+          </View>
+
+          {/* Benefits */}
+          <View style={s.benefits}>
+            <Text style={s.benefitsTitle}>Agar JAHON BOZORIdan do'kon xarid qilsam nimalar yutaman?</Text>
+            {[
+              ['Ajoyib joylashuv', 'Viloyat va vodiyning markazi'],
+              ['Keng qamrovli transport tarmog\'i', 'Logistika arteriyasi'],
+              ['Xitoyga to\'g\'ridan-to\'g\'ri ulanish', null],
+              ['Keng avto turargohlar', 'tirbandlik bilan xayrlashing'],
+              ['Xavfsiz va qulay harakatlanish kafolati', null],
+              ['Yong\'indan mutlaq himoya', null],
+              ['Devalvatsiyaga qarshi kurashish va ijara egalari bilan xayrlashish uchun do\'kon sotib oling', null],
+            ].map(([bold, rest], i) => (
+              <View key={i} style={s.benefitRow}>
+                <View style={s.benefitNum}>
+                  <Text style={s.benefitNumText}>{i + 1}</Text>
+                </View>
+                <Text style={s.benefitText}>
+                  <Text style={s.benefitBold}>{bold}</Text>
+                  {rest ? `: ${rest}` : ''}
+                </Text>
+              </View>
+            ))}
           </View>
 
         </View>
@@ -334,6 +403,20 @@ export function ContractPDF({
                 </Text>
                 <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 9, color: P.fg }}>
                   {managerName}
+                </Text>
+              </View>
+            </>
+          ) : null}
+
+          {/* QR code — sidebar bottom */}
+          {qrDataUrl ? (
+            <>
+              <View style={{ flex: 1 }} />
+              <View style={s.divider} />
+              <View style={{ alignItems: 'center', gap: 4, paddingTop: 8 }}>
+                <Image src={qrDataUrl} style={{ width: 110, height: 110 }} />
+                <Text style={{ fontSize: 7, color: P.muted, textAlign: 'center', fontFamily: 'Helvetica-Bold' }}>
+                  Skayner qiling!
                 </Text>
               </View>
             </>

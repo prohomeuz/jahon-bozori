@@ -3,12 +3,9 @@
 .github
 .gitignore
 
-# ── Dependencies — har bir stage o'zi install qiladi ─────────────────────────
-node_modules
-backend/node_modules
+# node_modules hostdan ko'chiriladi, ignore qilinmaydi
 
-# ── Build output — builder stage o'zi yaratadi ───────────────────────────────
-dist
+# dist/ hostda build qilinadi va Docker image'ga ko'chiriladi
 
 # ── Database — volume orqali mount bo'ladi, image ichiga kirmasin ─────────────
 *.sqlite

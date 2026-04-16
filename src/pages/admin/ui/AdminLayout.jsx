@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router'
 import { getUser, removeToken } from '@/shared/lib/auth'
-import { LayoutDashboard, Users, ClipboardList, LogOut, Home, Bell, BellOff, PanelLeftClose, PanelLeftOpen } from 'lucide-react'
+import { LayoutDashboard, Users, ClipboardList, LogOut, Home, PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 
 const NAV = [
   { to: '/admin',          label: 'Dashboard',       icon: LayoutDashboard, end: true },
@@ -14,18 +14,10 @@ export default function AdminLayout() {
   const user = getUser()
   const isAdmin = user?.role === 'admin'
   const [collapsed, setCollapsed] = useState(false)
-  const [notifPerm, setNotifPerm] = useState(() =>
-    'Notification' in window ? Notification.permission : 'denied'
-  )
 
   useEffect(() => {
     if (!user) navigate('/admin/login', { replace: true })
   }, [])
-
-  async function enableNotifications() {
-    const perm = await Notification.requestPermission()
-    setNotifPerm(perm)
-  }
 
   function logout() {
     removeToken()
@@ -105,19 +97,6 @@ export default function AdminLayout() {
           </button>
         </div>
 
-        {/* Notification enable button (expanded only) */}
-        {!collapsed && isAdmin && notifPerm !== 'granted' && (
-          <div className="px-2 pb-2">
-            <button
-              onClick={enableNotifications}
-              className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 transition-colors"
-            >
-              <Bell size={13} />
-              Bildirishnomalarni yoqish
-            </button>
-          </div>
-        )}
-
         {/* User info */}
         <div className={`border-t border-border flex items-center gap-2 shrink-0
           ${collapsed ? 'justify-center px-0 py-3' : 'px-3 py-3'}`}>
@@ -134,14 +113,6 @@ export default function AdminLayout() {
                 <p className="text-xs font-semibold text-foreground truncate">{user.name}</p>
                 <p className="text-xs text-muted-foreground">{isAdmin ? 'Admin' : 'Salesmanager'}</p>
               </div>
-              {isAdmin && (
-                <span title={notifPerm === 'granted' ? 'Bildirishnomalar yoqilgan' : "Bildirishnomalar o'chiq"}>
-                  {notifPerm === 'granted'
-                    ? <Bell size={14} className="text-green-500 shrink-0" />
-                    : <BellOff size={14} className="text-muted-foreground shrink-0" />
-                  }
-                </span>
-              )}
             </>
           )}
         </div>

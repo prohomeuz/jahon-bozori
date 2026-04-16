@@ -1,4 +1,4 @@
-import { Loader2, Mic, RotateCcw, FileText, CheckCircle, Lock, ShoppingBag, Ruler, X } from 'lucide-react'
+import { Loader2, Mic, RotateCcw, FileText, CheckCircle, Lock, ShoppingBag, Ruler, X, ChevronDown, Calculator } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { apiFetch, getUser } from '@/shared/lib/auth'
 import { ContractPDF } from './ContractPDF'
@@ -109,6 +109,8 @@ async function drawHighlight(imgSrc, rect, viewBox) {
 
 async function downloadContractPDF({ apartment, floor, blockId, bolimNum, form, type, managerName }) {
   const { pdf } = await import('@react-pdf/renderer')
+  const qrImg = await import('@/assets/qrcode.png')
+  const qrDataUrl = qrImg.default
 
   // Floor plan image: blocks/{BLOCK}/{FLOOR}/{BOLIM}.png
   const rawFloorImg = loadImg(blockId, floor, bolimNum)
@@ -134,16 +136,41 @@ async function downloadContractPDF({ apartment, floor, blockId, bolimNum, form, 
       date={date}
       floorImgSrc={floorImgSrc}
       managerName={managerName}
+      qrDataUrl={qrDataUrl}
     />
   ).toBlob()
   return blob
 }
 
-async function transcribe(blob) {
+// iOS va boshqa platformalarda ishlaydi
+function getBestMimeType() {
+  const candidates = [
+    'audio/webm;codecs=opus',
+    'audio/webm',
+    'audio/mp4',
+    'audio/aac',
+    'audio/ogg;codecs=opus',
+  ]
+  if (typeof MediaRecorder === 'undefined') return null
+  for (const t of candidates) {
+    if (MediaRecorder.isTypeSupported(t)) return t
+  }
+  return ''
+}
+
+function mimeToExt(mime) {
+  if (mime.includes('mp4') || mime.includes('aac')) return 'mp4'
+  if (mime.includes('ogg')) return 'ogg'
+  return 'webm'
+}
+
+async function transcribe(blob, mimeType) {
+  const ext = mimeToExt(mimeType)
   const fd = new FormData()
-  fd.append('file', blob, 'voice.webm')
+  fd.append('file', blob, `voice.${ext}`)
   const res = await fetch('/api/voice/transcribe', { method: 'POST', body: fd })
-  const data = await res.json()
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok || data.error) throw Object.assign(new Error('transcribe'), { code: data.error })
   return data.text ?? ''
 }
 
@@ -153,6 +180,7 @@ async function extractFields(text) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ text }),
   })
+  if (!res.ok) throw new Error('extract failed')
   return res.json()
 }
 
@@ -245,7 +273,7 @@ function MonthsField({ value, onChange }) {
   return (
     <div>
       <label className={LABEL}>Necha oyga</label>
-      <div className="flex gap-2 mb-2">
+      <div className="flex gap-2">
         {QUICK_MONTHS.map((m) => (
           <button
             key={m}
@@ -261,82 +289,93 @@ function MonthsField({ value, onChange }) {
           </button>
         ))}
       </div>
-      <div className="relative mb-3">
-        <input
-          type="number"
-          className={INPUT + ' pr-14'}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          min="12"
-          max="48"
-          required
-        />
-        <span className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground text-sm font-semibold pointer-events-none select-none">
-          oy
-        </span>
-      </div>
-      <input
-        type="range"
-        min="12"
-        max="48"
-        step="1"
-        value={num}
-        onChange={(e) => onChange(e.target.value)}
-        className="w-full cursor-pointer appearance-none h-2 rounded-full outline-none [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-6 [&::-webkit-slider-thumb]:h-6 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:shadow-md [&::-webkit-slider-thumb]:border [&::-webkit-slider-thumb]:border-border [&::-webkit-slider-thumb]:cursor-pointer"
-        style={{
-          background: `linear-gradient(to right, #16a34a ${((num - 12) / 36) * 100}%, #e5e7eb ${((num - 12) / 36) * 100}%)`,
-        }}
-      />
-      <div className="flex justify-between text-xs text-muted-foreground mt-1">
-        <span>12 oy</span>
-        <span>48 oy</span>
-      </div>
     </div>
   )
 }
 
 function VoiceRecorder({ onExtracted }) {
-  const [status, setStatus] = useState('idle')
+  const [status, setStatus] = useState('idle') // idle | recording | processing | error
+  const [errorMsg, setErrorMsg] = useState('')
   const mrRef = useRef(null)
   const chunksRef = useRef([])
+  const mimeRef = useRef('')
 
   async function startRecording(e) {
     e.preventDefault()
     try { e.currentTarget.setPointerCapture(e.pointerId) } catch {}
-    if (status !== 'idle') return
+    if (status !== 'idle' && status !== 'error') return
+    setErrorMsg('')
+
+    // MediaRecorder support tekshirish (eski iOS)
+    if (typeof MediaRecorder === 'undefined') {
+      setStatus('error')
+      setErrorMsg('Qurilma ovoz yozishni qo\'llab-quvvatlamaydi')
+      return
+    }
+
+    const mimeType = getBestMimeType()
+    if (mimeType === null) {
+      setStatus('error')
+      setErrorMsg('Ovoz yozish qo\'llab-quvvatlanmaydi')
+      return
+    }
+
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      const mr = new MediaRecorder(stream)
+      const mrOpts = mimeType ? { mimeType } : {}
+      const mr = new MediaRecorder(stream, mrOpts)
+      mimeRef.current = mr.mimeType || mimeType || 'audio/webm'
       chunksRef.current = []
+
       mr.ondataavailable = (ev) => { if (ev.data.size > 0) chunksRef.current.push(ev.data) }
+      mr.onerror = () => {
+        stream.getTracks().forEach(t => t.stop())
+        setStatus('error')
+        setErrorMsg('Yozish xatosi. Qayta urinib ko\'ring.')
+      }
       mr.onstop = async () => {
-        stream.getTracks().forEach((t) => t.stop())
+        stream.getTracks().forEach(t => t.stop())
+        if (chunksRef.current.length === 0) { setStatus('idle'); return }
         setStatus('processing')
         try {
-          const blob = new Blob(chunksRef.current, { type: 'audio/webm' })
-          const text = await transcribe(blob)
+          const blob = new Blob(chunksRef.current, { type: mimeRef.current })
+          const text = await transcribe(blob, mimeRef.current)
           if (text) {
             const fields = await extractFields(text)
             onExtracted(fields)
           }
-        } finally {
           setStatus('idle')
+        } catch (err) {
+          setStatus('error')
+          if (err?.code === 'transcribe_failed') {
+            setErrorMsg('Ovoz xizmati ishlamayapti')
+          } else {
+            setErrorMsg('Qayta urinib ko\'ring')
+          }
         }
       }
-      mr.start()
+
+      // timeslice=250 — iOS da chunk'lar kelmasa ham ishlaydi
+      mr.start(250)
       mrRef.current = mr
       setStatus('recording')
-    } catch {
-      setStatus('idle')
+    } catch (err) {
+      setStatus('error')
+      if (err?.name === 'NotAllowedError') {
+        setErrorMsg('Mikrofon ruxsati berilmagan')
+      } else {
+        setErrorMsg('Mikrofon ishlamayapti')
+      }
     }
   }
 
-  function stopRecording() {
+  function stopRecording(e) {
+    e?.preventDefault()
     if (mrRef.current?.state === 'recording') mrRef.current.stop()
   }
 
   return (
-    <div className="flex flex-col items-center gap-4 px-4">
+    <div className="flex flex-col items-center gap-3 px-4">
       <button
         type="button"
         onPointerDown={startRecording}
@@ -350,32 +389,47 @@ function VoiceRecorder({ onExtracted }) {
             ? 'bg-red-500 text-white scale-110 shadow-xl shadow-red-200'
             : status === 'processing'
             ? 'bg-muted text-muted-foreground cursor-wait'
+            : status === 'error'
+            ? 'bg-red-50 text-red-400 border-2 border-red-200'
             : 'bg-muted text-muted-foreground hover:bg-secondary active:scale-95'
         }`}
       >
         {status === 'processing' ? <Loader2 size={40} className="animate-spin" /> : <Mic size={40} />}
       </button>
-      <p className="text-sm text-center leading-tight">
-        {status === 'recording' && <span className="text-red-500 font-medium">Yozilmoqda...</span>}
-        {status === 'processing' && <span className="text-muted-foreground">Tahlil qilinmoqda...</span>}
-        {status === 'idle' && <span className="text-muted-foreground">Bosib turing</span>}
+      <p className="text-sm text-center leading-tight min-h-[20px]">
+        {status === 'recording'   && <span className="text-red-500 font-medium">Yozilmoqda...</span>}
+        {status === 'processing'  && <span className="text-muted-foreground">Tahlil qilinmoqda...</span>}
+        {status === 'idle'        && <span className="text-muted-foreground">Bosib turing</span>}
+        {status === 'error'       && <span className="text-red-500 text-xs">{errorMsg}</span>}
       </p>
     </div>
   )
 }
 
-const BRON_EMPTY = { ism: '', familiya: '', telefon: '', boshlangich: '', oylar: '12', umumiy: '' }
-const SOTISH_EMPTY = { ism: '', familiya: '', telefon: '', boshlangich: '', oylar: '12', umumiy: '', passport: '', passport_place: '', manzil: '' }
+const BRON_EMPTY = { ism: '', familiya: '', telefon: '', boshlangich: '', oylar: '12', umumiy: '', narx_m2: '' }
+const SOTISH_EMPTY = { ism: '', familiya: '', telefon: '', boshlangich: '', oylar: '12', umumiy: '', narx_m2: '', passport: '', passport_place: '', manzil: '' }
 
 export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, onBooked }) {
+  const currentUser = getUser()
   const [tab, setTab] = useState('bron')
   const [bronForm, setBronForm] = useState(BRON_EMPTY)
   const [sotishForm, setSotishForm] = useState(SOTISH_EMPTY)
   const [flash, setFlash] = useState(new Set())
-  const [booked, setBooked] = useState(null) // { form, type }
+  const [booked, setBooked] = useState(null)
   const [pdfLoading, setPdfLoading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState(null)
+  const [managers, setManagers] = useState([])
+  const [assignedUserId, setAssignedUserId] = useState(null) // null = o'zi
+  const [confirmPending, setConfirmPending] = useState(null) // 'bron' | 'sotish'
+  const [showCalc, setShowCalc] = useState(false)
+  const [calc, setCalc] = useState({ narxM2: '', boshlangich: '', oylar: '12', focus: 'narxM2' })
+
+  useEffect(() => {
+    apiFetch('/api/managers').then(r => r.json()).then(list => {
+      if (Array.isArray(list)) setManagers(list)
+    }).catch(() => {})
+  }, [])
 
   useEffect(() => {
     const handler = (e) => { if (e.key === 'Escape') onClose() }
@@ -392,20 +446,28 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
   const setSotish = (key) => (e) => setSotishForm((f) => ({ ...f, [key]: e.target.value }))
   const setSotishCap = (key) => (e) => setSotishForm((f) => ({ ...f, [key]: cap(e.target.value) }))
 
-  function handleExtracted(fields) {
-    if (fields.ism) fields.ism = cap(fields.ism)
-    if (fields.familiya) fields.familiya = cap(fields.familiya)
+  function handleExtracted(raw) {
+    // Faqat ism, familiya, telefon — boshqa hamma narsani e'tiborsiz qoldir
+    const fields = {}
+    if (raw.ism)      fields.ism      = cap(String(raw.ism))
+    if (raw.familiya) fields.familiya = cap(String(raw.familiya))
     // GPT ba'zan "phone" kalit bilan qaytaradi — normallashtir
-    const rawPhone = fields.telefon || fields.phone || ''
-    if (rawPhone) fields.telefon = formatUzPhone(rawPhone)
-    delete fields.phone
-    setBronForm((f) => ({ ...f, ...fields }))
-    const filled = new Set(Object.keys(fields).filter((k) => fields[k]))
+    const rawPhone = raw.telefon || raw.phone || ''
+    if (rawPhone)     fields.telefon  = formatUzPhone(String(rawPhone))
+    if (!Object.keys(fields).length) return
+    setBronForm(f => ({ ...f, ...fields }))
+    const filled = new Set(Object.keys(fields).filter(k => fields[k]))
     setFlash(filled)
     setTimeout(() => setFlash(new Set()), 1200)
   }
 
+  const assignedManager = assignedUserId
+    ? managers.find(m => m.id === assignedUserId)
+    : null
+  const effectiveManagerName = assignedManager?.name ?? currentUser?.name ?? ''
+
   async function submitBooking(type) {
+    setConfirmPending(null)
     setSubmitting(true)
     setSubmitError(null)
     const form = type === 'bron' ? bronForm : sotishForm
@@ -421,10 +483,12 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
           boshlangich: form.boshlangich,
           oylar: parseInt(form.oylar),
           umumiy: form.umumiy || null,
+          narx_m2: form.narx_m2 || null,
           phone: form.telefon || null,
           passport: form.passport || null,
           passport_place: form.passport_place || null,
           manzil: form.manzil || null,
+          assigned_user_id: assignedUserId ?? null,
         }),
       })
       if (!res.ok) {
@@ -434,11 +498,11 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
       }
       const booking = await res.json()
       onBooked?.()
-      setBooked({ form, type, bookingId: booking.id })
+      setBooked({ form, type, bookingId: booking.id, managerName: effectiveManagerName })
 
       // Faqat bron uchun Telegramga PDF yuborish (background)
       if (type === 'bron' && booking.id) {
-        const managerName = getUser()?.name ?? ''
+        const managerName = effectiveManagerName
         downloadContractPDF({ apartment, floor, blockId, bolimNum, form, type, managerName })
           .then(blob => {
             const fd = new FormData()
@@ -458,7 +522,7 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
   async function handleDownloadPDF() {
     setPdfLoading(true)
     try {
-      const managerName = getUser()?.name ?? ''
+      const managerName = booked.managerName ?? getUser()?.name ?? ''
       const blob = await downloadContractPDF({ apartment, floor, blockId, bolimNum, form: booked.form, type: booked.type, managerName })
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
@@ -471,18 +535,161 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
     }
   }
 
+  const calcKeypad = (() => {
+    const narxVal = Number(String(calc.narxM2).replace(/\s/g, ''))
+    const downVal = Number(String(calc.boshlangich).replace(/\s/g, ''))
+    const months  = parseInt(calc.oylar) || 12
+    const total   = apartment.size * narxVal
+    const monthly = total > 0 ? Math.round((total - downVal) / months) : 0
+
+    function pressKey(key) {
+      setCalc(f => {
+        if (f.focus === 'oylar') return f
+        const raw = String(f[f.focus]).replace(/\s/g, '')
+        let next = raw
+        if (key === '⌫') next = raw.slice(0, -1)
+        else if (key === 'C') next = ''
+        else if (raw.length < 12) next = raw + key
+        const formatted = next ? Number(next).toLocaleString('ru-RU').replace(/,/g, ' ') : ''
+        return { ...f, [f.focus]: formatted }
+      })
+    }
+
+    const KEYS = ['7','8','9','4','5','6','1','2','3','C','0','⌫']
+
+    return (
+      <div className="flex flex-col gap-3 px-4 py-5 w-full h-full">
+        <button type="button"
+          onClick={() => setCalc(f => ({ ...f, focus: 'narxM2' }))}
+          className={`w-full rounded-2xl border-2 text-left px-4 py-4 transition-colors shrink-0 ${calc.focus === 'narxM2' ? 'border-amber-400 bg-amber-50' : 'border-border bg-background hover:border-amber-200'}`}
+        >
+          <p className="text-xs text-muted-foreground mb-1">Narx/m²</p>
+          <p className={`text-2xl font-bold ${calc.narxM2 ? 'text-foreground' : 'text-muted-foreground/30'}`}>
+            {calc.narxM2 ? Number(String(calc.narxM2).replace(/\s/g, '')).toLocaleString('ru-RU') : '0'}
+            <span className="text-sm font-normal text-muted-foreground ml-1">USD</span>
+          </p>
+        </button>
+        <div className="grid grid-cols-3 gap-2 w-full flex-1">
+          {KEYS.map(k => (
+            <button key={k} type="button" onPointerDown={(e) => { e.preventDefault(); pressKey(k) }}
+              className={`rounded-xl text-lg font-semibold transition-all active:scale-95 select-none ${
+                k === '⌫' ? 'bg-red-50 text-red-500 border border-red-200 hover:bg-red-100'
+                : k === 'C' ? 'bg-muted text-muted-foreground border border-border hover:bg-muted/70'
+                : 'bg-background border border-border text-foreground hover:bg-amber-50 hover:border-amber-300'
+              }`}
+            >{k}</button>
+          ))}
+        </div>
+      </div>
+    )
+  })
+
+  const calcLeftPanel = (() => {
+    const narxVal = Number(String(calc.narxM2).replace(/\s/g, ''))
+    const downVal = Number(String(calc.boshlangich).replace(/\s/g, ''))
+    const months  = parseInt(calc.oylar) || 12
+    const total   = apartment.size * narxVal
+    const monthly = total > 0 ? Math.round((total - downVal) / months) : 0
+    const FIELDS  = [
+      { key: 'boshlangich', label: "Boshlang'ich",  unit: 'USD', val: calc.boshlangich },
+    ]
+    function transferToForm() {
+      if (calc.narxM2)      setBronForm(f => ({ ...f, narx_m2: calc.narxM2 }))
+      if (calc.boshlangich) setBronForm(f => ({ ...f, boshlangich: calc.boshlangich }))
+      if (calc.oylar)       setBronForm(f => ({ ...f, oylar: calc.oylar }))
+      setShowCalc(false)
+    }
+    return (
+      <div className="flex flex-col gap-4 px-5 py-5 border-r border-border overflow-y-auto" style={{ flex: '0 0 70%' }}>
+        {/* Yuqori qator: Umumiy narx (static) + Boshlang'ich (tappable) */}
+        <div className="flex gap-3">
+          <div className="flex-1 rounded-2xl border-2 border-border bg-muted/40 px-4 py-3">
+            <p className="text-xs text-muted-foreground mb-1">Umumiy narx <span className="text-muted-foreground/50">({apartment.size} m²)</span></p>
+            <p className={`text-xl font-bold ${total > 0 ? 'text-foreground' : 'text-muted-foreground/30'}`}>
+              {total > 0 ? total.toLocaleString('ru-RU') : '—'}
+              {total > 0 && <span className="text-sm font-normal text-muted-foreground ml-1">USD</span>}
+            </p>
+          </div>
+          {FIELDS.map(({ key, label, unit, val }) => (
+            <button key={key} type="button"
+              onClick={() => setCalc(f => ({ ...f, focus: key }))}
+              className={`flex-1 rounded-2xl border-2 text-left px-4 py-3 transition-colors ${calc.focus === key ? 'border-amber-400 bg-amber-50' : 'border-border bg-background hover:border-amber-200'}`}
+            >
+              <p className="text-xs text-muted-foreground mb-1">{label}</p>
+              <p className={`text-xl font-bold ${val ? 'text-foreground' : 'text-muted-foreground/30'}`}>
+                {val ? Number(String(val).replace(/\s/g, '')).toLocaleString('ru-RU') : '0'}
+                <span className="text-sm font-normal text-muted-foreground ml-1">{unit}</span>
+              </p>
+            </button>
+          ))}
+        </div>
+
+        {/* Oylar */}
+        <div>
+          <p className={LABEL}>Oylar</p>
+          <div className="flex gap-2">
+            {QUICK_MONTHS.map(m => (
+              <button key={m} type="button"
+                onClick={() => setCalc(f => ({ ...f, oylar: String(m) }))}
+                className={`flex-1 py-3 rounded-xl text-sm font-semibold border transition-colors ${parseInt(calc.oylar) === m ? 'bg-amber-500 text-white border-amber-500' : 'bg-background text-muted-foreground border-border hover:bg-amber-50'}`}
+              >{m}</button>
+            ))}
+          </div>
+        </div>
+
+        {/* Oylik to'lov — flex-1 katta display */}
+        <div className="flex-1 rounded-2xl border-2 border-amber-400 bg-amber-50 px-5 py-4 flex flex-col justify-center">
+          <p className="text-xs text-amber-700 font-medium mb-2">Oylik to'lov</p>
+          <p className={`text-4xl font-bold leading-tight ${monthly > 0 ? 'text-amber-700' : 'text-amber-300'}`}>
+            {monthly > 0 ? monthly.toLocaleString('ru-RU') : '—'}
+          </p>
+          {monthly > 0 && <p className="text-sm text-amber-600 mt-1">USD / oy</p>}
+        </div>
+
+        {/* Formaga o'tkazish */}
+        <button type="button" onClick={transferToForm}
+          className="w-full py-3.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-semibold text-sm active:scale-[0.98] transition-all shrink-0"
+        >
+          Formaga o'tkazish →
+        </button>
+      </div>
+    )
+  })
+
   const bronFields = (
     <div className="flex flex-1 min-h-0">
-      <div className="flex flex-col gap-4 px-5 py-4 overflow-y-auto border-r border-border" style={{ flex: '0 0 70%' }}>
-        <Field label="Ism" placeholder="Abdulloh" value={bronForm.ism} onChange={setBronCap('ism')} required autoComplete="given-name" flash={flash.has('ism')} />
-        <Field label="Familiya" placeholder="Karimov" value={bronForm.familiya} onChange={setBronCap('familiya')} required autoComplete="family-name" flash={flash.has('familiya')} />
-        <PhoneField label="Telefon raqam" value={bronForm.telefon} onChange={(v) => setBronForm((f) => ({ ...f, telefon: v }))} flash={flash.has('telefon')} />
-        <MoneyField label="Kafolat summasi" value={bronForm.boshlangich} onChange={(v) => setBronForm((f) => ({ ...f, boshlangich: v }))} flash={flash.has('boshlangich')} />
-        <MonthsField value={bronForm.oylar} onChange={(v) => setBronForm((f) => ({ ...f, oylar: v }))} />
-        <MoneyField label="Umumiy narx" value={bronForm.umumiy} onChange={(v) => setBronForm((f) => ({ ...f, umumiy: v }))} />
-      </div>
-      <div className="flex items-center justify-center" style={{ flex: '0 0 30%' }}>
-        <VoiceRecorder onExtracted={handleExtracted} />
+      {showCalc ? calcLeftPanel() : (
+        <div className="flex flex-col gap-4 px-5 py-4 overflow-y-auto border-r border-border" style={{ flex: '0 0 70%' }}>
+          <Field label="Ism" placeholder="Abdulloh" value={bronForm.ism} onChange={setBronCap('ism')} required autoComplete="given-name" flash={flash.has('ism')} />
+          <Field label="Familiya" placeholder="Karimov" value={bronForm.familiya} onChange={setBronCap('familiya')} required autoComplete="family-name" flash={flash.has('familiya')} />
+          <PhoneField label="Telefon raqam" value={bronForm.telefon} onChange={(v) => setBronForm((f) => ({ ...f, telefon: v }))} flash={flash.has('telefon')} />
+          {(bronForm.boshlangich || bronForm.narx_m2) ? (
+            <div className="flex-1 rounded-2xl border-2 border-amber-200 bg-amber-50 px-5 py-4 flex flex-col justify-between">
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <p className="text-xs text-amber-700 mb-1">Kafolat summasi</p>
+                  <p className="text-xl font-bold text-foreground">{bronForm.boshlangich || '—'} <span className="text-sm font-normal text-muted-foreground">USD</span></p>
+                </div>
+                <div>
+                  <p className="text-xs text-amber-700 mb-1">Muddat</p>
+                  <p className="text-xl font-bold text-foreground">{bronForm.oylar || '—'} <span className="text-sm font-normal text-muted-foreground">oy</span></p>
+                </div>
+                <div>
+                  <p className="text-xs text-amber-700 mb-1">Narx/m²</p>
+                  <p className="text-xl font-bold text-foreground">{bronForm.narx_m2 || '—'} <span className="text-sm font-normal text-muted-foreground">USD</span></p>
+                </div>
+              </div>
+              <button type="button" onClick={() => setShowCalc(true)}
+                className="mt-4 self-start text-xs text-amber-700 underline underline-offset-2 hover:text-amber-900"
+              >
+                Qayta hisoblash →
+              </button>
+            </div>
+          ) : null}
+        </div>
+      )}
+      <div className={`flex ${showCalc ? 'items-stretch' : 'items-center justify-center'}`} style={{ flex: '0 0 30%' }}>
+        {showCalc ? calcKeypad() : <VoiceRecorder onExtracted={handleExtracted} />}
       </div>
     </div>
   )
@@ -497,7 +704,7 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
       <div className="grid grid-cols-2 gap-4">
         <MoneyField label="Boshlang'ich to'lov" value={sotishForm.boshlangich} onChange={(v) => setSotishForm((f) => ({ ...f, boshlangich: v }))} />
         <MonthsField value={sotishForm.oylar} onChange={(v) => setSotishForm((f) => ({ ...f, oylar: v }))} />
-        <MoneyField label="Umumiy narx" value={sotishForm.umumiy} onChange={(v) => setSotishForm((f) => ({ ...f, umumiy: v }))} />
+        <MoneyField label="Kvadrat metr narxi" value={sotishForm.narx_m2} onChange={(v) => setSotishForm((f) => ({ ...f, narx_m2: v }))} />
       </div>
       <div className="grid grid-cols-2 gap-4">
         <Field label="Passport seriya/raqam" placeholder="AA 1234567" value={sotishForm.passport} onChange={setSotish('passport')} />
@@ -620,6 +827,15 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
           </div>
           <div className="flex-1" />
           <button
+            type="button"
+            onClick={() => setShowCalc(v => !v)}
+            className={`w-14 h-14 rounded-full flex items-center justify-center transition-colors shrink-0 ${showCalc ? 'bg-amber-100 text-amber-600' : 'text-muted-foreground hover:bg-accent hover:text-foreground'}`}
+            title="Kalkulator"
+          >
+            <Calculator size={22} />
+          </button>
+          <div className="w-px h-10 bg-border mx-1 shrink-0" />
+          <button
             onClick={() => { setBronForm(BRON_EMPTY); setSotishForm(SOTISH_EMPTY); setFlash(new Set()) }}
             className="w-14 h-14 rounded-full flex items-center justify-center text-muted-foreground hover:bg-accent hover:text-foreground transition-colors shrink-0"
             title="Formani tozalash"
@@ -636,20 +852,74 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
           </button>
         </div>
 
+        {/* Tasdiqlash dialogi */}
+        {confirmPending && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/40 rounded-2xl" style={{ backdropFilter: 'blur(2px)' }}>
+            <div className="bg-background rounded-2xl shadow-2xl border border-border flex flex-col gap-5 px-7 py-7 w-full max-w-sm mx-4">
+              <div>
+                <p className="text-lg font-bold text-foreground">
+                  {confirmPending === 'bron' ? 'Bron qilishni tasdiqlang' : 'Sotishni tasdiqlang'}
+                </p>
+                <p className="text-sm text-muted-foreground mt-0.5">{apartment.address}</p>
+              </div>
+
+              {/* Menejer tanlash */}
+              <div>
+                <label className={LABEL}>Kim nomiga?</label>
+                <div className="relative">
+                  <select
+                    value={assignedUserId ?? ''}
+                    onChange={(e) => setAssignedUserId(e.target.value ? parseInt(e.target.value) : null)}
+                    className="w-full rounded-xl border border-border bg-background px-4 py-3 text-base text-foreground focus:outline-none focus:ring-2 focus:ring-ring appearance-none pr-10"
+                  >
+                    <option value="">{currentUser?.name ?? 'Men'} (o'zim)</option>
+                    {managers.filter(m => m.id !== currentUser?.id).map(m => (
+                      <option key={m.id} value={m.id}>{m.name}</option>
+                    ))}
+                  </select>
+                  <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+                </div>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => { setConfirmPending(null); setAssignedUserId(null) }}
+                  className="flex-1 py-3 rounded-xl border border-border text-sm font-semibold text-muted-foreground hover:bg-muted transition-colors"
+                >
+                  Bekor qilish
+                </button>
+                <button
+                  type="button"
+                  onClick={() => submitBooking(confirmPending)}
+                  disabled={submitting}
+                  className={`flex-1 py-3 rounded-xl text-white font-semibold text-sm active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-70 ${
+                    confirmPending === 'bron' ? 'bg-amber-500 hover:bg-amber-600' : 'bg-green-600 hover:bg-green-700'
+                  }`}
+                >
+                  {submitting && <Loader2 size={16} className="animate-spin" />}
+                  {submitting ? 'Saqlanmoqda...' : 'Tasdiqlash'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+
         {/* Kontent */}
         <div className="flex flex-col flex-1 min-h-0">
           {tab === 'bron' ? (
-            <form id="bron-form" onSubmit={(e) => { e.preventDefault(); submitBooking('bron') }} className="flex flex-col flex-1 min-h-0">
+            <form id="bron-form" onSubmit={(e) => { e.preventDefault(); setConfirmPending('bron') }} className="flex flex-col flex-1 min-h-0">
               {bronFields}
             </form>
           ) : (
-            <form id="sotish-form" onSubmit={(e) => { e.preventDefault(); submitBooking('sotish') }} className="flex flex-col flex-1 min-h-0">
+            <form id="sotish-form" onSubmit={(e) => { e.preventDefault(); setConfirmPending('sotish') }} className="flex flex-col flex-1 min-h-0">
               {sotishFields}
             </form>
           )}
 
           {/* Pastki bar */}
-          <div className="px-5 pb-5 pt-3 shrink-0 border-t border-border flex flex-col gap-2">
+          {!showCalc && <div className="px-5 pb-5 pt-3 shrink-0 border-t border-border flex flex-col gap-2">
             {submitError && (
               <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm font-medium">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
@@ -664,10 +934,13 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
                   <button
                     key={key}
                     type="button"
+                    disabled={key === 'sotish'}
                     onClick={() => { setTab(key); setSubmitError(null) }}
                     className={`flex-1 px-4 py-3 rounded-lg text-sm font-semibold transition-colors ${
                       tab === key
                         ? 'bg-background text-foreground shadow-sm'
+                        : key === 'sotish'
+                        ? 'text-muted-foreground/40 cursor-not-allowed'
                         : 'text-muted-foreground hover:text-foreground'
                     }`}
                   >
@@ -697,7 +970,7 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
                 </button>
               )}
             </div>
-          </div>
+          </div>}
         </div>
       </div>
     </div>

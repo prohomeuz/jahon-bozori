@@ -12,6 +12,9 @@ services:
       - DB_PATH=/data/db.sqlite     # SQLite fayli saqlanadigan joy
     volumes:
       - ./data:/data                # ← MA'LUMOTLAR SAQLANADIGAN PAPKA (host bind mount)
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
     networks:
       - jahon-bozori-net
     # Backend tashqariga ochilmaydi — faqat frontend container ko'radi

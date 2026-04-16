@@ -1,31 +1,6 @@
 import { useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { getToken, getUser } from '@/shared/lib/auth'
-
-async function requestNotificationPermission() {
-  if (!('Notification' in window)) return
-  if (Notification.permission === 'default') {
-    await Notification.requestPermission()
-  }
-}
-
-function playNotificationSound() {
-  try {
-    const ctx = new AudioContext()
-    const t = ctx.currentTime
-    const osc = ctx.createOscillator()
-    const gain = ctx.createGain()
-    osc.connect(gain)
-    gain.connect(ctx.destination)
-    osc.type = 'sine'
-    osc.frequency.setValueAtTime(880, t)
-    osc.frequency.setValueAtTime(1100, t + 0.1)
-    gain.gain.setValueAtTime(0.3, t)
-    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.4)
-    osc.start(t)
-    osc.stop(t + 0.4)
-  } catch {}
-}
+import { getToken } from '@/shared/lib/auth'
 
 // Fetch-based SSE — supports custom headers (ngrok, auth, etc.)
 async function connectSSE(token, onEvent, signal) {
@@ -61,10 +36,6 @@ export function useRealtimeApts() {
   const queryClient = useQueryClient()
 
   useEffect(() => {
-    if (getUser()?.role === 'admin') requestNotificationPermission()
-  }, [])
-
-  useEffect(() => {
     const token = getToken()
     if (!token) return
 
@@ -87,27 +58,8 @@ export function useRealtimeApts() {
       }
 
       if (event === 'booking') {
-        const { id, apartment_id, type, ism, familiya, manager, cancelled } = JSON.parse(rawData)
         queryClient.invalidateQueries({ queryKey: ['bookings'] })
         queryClient.invalidateQueries({ queryKey: ['dashboard'] })
-
-        const user = getUser()
-        if (user?.role !== 'admin' || cancelled) return
-        if (Notification.permission !== 'granted') return
-
-        playNotificationSound()
-        const n = new Notification(`${type}: ${apartment_id}`, {
-          body: `${ism} ${familiya}${manager ? ` — ${manager}` : ''}`,
-          icon: '/favicon.ico',
-          tag: 'booking',
-          renotify: true,
-        })
-        n.onclick = () => {
-          window.focus()
-          window.dispatchEvent(new CustomEvent('flash-booking', { detail: { id } }))
-          n.close()
-        }
-        setTimeout(() => n.close(), 6000)
       }
     }
 

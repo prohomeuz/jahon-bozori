@@ -5,7 +5,10 @@ import { cors } from 'hono/cors'
 import { db, q } from './db.js'
 import { hashPassword, verifyPassword, createToken, requireAuth, requireAdmin } from './auth.js'
 import nodeFetch from 'node-fetch'
-const proxiedFetch = (url, opts = {}) => nodeFetch(url, opts)
+import { SocksProxyAgent } from 'socks-proxy-agent'
+const _socksAgent = process.env.SOCKS_PROXY ? new SocksProxyAgent(process.env.SOCKS_PROXY) : null
+const proxiedFetch = (url, opts = {}) =>
+  _socksAgent ? nodeFetch(url, { ...opts, agent: _socksAgent }) : fetch(url, opts)
 
 const app = new Hono()
 app.use('/api/*', cors())
@@ -112,6 +115,11 @@ app.get('/api/users', requireAuth, requireAdmin, (c) => {
   return c.json(q.allUsers.all())
 })
 
+// Barcha auth userlar uchun: managerlar ro'yxati (bron assign uchun)
+app.get('/api/managers', requireAuth, (c) => {
+  return c.json(q.allUsers.all())
+})
+
 app.post('/api/users', requireAuth, requireAdmin, async (c) => {
   const { username, password, name } = await c.req.json()
   if (!username || !password || !name) return c.json({ error: 'username, password, name majburiy' }, 400)
@@ -193,13 +201,15 @@ app.patch('/api/apartments/:id/status', requireAuth, requireAdmin, async (c) => 
 
 app.post('/api/bookings', requireAuth, async (c) => {
   const user = c.get('user')
-  const { apartment_id, type, ism, familiya, boshlangich, oylar, umumiy, passport, manzil, phone, passport_place } = await c.req.json()
+  const { apartment_id, type, ism, familiya, boshlangich, oylar, umumiy, passport, manzil, phone, passport_place, narx_m2, assigned_user_id } = await c.req.json()
   if (!apartment_id || !type || !ism || !familiya || !boshlangich || !oylar)
     return c.json({ error: "Majburiy maydonlar to'ldirilmagan" }, 400)
 
+  const effective_user_id = assigned_user_id ? parseInt(assigned_user_id) : user.sub
+
   db.exec('BEGIN')
   try {
-    q.insertBooking.run({ apartment_id, user_id: user.sub, type, ism, familiya, boshlangich, oylar: parseInt(oylar), umumiy: umumiy ?? null, passport: passport ?? null, manzil: manzil ?? null, phone: phone ?? null, passport_place: passport_place ?? null })
+    q.insertBooking.run({ apartment_id, user_id: effective_user_id, type, ism, familiya, boshlangich, oylar: parseInt(oylar), umumiy: umumiy ?? null, passport: passport ?? null, manzil: manzil ?? null, phone: phone ?? null, passport_place: passport_place ?? null, narx_m2: narx_m2 ?? null })
     const newStatus = type === 'sotish' ? 'SOLD' : 'RESERVED'
     q.updateStatus.run({ status: newStatus, id: apartment_id })
     const booking = q.lastBooking.get()
@@ -369,21 +379,31 @@ app.post('/api/voice/transcribe', async (c) => {
   const formData = await c.req.formData()
   const file = formData.get('file')
   if (!file) return c.json({ error: 'file required' }, 400)
+  if (process.env.DEV_MOCK === 'true') {
+    return c.json({ text: 'ismim Sardor, familiyam Toshmatov, telefon raqamim 90 123 45 67' })
+  }
   const fd = new FormData()
   fd.append('file', file, 'voice.webm')
   fd.append('enable_diarization', 'false')
-  const res = await proxiedFetch('https://uzbekvoice.ai/api/v1/stt', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${process.env.UV_KEY}` },
-    body: fd,
-  })
-  const data = await res.json()
-  return c.json({ text: (data?.result?.text ?? '').trim() })
+  try {
+    const res = await proxiedFetch('https://uzbekvoice.ai/api/v1/stt', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${process.env.UV_KEY}` },
+      body: fd,
+    })
+    const data = await res.json()
+    return c.json({ text: (data?.result?.text ?? '').trim() })
+  } catch (e) {
+    return c.json({ error: 'transcribe_failed', text: '' }, 503)
+  }
 })
 
 app.post('/api/voice/extract', async (c) => {
   const { text } = await c.req.json()
   if (!text) return c.json({})
+  if (process.env.DEV_MOCK === 'true') {
+    return c.json({ ism: 'Sardor', familiya: 'Toshmatov', telefon: '901234567' })
+  }
   const res = await proxiedFetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${process.env.GPT_KEY}` },
@@ -391,12 +411,42 @@ app.post('/api/voice/extract', async (c) => {
       model: 'gpt-4o-mini',
       response_format: { type: 'json_object' },
       messages: [
-        { role: 'system', content: `O'zbek tilidagi matndan quyidagi ma'lumotlarni ajrat va JSON qaytar.\nQoidalar:\n- "ismim X", "ismi X", "X ismli" → ism: "X"\n- "familiyam X", "familiyasi X" → familiya: "X"\n- boshlangich: to'lov raqami, faqat raqamlar va bo'shliq "10 000 000"\n- oylar: necha oyga, faqat raqam string "24"\n- telefon: telefon raqami, xalqaro yoki mahalliy formatda, masalan "+998901234567" yoki "901234567"\n- Topilmasa bo'sh string\nJSON kalitlari: ism, familiya, boshlangich, oylar, telefon` },
+        {
+          role: 'system',
+          content: `Siz o'zbek tilida aytilgan ovozli matndan faqat 3 ta ma'lumot ajratuvchi yordamchisiz: ism, familiya, telefon raqam.
+
+QOIDALAR:
+
+1. TUZATISH: Agar inson "adashdim", "yo'q", "bunday emas", "ey bunday edi", "to'g'rilash", "xato" yoki shunga o'xshash so'zlar aytsa — o'sha maydon uchun OXIRGI aytilgan qiymatni qabul qil, avvalgisini butunlay e'tiborsiz qoldir.
+
+2. ISM VA FAMILIYA: Istalgan tartibda aytilishi mumkin. Kontekstdan aniqlashga harakat qil. O'zbek ismlari va familiyalarini to'g'ri ajrat.
+
+3. TELEFON RAQAM — quyidagi barcha formatlarni qabul qil:
+   - "90 123 45 67" → "901234567"
+   - "998 90 123 45 67" yoki "+998 90 123 45 67" → "901234567"
+   - "nol to'qson bir ikki uch..." (so'z bilan) → raqamga o'tkazib ajrat
+   - Avval operator kodi keyin raqam YOKI avval raqam keyin kod — ikkalasi ham to'g'ri
+   - Natijada faqat 9 ta raqam qaytar (998 prefikssiz), masalan: "901234567"
+
+4. FAQAT uchta kalit qaytargin: ism, familiya, telefon
+   - Topilmagan maydon uchun null qaytar
+   - Boshqa hech qanday ma'lumot (pul, muddat, manzil va h.k.) qabul qilma
+
+Misol kirish: "ismim Abdulloh, familiyam Karimov, telefon raqamim 90 123 45 67"
+Misol chiqish: {"ism": "Abdulloh", "familiya": "Karimov", "telefon": "901234567"}
+
+Misol kirish: "Telefon 998901234567, Karimov Abdulloh"
+Misol chiqish: {"ism": "Abdulloh", "familiya": "Karimov", "telefon": "901234567"}
+
+Misol kirish: "ismim Jasur, adashdim, Sardor Toshmatov, raqam 93 456 78 90"
+Misol chiqish: {"ism": "Sardor", "familiya": "Toshmatov", "telefon": "934567890"}`,
+        },
         { role: 'user', content: String(text) },
       ],
     }),
   })
-  const data = await res.json()
+  let data
+  try { data = await res.json() } catch { return c.json({}) }
   try { return c.json(JSON.parse(data.choices[0].message.content)) }
   catch { return c.json({}) }
 })
