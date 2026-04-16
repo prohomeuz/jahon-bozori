@@ -158,16 +158,42 @@ function getBestMimeType() {
   return ''
 }
 
-function mimeToExt(mime) {
-  if (mime.includes('mp4') || mime.includes('aac')) return 'mp4'
-  if (mime.includes('ogg')) return 'ogg'
-  return 'webm'
+// Float32Array → 16-bit PCM WAV (16kHz mono)
+function encodeWav(samples, sampleRate) {
+  const buf = new ArrayBuffer(44 + samples.length * 2)
+  const v = new DataView(buf)
+  const str = (off, s) => { for (let i = 0; i < s.length; i++) v.setUint8(off + i, s.charCodeAt(i)) }
+  str(0, 'RIFF'); v.setUint32(4, 36 + samples.length * 2, true)
+  str(8, 'WAVE'); str(12, 'fmt ')
+  v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true)
+  v.setUint32(24, sampleRate, true); v.setUint32(28, sampleRate * 2, true)
+  v.setUint16(32, 2, true); v.setUint16(34, 16, true)
+  str(36, 'data'); v.setUint32(40, samples.length * 2, true)
+  let off = 44
+  for (let i = 0; i < samples.length; i++) {
+    const s = Math.max(-1, Math.min(1, samples[i]))
+    v.setInt16(off, s < 0 ? s * 0x8000 : s * 0x7FFF, true)
+    off += 2
+  }
+  return buf
 }
 
-async function transcribe(blob, mimeType) {
-  const ext = mimeToExt(mimeType)
+// Browser WebM/Opus/MP4 → WAV 16kHz mono (UzbekVoice WAV qabul qiladi)
+async function blobToWav(blob) {
+  const arrayBuffer = await blob.arrayBuffer()
+  const ctx = new AudioContext({ sampleRate: 16000 })
+  const audioBuf = await ctx.decodeAudioData(arrayBuffer)
+  await ctx.close()
+  // Stereo bo'lsa birinchi channelni olamiz (mono)
+  const samples = audioBuf.getChannelData(0)
+  return new Blob([encodeWav(samples, 16000)], { type: 'audio/wav' })
+}
+
+async function transcribe(blob) {
+  // Browser audio (WebM/Opus/MP4) → WAV, UzbekVoice uchun
+  const wavBlob = await blobToWav(blob)
   const fd = new FormData()
-  fd.append('file', blob, `voice.${ext}`)
+  fd.append('file', wavBlob, 'voice.wav')
   const res = await fetch('/api/voice/transcribe', { method: 'POST', body: fd })
   const data = await res.json().catch(() => ({}))
   if (!res.ok || data.error) throw Object.assign(new Error('transcribe'), { code: data.error })
@@ -293,38 +319,38 @@ function MonthsField({ value, onChange }) {
   )
 }
 
+// idle | recording | transcribing | extracting | done | error
 function VoiceRecorder({ onExtracted }) {
-  const [status, setStatus] = useState('idle') // idle | recording | processing | error
+  const [status, setStatus] = useState('idle')
   const [errorMsg, setErrorMsg] = useState('')
+  const [transcript, setTranscript] = useState('')
   const mrRef = useRef(null)
   const chunksRef = useRef([])
   const mimeRef = useRef('')
 
   async function startRecording(e) {
     e.preventDefault()
-    // Agar yozilayotgan bo'lsa — to'xtatamiz (toggle)
     if (status === 'recording') { stopRecording(); return }
-    if (status !== 'idle' && status !== 'error') return
+    if (status !== 'idle' && status !== 'error' && status !== 'done') return
     setErrorMsg('')
+    setTranscript('')
 
-    // MediaRecorder support tekshirish (eski iOS)
     if (typeof MediaRecorder === 'undefined') {
       setStatus('error')
-      setErrorMsg('Qurilma ovoz yozishni qo\'llab-quvvatlamaydi')
+      setErrorMsg("Qurilma ovoz yozishni qo'llab-quvvatlamaydi")
       return
     }
 
     const mimeType = getBestMimeType()
     if (mimeType === null) {
       setStatus('error')
-      setErrorMsg('Ovoz yozish qo\'llab-quvvatlanmaydi')
+      setErrorMsg("Ovoz yozish qo'llab-quvvatlanmaydi")
       return
     }
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      const mrOpts = mimeType ? { mimeType } : {}
-      const mr = new MediaRecorder(stream, mrOpts)
+      const mr = new MediaRecorder(stream, mimeType ? { mimeType } : {})
       mimeRef.current = mr.mimeType || mimeType || 'audio/webm'
       chunksRef.current = []
 
@@ -332,41 +358,38 @@ function VoiceRecorder({ onExtracted }) {
       mr.onerror = () => {
         stream.getTracks().forEach(t => t.stop())
         setStatus('error')
-        setErrorMsg('Yozish xatosi. Qayta urinib ko\'ring.')
+        setErrorMsg("Yozish xatosi. Qayta urinib ko'ring.")
       }
       mr.onstop = async () => {
         stream.getTracks().forEach(t => t.stop())
         if (chunksRef.current.length === 0) { setStatus('idle'); return }
-        setStatus('processing')
         try {
+          setStatus('transcribing')
           const blob = new Blob(chunksRef.current, { type: mimeRef.current })
-          const text = await transcribe(blob, mimeRef.current)
-          if (text) {
-            const fields = await extractFields(text)
-            onExtracted(fields)
+          const text = await transcribe(blob)
+          if (!text) {
+            setStatus('error')
+            setErrorMsg("Ovoz tanilmadi. Qayta urinib ko'ring.")
+            return
           }
-          setStatus('idle')
+          setTranscript(text)
+          setStatus('extracting')
+          const fields = await extractFields(text)
+          onExtracted(fields)
+          setStatus('done')
+          setTimeout(() => { setStatus('idle'); setTranscript('') }, 2500)
         } catch (err) {
           setStatus('error')
-          if (err?.code === 'transcribe_failed') {
-            setErrorMsg('Ovoz xizmati ishlamayapti')
-          } else {
-            setErrorMsg('Qayta urinib ko\'ring')
-          }
+          setErrorMsg(err?.code === 'transcribe_failed' ? "Ovoz xizmati ishlamayapti" : "Qayta urinib ko'ring")
         }
       }
 
-      // timeslice=250 — iOS da chunk'lar kelmasa ham ishlaydi
-      mr.start(250)
+      mr.start(250) // iOS da chunk'lar kelmasa ham ishlaydi
       mrRef.current = mr
       setStatus('recording')
     } catch (err) {
       setStatus('error')
-      if (err?.name === 'NotAllowedError') {
-        setErrorMsg('Mikrofon ruxsati berilmagan')
-      } else {
-        setErrorMsg('Mikrofon ishlamayapti')
-      }
+      setErrorMsg(err?.name === 'NotAllowedError' ? "Mikrofon ruxsati berilmagan" : "Mikrofon ishlamayapti")
     }
   }
 
@@ -375,34 +398,46 @@ function VoiceRecorder({ onExtracted }) {
     if (mrRef.current?.state === 'recording') mrRef.current.stop()
   }
 
+  const isProcessing = status === 'transcribing' || status === 'extracting'
+
   return (
     <div className="flex flex-col items-center gap-3 px-4">
       <button
         type="button"
         onClick={startRecording}
         onContextMenu={(e) => e.preventDefault()}
-        disabled={status === 'processing'}
+        disabled={isProcessing}
         style={{ touchAction: 'manipulation', WebkitUserSelect: 'none', userSelect: 'none', WebkitTouchCallout: 'none' }}
         className={`w-24 h-24 rounded-full flex items-center justify-center transition-all select-none ${
           status === 'recording'
             ? 'bg-red-500 text-white scale-110 shadow-xl shadow-red-200'
-            : status === 'processing'
+            : isProcessing
             ? 'bg-muted text-muted-foreground cursor-wait'
+            : status === 'done'
+            ? 'bg-green-500 text-white scale-105'
             : status === 'error'
             ? 'bg-red-50 text-red-400 border-2 border-red-200'
             : 'bg-muted text-muted-foreground hover:bg-secondary active:scale-95'
         }`}
       >
-        {status === 'processing'
+        {isProcessing
           ? <Loader2 size={40} className="animate-spin" style={{ pointerEvents: 'none' }} />
-          : <Mic size={40} style={{ pointerEvents: 'none' }} />}
+          : status === 'done'
+          ? <CheckCircle size={40} style={{ pointerEvents: 'none' }} />
+          : <Mic size={40} style={{ pointerEvents: 'none' }} />
+        }
       </button>
-      <p className="text-sm text-center leading-tight min-h-[20px]">
-        {status === 'recording'   && <span className="text-red-500 font-medium">Yozilmoqda...</span>}
-        {status === 'processing'  && <span className="text-muted-foreground">Tahlil qilinmoqda...</span>}
-        {status === 'idle'        && <span className="text-muted-foreground">Bosing → gapiring → qayta bosing</span>}
-        {status === 'error'       && <span className="text-red-500 text-xs">{errorMsg}</span>}
-      </p>
+      <div className="text-sm text-center leading-tight min-h-[20px]">
+        {status === 'recording'    && <span className="text-red-500 font-medium">Yozilmoqda... (qayta bosing)</span>}
+        {status === 'transcribing' && <span className="text-muted-foreground">Matn ajratilmoqda...</span>}
+        {status === 'extracting'   && <span className="text-muted-foreground">Ma'lumot olinmoqda...</span>}
+        {status === 'done'         && <span className="text-green-600 font-medium">To'ldirildi</span>}
+        {status === 'idle'         && <span className="text-muted-foreground">Bosing → gapiring → qayta bosing</span>}
+        {status === 'error'        && <span className="text-red-500 text-xs">{errorMsg}</span>}
+      </div>
+      {transcript && (
+        <p className="text-xs text-muted-foreground text-center italic max-w-[220px] line-clamp-2">"{transcript}"</p>
+      )}
     </div>
   )
 }
@@ -457,6 +492,7 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
     if (rawPhone)     fields.telefon  = formatUzPhone(String(rawPhone))
     if (!Object.keys(fields).length) return
     setBronForm(f => ({ ...f, ...fields }))
+    setSotishForm(f => ({ ...f, ...fields }))
     const filled = new Set(Object.keys(fields).filter(k => fields[k]))
     setFlash(filled)
     setTimeout(() => setFlash(new Set()), 1200)

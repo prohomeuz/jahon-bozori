@@ -7,8 +7,10 @@ import { hashPassword, verifyPassword, createToken, requireAuth, requireAdmin } 
 import nodeFetch from 'node-fetch'
 import { SocksProxyAgent } from 'socks-proxy-agent'
 const _socksAgent = process.env.SOCKS_PROXY ? new SocksProxyAgent(process.env.SOCKS_PROXY) : null
+// Faqat Telegram uchun proxy (geo-block) — UzbekVoice va OpenAI to'g'ridan ishlaydi
 const proxiedFetch = (url, opts = {}) =>
   _socksAgent ? nodeFetch(url, { ...opts, agent: _socksAgent }) : fetch(url, opts)
+const directFetch = (url, opts = {}) => fetch(url, opts)
 
 const app = new Hono()
 app.use('/api/*', cors())
@@ -378,6 +380,7 @@ app.get('/api/stats/snapshot', requireAuth, (c) => {
 app.post('/api/voice/transcribe', async (c) => {
   const formData = await c.req.formData()
   const file = formData.get('file')
+  console.log('[voice] request received, file:', file ? `type=${file.type} size=${file.size}` : 'NULL')
   if (!file) return c.json({ error: 'file required' }, 400)
   if (process.env.DEV_MOCK === 'true') {
     return c.json({ text: 'ismim Sardor, familiyam Toshmatov, telefon raqamim 90 123 45 67' })
@@ -387,26 +390,49 @@ app.post('/api/voice/transcribe', async (c) => {
     : mime.includes('ogg') ? 'ogg' : 'webm'
   // codec parametrini olib tashlaymiz — UzbekVoice 'audio/webm;codecs=opus' ni qayta ishlay olmaydi
   const cleanMime = mime.split(';')[0]
-  const arrayBuf = await file.arrayBuffer()
-  const blob = new Blob([arrayBuf], { type: cleanMime })
-  const fd = new FormData()
-  fd.append('file', blob, `voice.${ext}`)
-  fd.append('enable_diarization', 'false')
+  const audioBuf = Buffer.from(await file.arrayBuffer())
+  console.log('[voice] audioBuf size:', audioBuf.length, 'mime:', mime, 'ext:', ext)
+
+  // nodeFetch bilan manual multipart — native fetch + FormData muammosidan xoli
+  const boundary = '----UVBoundary' + Date.now()
+  const CRLF = '\r\n'
+  function field(name, value) {
+    return Buffer.from(
+      `--${boundary}${CRLF}Content-Disposition: form-data; name="${name}"${CRLF}${CRLF}${value}${CRLF}`
+    )
+  }
+  const fileHeader = Buffer.from(
+    `--${boundary}${CRLF}Content-Disposition: form-data; name="file"; filename="voice.${ext}"${CRLF}Content-Type: ${cleanMime}${CRLF}${CRLF}`
+  )
+  const body = Buffer.concat([
+    fileHeader, audioBuf, Buffer.from(CRLF),
+    field('return_offsets', 'false'),
+    field('run_diarization', 'false'),
+    field('language', 'uz'),
+    field('model', 'enhanced-stt'),
+    field('blocking', 'true'),
+    Buffer.from(`--${boundary}--${CRLF}`),
+  ])
+
   try {
-    console.log('[voice] transcribe start, mime:', mime, '→', cleanMime, 'ext:', ext, 'size:', blob.size)
-    const res = await proxiedFetch('https://uzbekvoice.ai/api/v1/stt', {
+    const res = await nodeFetch('https://uzbekvoice.ai/api/v1/stt', {
       method: 'POST',
-      headers: { Authorization: `Bearer ${process.env.UV_KEY}` },
-      body: fd,
+      headers: {
+        Authorization: `Bearer ${process.env.UV_KEY}`,
+        'Content-Type': `multipart/form-data; boundary=${boundary}`,
+        'Content-Length': String(body.length),
+      },
+      body,
     })
-    console.log('[voice] uzbekvoice status:', res.status)
     const raw = await res.text()
-    console.log('[voice] uzbekvoice response:', raw.slice(0, 300))
+    console.log('[voice] status:', res.status, 'body:', raw.slice(0, 300))
     if (!res.ok) return c.json({ error: 'transcribe_failed', text: '' }, 503)
-    const data = JSON.parse(raw)
-    return c.json({ text: (data?.result?.text ?? '').trim() })
+    let data
+    try { data = JSON.parse(raw) } catch { return c.json({ error: 'transcribe_failed', text: '' }, 503) }
+    const text = (data?.result?.text ?? data?.text ?? '').trim()
+    return c.json({ text })
   } catch (e) {
-    console.error('[voice] transcribe error:', e.message)
+    console.error('[voice] fetch error:', e.message, e.cause?.message ?? '')
     return c.json({ error: 'transcribe_failed', text: '' }, 503)
   }
 })
@@ -417,7 +443,7 @@ app.post('/api/voice/extract', async (c) => {
   if (process.env.DEV_MOCK === 'true') {
     return c.json({ ism: 'Sardor', familiya: 'Toshmatov', telefon: '901234567' })
   }
-  const res = await proxiedFetch('https://api.openai.com/v1/chat/completions', {
+  const res = await directFetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${process.env.GPT_KEY}` },
     body: JSON.stringify({
@@ -426,7 +452,7 @@ app.post('/api/voice/extract', async (c) => {
       messages: [
         {
           role: 'system',
-          content: `Siz o'zbek tilida aytilgan ovozli matndan faqat 3 ta ma'lumot ajratuvchi yordamchisiz: ism, familiya, telefon raqam.
+          content: `Siz o'zbek tilida aytilgan ovozli matndan faqat 3 ta ma'lumot ajratuvchi yordamchisiz: ism, familiya, telefon raqam. Natijani JSON formatida qaytaring.
 
 QOIDALAR:
 
