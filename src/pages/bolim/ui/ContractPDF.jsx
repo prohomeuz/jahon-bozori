@@ -279,12 +279,18 @@ export function ContractPDF({
       ? calcUmumiy.toLocaleString('ru-RU') + ' USD'
       : '—'
 
-  const narxPerM2 =
-    rawNum && apartment.size > 0
+  const narxPerM2 = rawNarxM2
+    ? Number(rawNarxM2).toLocaleString('ru-RU') + ' USD'
+    : rawNum && apartment.size > 0
       ? Math.round(Number(rawNum) / apartment.size).toLocaleString('ru-RU') + ' USD'
       : '—'
 
-  const isBron = type === 'bron'
+  const umumiyRaw = rawUmumiy ? Number(rawUmumiy) : (calcUmumiy ?? 0)
+  const oylar = parseInt(form.oylar) || 0
+  const oylikVal = umumiyRaw > 0 && oylar > 0
+    ? Math.round((umumiyRaw - Number(rawNum || '0')) / oylar)
+    : 0
+  const oylikFmt = oylikVal > 0 ? oylikVal.toLocaleString('ru-RU') + ' USD' : '—'
 
   return (
     <Document>
@@ -311,6 +317,7 @@ export function ContractPDF({
             {/* Row 2 */}
             <View style={s.gridRow}>
               <Cell label="Kafolat summasi" value={boshlangichFmt} />
+              <Cell label="Oylik to'lov"    value={oylikFmt} />
               <Cell label="Umumiy narx"     value={umumiyFmt}      last />
             </View>
           </View>
@@ -373,7 +380,7 @@ export function ContractPDF({
           {/* Aloqa */}
           <View style={s.section}>
             <Text style={{ fontSize: 7.5, color: P.fg, lineHeight: 1.6 }}>
-              <Text style={{ fontFamily: 'Helvetica-Bold' }}>Call senter: </Text>
+              <Text style={{ fontFamily: 'Helvetica-Bold' }}>Telegram: </Text>
               <Text style={{ color: '#2563eb' }}>@HengTai_Admin</Text>
             </Text>
             <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 7.5, color: P.fg, marginTop: 3 }}>

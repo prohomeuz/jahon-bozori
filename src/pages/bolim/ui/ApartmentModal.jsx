@@ -610,9 +610,10 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
             const fd = new FormData()
             fd.append('pdf', blob, `shartnoma-${apartment.address}.pdf`)
             fd.append('booking_id', String(booking.id))
-            apiFetch('/api/bookings/send-pdf', { method: 'POST', body: fd }).catch(() => {})
+            return apiFetch('/api/bookings/send-pdf', { method: 'POST', body: fd })
           })
-          .catch(() => {})
+          .then(res => res?.ok && console.log('[PDF] Telegramga yuborildi'))
+          .catch(e => console.error('[PDF] xato:', e?.message ?? e))
       }
     } catch {
       setSubmitError('Internet aloqasi uzildi. Qayta urinib ko\'ring.')
@@ -696,9 +697,12 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
       { key: 'boshlangich', label: "Boshlang'ich",  unit: 'USD', val: calc.boshlangich },
     ]
     function transferToForm() {
+      const narxVal = Number(String(calc.narxM2).replace(/\s/g, ''))
+      const totalVal = narxVal && apartment.size > 0 ? Math.round(narxVal * apartment.size) : 0
       if (calc.narxM2)      setBronForm(f => ({ ...f, narx_m2: calc.narxM2 }))
       if (calc.boshlangich) setBronForm(f => ({ ...f, boshlangich: calc.boshlangich }))
       if (calc.oylar)       setBronForm(f => ({ ...f, oylar: calc.oylar }))
+      if (totalVal)         setBronForm(f => ({ ...f, umumiy: String(totalVal) }))
       setShowCalc(false)
     }
     return (
