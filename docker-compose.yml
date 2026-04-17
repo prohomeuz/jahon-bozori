@@ -17,6 +17,8 @@ services:
     dns:
       - 8.8.8.8
       - 1.1.1.1
+    ports:
+      - "127.0.0.1:3001:3001"      # Dev uchun: Vite proxy localhost:3001 ga ulanadi
     networks:
       - jahon-bozori-net
     # Backend tashqariga ochilmaydi — faqat frontend container ko'radi

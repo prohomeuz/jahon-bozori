@@ -526,6 +526,18 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
   const [calc, setCalc] = useState({ narxM2: '', boshlangich: '', oylar: '12', focus: 'narxM2' })
   const [phoneTarget, setPhoneTarget] = useState(null) // null | 'bron' | 'sotish'
 
+  // Kalkulyator ochilganda narxni bazadan yuklash
+  useEffect(() => {
+    if (!showCalc || calc.narxM2) return
+    const [block, bolimStr] = apartment.address.split('-')
+    apiFetch(`/api/prices?block=${block}&bolim=${parseInt(bolimStr)}&floor=${floor}`)
+      .then(r => r.json())
+      .then(({ price }) => {
+        if (price) setCalc(f => ({ ...f, narxM2: String(price) }))
+      })
+      .catch(() => {})
+  }, [showCalc]) // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     apiFetch('/api/managers').then(r => r.json()).then(list => {
       if (Array.isArray(list)) setManagers(list)

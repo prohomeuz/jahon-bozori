@@ -219,6 +219,17 @@ app.get('/api/apartments', (c) => {
   return c.json(q.apartments.all({ block, bolim, floor }))
 })
 
+// ─── PRICES ───────────────────────────────────────────────────────────────────
+
+app.get('/api/prices', requireAuth, (c) => {
+  const block = c.req.query('block')
+  const bolim = parseInt(c.req.query('bolim'))
+  const floor = parseInt(c.req.query('floor'))
+  if (!block || isNaN(bolim) || isNaN(floor)) return c.json({ error: 'block, bolim, floor required' }, 400)
+  const row = q.getPrice.get({ block, bolim, floor })
+  return c.json({ price: row?.price ?? 1000 })
+})
+
 app.patch('/api/apartments/:id/status', requireAuth, requireAdmin, async (c) => {
   const id = c.req.param('id')
   const { status } = await c.req.json()

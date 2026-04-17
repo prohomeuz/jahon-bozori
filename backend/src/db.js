@@ -61,6 +61,19 @@ try { db.exec(`ALTER TABLE bookings ADD COLUMN passport_place TEXT`) } catch {}
 try { db.exec(`ALTER TABLE bookings ADD COLUMN umumiy TEXT`) } catch {}
 // Add narx_m2 to bookings if missing (migration)
 try { db.exec(`ALTER TABLE bookings ADD COLUMN narx_m2 TEXT`) } catch {}
+// Prices table — har bir block/bolim/floor uchun narx (USD/m²)
+try {
+  db.exec(`CREATE TABLE IF NOT EXISTS prices (
+    block TEXT NOT NULL,
+    bolim INTEGER NOT NULL,
+    floor INTEGER NOT NULL,
+    price REAL NOT NULL DEFAULT 1000,
+    PRIMARY KEY (block, bolim, floor)
+  )`)
+  // Mavjud bo'lmagan (block,bolim,floor) kombinatsiyalari uchun 1000$ seed
+  db.exec(`INSERT OR IGNORE INTO prices (block, bolim, floor, price)
+    SELECT DISTINCT block, bolim, floor, 1000 FROM apartments`)
+} catch {}
 // Telegram subscribers — /start bosgan har kim
 try { db.exec(`CREATE TABLE IF NOT EXISTS telegram_subscribers (chat_id TEXT PRIMARY KEY, first_name TEXT, joined_at TEXT NOT NULL DEFAULT (datetime('now')))`) } catch {}
 // Translate Chinese notes → Uzbek
@@ -126,6 +139,11 @@ export const q = {
     GROUP BY b.user_id
     ORDER BY total DESC
   `),
+  // prices
+  getPrice:        db.prepare("SELECT price FROM prices WHERE block=:block AND bolim=:bolim AND floor=:floor"),
+  upsertPrice:     db.prepare("INSERT OR REPLACE INTO prices (block, bolim, floor, price) VALUES (:block, :bolim, :floor, :price)"),
+  allPrices:       db.prepare("SELECT block, bolim, floor, price FROM prices ORDER BY block, bolim, floor"),
+
   totalByBlock:    db.prepare("SELECT COUNT(*) AS n FROM apartments WHERE block=:block"),
   snapshotByBlock: db.prepare(`
     SELECT

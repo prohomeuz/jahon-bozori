@@ -9,6 +9,7 @@ COPY nginx.conf /etc/nginx/conf.d/default.conf
 
 # Build artifact'larni ko'chirish
 COPY dist /usr/share/nginx/html
+RUN chmod -R 755 /usr/share/nginx/html
 
 # nginx 80 portda ishlaydi
 EXPOSE 80
