@@ -58,31 +58,31 @@ export const BLOCK_BUILDINGS = {
     { id: 'M', label: "4-bo'lim",  delay: '7.2s', textX: 1008, textY: 344, points: '799,306 1218,314 1229,350 1221,382 793,371 790,339' },
   ],
   C: [
-    // top-left tall narrow = 9
-    { id: 'A', label: "9-bo'lim",  delay: '0.0s', textX: 162,  textY: 239, points: '144,87 231,87 196,268 196,279 190,279 193,303 106,303 103,279 98,268' },
+    // top-left tall narrow = 6
+    { id: 'A', label: "6-bo'lim",  delay: '0.0s', textX: 162,  textY: 239, points: '144,87 231,87 196,268 196,279 190,279 193,303 106,303 103,279 98,268' },
     // left L-shape = 3
     { id: 'B', label: "3-bo'lim",  delay: '0.6s', textX: 258,  textY: 419, points: '82,306 193,303 182,368 236,404 529,404 526,463 523,536 185,539 68,471 60,393' },
-    // middle-left top row = 13
-    { id: 'C', label: "13-bo'lim", delay: '1.2s', textX: 526,  textY: 130, points: '299,92 699,92 699,130 697,141 697,165 296,160 293,130' },
-    // middle-right top row = 12
-    { id: 'D', label: "12-bo'lim", delay: '1.8s', textX: 1001, textY: 131, points: '1136,163 1138,141 1144,138 1144,130 1130,92 770,92 773,130 775,165' },
-    // right tall narrow = 6
-    { id: 'E', label: "6-bo'lim",  delay: '2.4s', textX: 1299, textY: 204, points: '1206,133 1209,100 1301,98 1360,241 1363,252 1352,252 1347,279 1257,279' },
-    // middle-left row 2 = 11
-    { id: 'F', label: "11-bo'lim", delay: '3.0s', textX: 496,  textY: 187, points: '290,200 296,171 697,173 702,203' },
-    // middle-left row 3 = 8
-    { id: 'G', label: "8-bo'lim",  delay: '3.6s', textX: 492,  textY: 255, points: '282,238 277,268 708,271 702,241' },
-    // middle-right row 2 = 10
-    { id: 'H', label: "10-bo'lim", delay: '4.2s', textX: 974,  textY: 188, points: '783,171 1157,173 1165,203 789,203' },
-    // middle-right row 3 = 7
-    { id: 'I', label: "7-bo'lim",  delay: '4.8s', textX: 989,  textY: 257, points: '794,241 800,271 1187,274 1176,241' },
+    // middle-left top row = 12
+    { id: 'C', label: "12-bo'lim", delay: '1.2s', textX: 526,  textY: 130, points: '299,92 699,92 699,130 697,141 697,165 296,160 293,130' },
+    // middle-right top row = 13
+    { id: 'D', label: "13-bo'lim", delay: '1.8s', textX: 1001, textY: 131, points: '1136,163 1138,141 1144,138 1144,130 1130,92 770,92 773,130 775,165' },
+    // right tall narrow = 9
+    { id: 'E', label: "9-bo'lim",  delay: '2.4s', textX: 1299, textY: 204, points: '1206,133 1209,100 1301,98 1360,241 1363,252 1352,252 1347,279 1257,279' },
+    // middle-left row 2 = 10
+    { id: 'F', label: "10-bo'lim", delay: '3.0s', textX: 496,  textY: 187, points: '290,200 296,171 697,173 702,203' },
+    // middle-left row 3 = 7
+    { id: 'G', label: "7-bo'lim",  delay: '3.6s', textX: 492,  textY: 255, points: '282,238 277,268 708,271 702,241' },
+    // middle-right row 2 = 11
+    { id: 'H', label: "11-bo'lim", delay: '4.2s', textX: 974,  textY: 188, points: '783,171 1157,173 1165,203 789,203' },
+    // middle-right row 3 = 8
+    { id: 'I', label: "8-bo'lim",  delay: '4.8s', textX: 989,  textY: 257, points: '794,241 800,271 1187,274 1176,241' },
     // right L-shape = 1
     { id: 'J', label: "1-bo'lim",  delay: '5.4s', textX: 1260, textY: 408, points: '1282,287 1390,287 1434,393 1423,471 1322,542 1065,542 1054,442 1057,406 1263,406 1295,382 1279,325' },
-    // middle-left row 4 = 5
-    { id: 'K', label: "5-bo'lim",  delay: '6.0s', textX: 490,  textY: 350, points: '708,312 271,309 266,349 269,385 710,390 713,355' },
+    // middle-left row 4 = 4
+    { id: 'K', label: "4-bo'lim",  delay: '6.0s', textX: 490,  textY: 350, points: '708,312 271,309 266,349 269,385 710,390 713,355' },
     // bottom center = 2
     { id: 'L', label: "2-bo'lim",  delay: '6.6s', textX: 823,  textY: 471, points: '580,404 997,406 1008,466 1006,474 1000,542 586,539 583,463' },
-    // middle-right row 4 = 4
-    { id: 'M', label: "4-bo'lim",  delay: '7.2s', textX: 1004, textY: 354, points: '802,312 1195,312 1211,352 1209,363 1206,363 1203,390 805,387 802,352' },
+    // middle-right row 4 = 5
+    { id: 'M', label: "5-bo'lim",  delay: '7.2s', textX: 1004, textY: 354, points: '802,312 1195,312 1211,352 1209,363 1206,363 1203,390 805,387 802,352' },
   ],
 }

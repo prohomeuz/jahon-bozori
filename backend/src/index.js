@@ -302,11 +302,13 @@ app.post('/api/bookings/send-pdf', requireAuth, async (c) => {
   const token = process.env.TELEGRAM_BOT_TOKEN
   if (!token) return c.json({ ok: true })
 
-  const caption = `🟡 <b>Bron</b> · ${booking.apartment_id}\n` +
-    `👤 ${booking.ism} ${booking.familiya}` +
-    (booking.phone ? ` · ${booking.phone}` : '') + '\n' +
-    `💰 ${booking.boshlangich} · ${booking.oylar} oy\n` +
-    `👨‍💼 ${booking.manager_name ?? ''}`
+  const caption = `🟡 <b>Bron</b>\n` +
+    `🏢 <b>Do'kon:</b> ${booking.apartment_id}\n` +
+    `👤 <b>Mijoz:</b> ${booking.ism} ${booking.familiya}\n` +
+    (booking.phone ? `📞 <b>Telefon:</b> ${booking.phone}\n` : '') +
+    `💰 <b>Boshlang'ich:</b> ${booking.boshlangich}\n` +
+    `📅 <b>Muddat:</b> ${booking.oylar} oy\n` +
+    `🤵 <b>Manager:</b> ${booking.manager_name ?? ''}`
 
   const buffer = Buffer.from(await file.arrayBuffer())
   // Fayl nomi uzun bo'lsa Telegram bubble kengroq bo'ladi → caption sig'adi

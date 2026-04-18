@@ -78,7 +78,7 @@ function PanZoomPane({ src, alt, overlay, aptByAddress, onSelect, ready }) {
             {overlay && (
               <svg viewBox={overlay.viewBox} preserveAspectRatio="none" className="absolute inset-0 w-full h-full">
                 {overlay.rects.map((r) => {
-                  const apt = aptByAddress[r.id]
+                  const apt = aptByAddress[r.id.split('-').pop()]
                   const isHovered = hovered === r.id
                   const status = apt?.status ?? 'UNKNOWN'
                   const baseColor =
@@ -173,7 +173,7 @@ export default function BolimPage() {
     queryFn: () => apiFetch(`/api/apartments?block=${blockId}&bolim=${bolimNum}&floor=${activeFloor}`).then(r => r.json()),
     placeholderData: keepPreviousData,
   })
-  const aptByAddress = Object.fromEntries(apts.map(a => [a.address, a]))
+  const aptByAddress = Object.fromEntries(apts.map(a => [a.address.split('-').pop(), a]))
 
   const { data: stats } = useQuery({
     queryKey: ['bolim-stats', blockId, bolimNum],
