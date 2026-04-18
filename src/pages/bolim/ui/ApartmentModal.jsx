@@ -651,6 +651,7 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
     const months  = parseInt(calc.oylar) || 12
     const total   = apartment.size * narxVal
     const monthly = total > 0 ? Math.round((total - downVal) / months) : 0
+    const percent = total > 0 && downVal > 0 ? Math.round((downVal / total) * 100) : 0
     const FIELDS  = [
       { key: 'boshlangich', label: "Boshlang'ich",  unit: 'USD', val: calc.boshlangich },
     ]
@@ -708,11 +709,18 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
             {monthly > 0 ? monthly.toLocaleString('ru-RU') : '—'}
           </p>
           {monthly > 0 && <p className="text-sm text-amber-600 mt-1">USD / oy</p>}
+          {percent > 0 && (
+            <div className="mt-3 pt-3 border-t border-amber-300">
+              <p className="text-xs text-amber-700 mb-0.5">Kafolat summasi</p>
+              <p className="text-2xl font-bold text-amber-700">{percent}% <span className="text-sm font-normal">umumiy to'lovdan</span></p>
+            </div>
+          )}
         </div>
 
         {/* Formaga o'tkazish */}
         <button type="button" onClick={transferToForm}
-          className="w-full py-3.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-semibold text-sm active:scale-[0.98] transition-all shrink-0"
+          disabled={!calc.boshlangich}
+          className="w-full py-3.5 rounded-xl font-semibold text-sm transition-all shrink-0 active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed bg-amber-500 hover:bg-amber-600 disabled:hover:bg-amber-500 text-white"
         >
           Formaga o'tkazish →
         </button>
@@ -737,6 +745,13 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
                 <div>
                   <p className="text-xs text-amber-700 mb-1">Kafolat summasi</p>
                   <p className="text-xl font-bold text-foreground">{bronForm.boshlangich || '—'} <span className="text-sm font-normal text-muted-foreground">USD</span></p>
+                  {(() => {
+                    const down  = Number(String(bronForm.boshlangich || '').replace(/\s/g, ''))
+                    const narx  = Number(String(bronForm.narx_m2 || '').replace(/\s/g, ''))
+                    const total = narx > 0 ? Math.round(narx * apartment.size) : 0
+                    const pct   = total > 0 && down > 0 ? Math.round((down / total) * 100) : 0
+                    return pct > 0 ? <p className="text-lg font-bold text-amber-600 mt-1">{pct}% <span className="text-xs font-normal">umumiy to'lovdan</span></p> : null
+                  })()}
                 </div>
                 <div>
                   <p className="text-xs text-amber-700 mb-1">Muddat</p>
