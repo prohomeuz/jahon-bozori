@@ -10,7 +10,6 @@ const _socksAgent = process.env.SOCKS_PROXY ? new SocksProxyAgent(process.env.SO
 // Faqat Telegram uchun proxy (geo-block) — UzbekVoice va OpenAI to'g'ridan ishlaydi
 const proxiedFetch = (url, opts = {}) =>
   _socksAgent ? nodeFetch(url, { ...opts, agent: _socksAgent }) : fetch(url, opts)
-const directFetch = (url, opts = {}) => fetch(url, opts)
 
 const app = new Hono()
 app.use('/api/*', cors())
@@ -219,6 +218,14 @@ app.get('/api/apartments', (c) => {
   return c.json(q.apartments.all({ block, bolim, floor }))
 })
 
+app.get('/api/apartments/booking', requireAuth, (c) => {
+  const aptId = c.req.query('id')
+  if (!aptId) return c.json({ error: 'id required' }, 400)
+  const row = q.aptBookings.get({ apartment_id: aptId })
+  if (!row) return c.json(null)
+  return c.json({ ism: row.ism, manager_name: row.manager_name, created_at: row.created_at, type: row.type })
+})
+
 // ─── PRICES ───────────────────────────────────────────────────────────────────
 
 app.get('/api/prices', requireAuth, (c) => {
@@ -228,6 +235,18 @@ app.get('/api/prices', requireAuth, (c) => {
   if (!block || isNaN(bolim) || isNaN(floor)) return c.json({ error: 'block, bolim, floor required' }, 400)
   const row = q.getPrice.get({ block, bolim, floor })
   return c.json({ price: row?.price ?? 1000 })
+})
+
+app.get('/api/prices/all', requireAuth, requireAdmin, (c) => {
+  return c.json(q.allPrices.all())
+})
+
+app.patch('/api/prices', requireAuth, requireAdmin, async (c) => {
+  const { block, bolim, floor, price } = await c.req.json()
+  if (!block || bolim == null || floor == null || price == null) return c.json({ error: 'block, bolim, floor, price required' }, 400)
+  if (typeof price !== 'number' || price < 0) return c.json({ error: 'price must be non-negative number' }, 400)
+  q.upsertPrice.run({ block, bolim: parseInt(bolim), floor: parseInt(floor), price })
+  return c.json({ ok: true })
 })
 
 app.patch('/api/apartments/:id/status', requireAuth, requireAdmin, async (c) => {
@@ -424,97 +443,6 @@ app.get('/api/stats/snapshot', requireAuth, (c) => {
   const sold     = snap?.sold     ?? 0
   const reserved = snap?.reserved ?? 0
   return c.json({ sold, reserved, empty: total - sold - reserved, total, date, block })
-})
-
-// ─── VOICE PROXY ─────────────────────────────────────────────────────────────
-
-app.post('/api/voice/transcribe', async (c) => {
-  const formData = await c.req.formData()
-  const file = formData.get('file')
-  console.log('[voice] request received, file:', file ? `type=${file.type} size=${file.size}` : 'NULL')
-  if (!file) return c.json({ error: 'file required' }, 400)
-  if (process.env.DEV_MOCK === 'true') {
-    return c.json({ text: 'ismim Sardor, familiyam Toshmatov, telefon raqamim 90 123 45 67' })
-  }
-  const mime = file.type || 'audio/webm'
-  const ext = mime.includes('mp4') || mime.includes('aac') ? 'mp4'
-    : mime.includes('ogg') ? 'ogg' : 'webm'
-  // codec parametrini olib tashlaymiz — UzbekVoice 'audio/webm;codecs=opus' ni qayta ishlay olmaydi
-  const cleanMime = mime.split(';')[0]
-  const audioBuf = Buffer.from(await file.arrayBuffer())
-  console.log('[voice] audioBuf size:', audioBuf.length, 'mime:', mime, 'ext:', ext)
-
-  // nodeFetch bilan manual multipart — native fetch + FormData muammosidan xoli
-  const boundary = '----UVBoundary' + Date.now()
-  const CRLF = '\r\n'
-  function field(name, value) {
-    return Buffer.from(
-      `--${boundary}${CRLF}Content-Disposition: form-data; name="${name}"${CRLF}${CRLF}${value}${CRLF}`
-    )
-  }
-  const fileHeader = Buffer.from(
-    `--${boundary}${CRLF}Content-Disposition: form-data; name="file"; filename="voice.${ext}"${CRLF}Content-Type: ${cleanMime}${CRLF}${CRLF}`
-  )
-  const body = Buffer.concat([
-    fileHeader, audioBuf, Buffer.from(CRLF),
-    field('return_offsets', 'false'),
-    field('run_diarization', 'false'),
-    field('language', 'uz'),
-    field('model', 'enhanced-stt'),
-    field('blocking', 'true'),
-    Buffer.from(`--${boundary}--${CRLF}`),
-  ])
-
-  try {
-    const res = await nodeFetch('https://uzbekvoice.ai/api/v1/stt', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${process.env.UV_KEY}`,
-        'Content-Type': `multipart/form-data; boundary=${boundary}`,
-        'Content-Length': String(body.length),
-      },
-      body,
-    })
-    const raw = await res.text()
-    console.log('[voice] status:', res.status, 'body:', raw.slice(0, 300))
-    if (!res.ok) return c.json({ error: 'transcribe_failed', text: '' }, 503)
-    let data
-    try { data = JSON.parse(raw) } catch { return c.json({ error: 'transcribe_failed', text: '' }, 503) }
-    const text = (data?.result?.text ?? data?.text ?? '').trim()
-    return c.json({ text })
-  } catch (e) {
-    console.error('[voice] fetch error:', e.message, e.cause?.message ?? '')
-    return c.json({ error: 'transcribe_failed', text: '' }, 503)
-  }
-})
-
-app.post('/api/voice/extract', async (c) => {
-  const { text } = await c.req.json()
-  if (!text) return c.json({})
-  if (process.env.DEV_MOCK === 'true') {
-    return c.json({ ism: 'Sardor', familiya: 'Toshmatov', telefon: '901234567' })
-  }
-  const res = await directFetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${process.env.GPT_KEY}` },
-    body: JSON.stringify({
-      model: 'gpt-4.1-nano',
-      response_format: { type: 'json_object' },
-      temperature: 0,
-      max_tokens: 60,
-      messages: [
-        {
-          role: 'system',
-          content: `O'zbek ovozli matndan ism va familiya ajrat. JSON: {"ism":"...","familiya":"..."}. Topilmasa "". "Adashdim/xato" desa oxirgi aytilgan qiymat to'g'ri.`,
-        },
-        { role: 'user', content: String(text) },
-      ],
-    }),
-  })
-  let data
-  try { data = await res.json() } catch { return c.json({}) }
-  try { return c.json(JSON.parse(data.choices[0].message.content)) }
-  catch { return c.json({}) }
 })
 
 // ─── HEALTH CHECK ────────────────────────────────────────────────────────────

@@ -104,7 +104,7 @@ function PanZoomPane({ src, alt, overlay, aptByAddress, onSelect, ready }) {
                     style: { cursor: apt ? 'pointer' : 'default' },
                     onMouseEnter: () => setHovered(r.id),
                     onMouseLeave: () => setHovered(null),
-                    onClick: () => !gesturedRef.current && apt && onSelect?.(apt),
+                    onDoubleClick: () => !gesturedRef.current && apt && onSelect?.(apt),
                   }
                   return r.d
                     ? <path {...sharedProps} d={r.d} />
@@ -181,7 +181,12 @@ export default function BolimPage() {
     staleTime: 30_000,
   })
 
-  // Ikkalasi ham tayyor bo'lganda ko'rsatamiz
+  const { data: priceData } = useQuery({
+    queryKey: ['price', blockId, bolimNum, activeFloor],
+    queryFn: () => apiFetch(`/api/prices?block=${blockId}&bolim=${bolimNum}&floor=${activeFloor}`).then(r => r.json()),
+    staleTime: 60_000,
+  })
+
   const ready = imgLoaded && !aptsLoading
 
   function goBolim(n) {
@@ -223,28 +228,41 @@ export default function BolimPage() {
       </div>
 
       {/* Legend */}
-      <div className="fixed top-20 right-5 z-40 flex flex-col gap-1.5 bg-background/90 backdrop-blur-sm border border-border rounded-xl px-4 py-3 shadow-lg">
-        {[
-          { color: 'bg-green-500',  label: "Bo'sh",    key: 'EMPTY'    },
-          { color: 'bg-yellow-400', label: 'Bron',     key: 'RESERVED' },
-          { color: 'bg-red-500',    label: 'Sotilgan', key: 'SOLD'     },
-        ].map(({ color, label, key }) => (
-          <div key={label} className="flex items-center gap-2.5">
-            <span className={`w-3.5 h-3.5 rounded-sm ${color} opacity-70 shrink-0`} />
-            <span className="text-sm font-medium text-foreground">{label}</span>
-            {stats != null && (
-              <span className="ml-auto pl-3 text-sm font-bold tabular-nums text-foreground">
-                {stats[key] ?? 0}
+      <div className="fixed top-20 right-5 z-40 flex flex-col bg-background/90 backdrop-blur-sm border border-border rounded-2xl shadow-xl overflow-hidden min-w-[220px]">
+        <div className="flex flex-col gap-1 px-5 py-4">
+          {[
+            { color: 'bg-green-500',  label: "Bo'sh",    key: 'EMPTY'    },
+            { color: 'bg-yellow-400', label: 'Bron',     key: 'RESERVED' },
+            { color: 'bg-red-500',    label: 'Sotilgan', key: 'SOLD'     },
+          ].map(({ color, label, key }) => (
+            <div key={label} className="flex items-center gap-3 py-0.5">
+              <span className={`w-3 h-3 rounded-full ${color} shrink-0`} />
+              <span className="text-sm font-medium text-foreground flex-1">{label}</span>
+              {stats != null && (
+                <span className="text-sm font-bold tabular-nums text-foreground">
+                  {stats[key] ?? 0}
+                </span>
+              )}
+            </div>
+          ))}
+          {stats != null && (
+            <div className="mt-2 pt-2 border-t border-border flex items-center justify-between">
+              <span className="text-xs text-muted-foreground">Jami</span>
+              <span className="text-xs font-bold tabular-nums text-foreground">
+                {(stats.EMPTY ?? 0) + (stats.RESERVED ?? 0) + (stats.SOLD ?? 0)}
               </span>
-            )}
-          </div>
-        ))}
-        {stats != null && (
-          <div className="mt-1 pt-1.5 border-t border-border flex items-center justify-between gap-4">
-            <span className="text-xs text-muted-foreground">Jami</span>
-            <span className="text-xs font-bold tabular-nums text-foreground">
-              {(stats.EMPTY ?? 0) + (stats.RESERVED ?? 0) + (stats.SOLD ?? 0)}
-            </span>
+            </div>
+          )}
+        </div>
+        {priceData?.price != null && (
+          <div className="px-5 py-4 bg-amber-50 border-t border-amber-200">
+            <p className="text-[10px] font-semibold text-amber-600 uppercase tracking-wider mb-1">{activeFloor}-qavat narxi</p>
+            <div className="flex items-baseline gap-1">
+              <span className="text-2xl font-black tabular-nums text-amber-900 leading-none">
+                ${priceData.price.toLocaleString('ru-RU')}
+              </span>
+              <span className="text-xs font-semibold text-amber-600">/m²</span>
+            </div>
           </div>
         )}
       </div>
@@ -309,9 +327,19 @@ export default function BolimPage() {
         )}
       </div>
 
-      {/* Kontent: skeleton yoki PanZoomPane */}
+      {/* Kontent */}
       <div className="relative flex flex-col flex-1 overflow-hidden bg-background">
-        {/* PanZoomPane — har doim mount qilingan, lekin tayyor bo'lguncha ko'rinmaydi */}
+        {!ready && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 z-10 bg-background">
+            <div className="relative w-12 h-12">
+              <svg className="w-full h-full animate-spin" viewBox="0 0 48 48" fill="none">
+                <circle cx="24" cy="24" r="20" stroke="currentColor" strokeWidth="4" strokeOpacity="0.1" />
+                <path d="M24 4a20 20 0 0 1 20 20" stroke="currentColor" strokeWidth="4" strokeLinecap="round" />
+              </svg>
+            </div>
+            <p className="text-sm text-muted-foreground font-medium tracking-wide">Yuklanmoqda...</p>
+          </div>
+        )}
         <PanZoomPane
           key={activeFloor}
           src={currentSrc}

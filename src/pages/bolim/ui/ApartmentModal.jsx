@@ -1,5 +1,5 @@
-import { Loader2, Mic, RotateCcw, FileText, CheckCircle, Lock, ShoppingBag, Ruler, X, ChevronDown, Calculator } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { Loader2, RotateCcw, FileText, CheckCircle, Lock, ShoppingBag, Ruler, X, ChevronDown, Calculator } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import { apiFetch, getUser } from '@/shared/lib/auth'
 import { ContractPDF } from './ContractPDF'
 
@@ -159,80 +159,9 @@ async function downloadContractPDF({ apartment, floor, blockId, bolimNum, form, 
   return blob
 }
 
-// iOS va boshqa platformalarda ishlaydi
-function getBestMimeType() {
-  const candidates = [
-    'audio/webm;codecs=opus',
-    'audio/webm',
-    'audio/mp4',
-    'audio/aac',
-    'audio/ogg;codecs=opus',
-  ]
-  if (typeof MediaRecorder === 'undefined') return null
-  for (const t of candidates) {
-    if (MediaRecorder.isTypeSupported(t)) return t
-  }
-  return ''
-}
-
-// Float32Array → 16-bit PCM WAV (16kHz mono)
-function encodeWav(samples, sampleRate) {
-  const buf = new ArrayBuffer(44 + samples.length * 2)
-  const v = new DataView(buf)
-  const str = (off, s) => { for (let i = 0; i < s.length; i++) v.setUint8(off + i, s.charCodeAt(i)) }
-  str(0, 'RIFF'); v.setUint32(4, 36 + samples.length * 2, true)
-  str(8, 'WAVE'); str(12, 'fmt ')
-  v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true)
-  v.setUint32(24, sampleRate, true); v.setUint32(28, sampleRate * 2, true)
-  v.setUint16(32, 2, true); v.setUint16(34, 16, true)
-  str(36, 'data'); v.setUint32(40, samples.length * 2, true)
-  let off = 44
-  for (let i = 0; i < samples.length; i++) {
-    const s = Math.max(-1, Math.min(1, samples[i]))
-    v.setInt16(off, s < 0 ? s * 0x8000 : s * 0x7FFF, true)
-    off += 2
-  }
-  return buf
-}
-
-// Browser WebM/Opus/MP4 → WAV 16kHz mono (UzbekVoice WAV qabul qiladi)
-async function blobToWav(blob) {
-  const arrayBuffer = await blob.arrayBuffer()
-  const ctx = new AudioContext({ sampleRate: 16000 })
-  const audioBuf = await ctx.decodeAudioData(arrayBuffer)
-  await ctx.close()
-  // Stereo bo'lsa birinchi channelni olamiz (mono)
-  const samples = audioBuf.getChannelData(0)
-  return new Blob([encodeWav(samples, 16000)], { type: 'audio/wav' })
-}
-
-async function transcribe(blob) {
-  // Browser audio (WebM/Opus/MP4) → WAV, UzbekVoice uchun
-  const wavBlob = await blobToWav(blob)
-  const fd = new FormData()
-  fd.append('file', wavBlob, 'voice.wav')
-  const res = await fetch('/api/voice/transcribe', { method: 'POST', body: fd })
-  const data = await res.json().catch(() => ({}))
-  if (!res.ok || data.error) throw Object.assign(new Error('transcribe'), { code: data.error })
-  return data.text ?? ''
-}
-
-async function extractFields(text) {
-  const res = await fetch('/api/voice/extract', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text }),
-  })
-  if (!res.ok) throw new Error('extract failed')
-  return res.json()
-}
-
 const INPUT =
   'w-full rounded-xl border border-border bg-background px-4 py-3.5 text-base text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring transition-shadow'
 const LABEL = 'block text-sm font-medium text-foreground mb-1.5'
-const FLASH_CLASS = ' ring-2 ring-green-400 bg-green-50 border-green-300'
-const FLASH_STYLE = { transition: 'box-shadow 0.4s, background 0.4s, border-color 0.4s' }
-
 // Faqat o'zbek raqamlar: +998 XX XXX XX XX
 function formatUzPhone(raw) {
   // Faqat raqamlar
@@ -251,27 +180,28 @@ function formatUzPhone(raw) {
   return out
 }
 
-function Field({ label, flash, ...props }) {
+function Field({ label, ...props }) {
   return (
     <div>
       <label className={LABEL}>{label}</label>
-      <input className={INPUT + (flash ? FLASH_CLASS : '')} style={FLASH_STYLE} {...props} />
+      <input className={INPUT} {...props} />
     </div>
   )
 }
 
-function PhoneField({ label, value, flash, onOpenNumpad, isOpen }) {
+function PhoneField({ label, value, onOpenNumpad, isOpen }) {
   return (
     <div>
       <label className={LABEL}>{label}</label>
       <input
         type="tel"
         readOnly
-        className={INPUT + (flash ? FLASH_CLASS : '') + (isOpen ? ' ring-2 ring-ring border-ring' : '')}
-        style={{ ...FLASH_STYLE, cursor: 'pointer' }}
+        className={INPUT + (isOpen ? ' ring-2 ring-ring border-ring' : '')}
+        style={{ cursor: 'pointer' }}
         value={value}
         placeholder="+998 90 123 45 67"
-        onPointerDown={e => { e.preventDefault(); onOpenNumpad() }}
+        onPointerDown={e => { e.preventDefault(); document.activeElement?.blur(); onOpenNumpad() }}
+        onFocus={() => onOpenNumpad()}
       />
     </div>
   )
@@ -287,6 +217,8 @@ function getRawDigits(val) {
 }
 
 function FullPhoneNumpad({ value, onChange, onClose }) {
+  const [activeKey, setActiveKey] = useState(null)
+
   function press(k) {
     const raw = getRawDigits(value)
     if (k === '⌫') { onChange(formatUzPhone(raw.slice(0, -1))); return }
@@ -295,6 +227,21 @@ function FullPhoneNumpad({ value, onChange, onClose }) {
     onChange(formatUzPhone(next))
     if (next.length === 9) onClose()
   }
+
+  function flash(k) {
+    setActiveKey(k)
+    setTimeout(() => setActiveKey(null), 150)
+  }
+
+  useEffect(() => {
+    function onKey(e) {
+      if (e.key >= '0' && e.key <= '9') { e.preventDefault(); flash(e.key); press(e.key) }
+      else if (e.key === 'Backspace') { e.preventDefault(); flash('⌫'); press('⌫') }
+      else if (e.key === 'Escape' || e.key === 'Enter') { e.preventDefault(); onClose() }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [value]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="flex flex-col h-full w-full p-3 gap-2">
@@ -308,8 +255,8 @@ function FullPhoneNumpad({ value, onChange, onClose }) {
           k === '' ? <div key={i} /> :
           k === '⌫' ? (
             <button key={i} type="button"
-              onPointerDown={e => { e.preventDefault(); press('⌫') }}
-              className="rounded-2xl bg-muted/60 text-muted-foreground flex items-center justify-center active:scale-95 transition-transform select-none touch-manipulation">
+              onPointerDown={e => { e.preventDefault(); flash('⌫'); press('⌫') }}
+              className={`rounded-2xl text-muted-foreground flex items-center justify-center active:scale-95 transition-all select-none touch-manipulation ${activeKey === '⌫' ? 'bg-primary/20 scale-95' : 'bg-muted/60'}`}>
               <svg width="20" height="15" viewBox="0 0 24 18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M9 3H20a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H9L3 9z"/>
                 <line x1="13" y1="7" x2="17" y2="11"/><line x1="17" y1="7" x2="13" y2="11"/>
@@ -317,8 +264,8 @@ function FullPhoneNumpad({ value, onChange, onClose }) {
             </button>
           ) : (
             <button key={i} type="button"
-              onPointerDown={e => { e.preventDefault(); press(k) }}
-              className="rounded-2xl bg-muted/60 text-foreground text-xl font-semibold flex items-center justify-center active:scale-95 transition-transform select-none touch-manipulation hover:bg-muted">
+              onPointerDown={e => { e.preventDefault(); flash(k); press(k) }}
+              className={`rounded-2xl text-foreground text-xl font-semibold flex items-center justify-center active:scale-95 transition-all select-none touch-manipulation ${activeKey === k ? 'bg-primary text-primary-foreground scale-95' : 'bg-muted/60 hover:bg-muted'}`}>
               {k}
             </button>
           )
@@ -383,125 +330,79 @@ function MonthsField({ value, onChange }) {
   )
 }
 
-// idle | recording | transcribing | extracting | done | error
-function VoiceRecorder({ onExtracted }) {
-  const [status, setStatus] = useState('idle')
-  const [errorMsg, setErrorMsg] = useState('')
-  const [transcript, setTranscript] = useState('')
-  const mrRef = useRef(null)
-  const chunksRef = useRef([])
-  const mimeRef = useRef('')
+function StatusCard({ apartment, isReserved, onClose }) {
+  const [booking, setBooking] = useState(null)
 
-  async function startRecording(e) {
-    e.preventDefault()
-    if (status === 'recording') { stopRecording(); return }
-    if (status !== 'idle' && status !== 'error' && status !== 'done') return
-    setErrorMsg('')
-    setTranscript('')
+  useEffect(() => {
+    apiFetch(`/api/apartments/booking?id=${apartment.address}`)
+      .then(r => r.json())
+      .then(d => setBooking(d))
+      .catch(() => {})
+  }, [apartment.address])
 
-    if (typeof MediaRecorder === 'undefined') {
-      setStatus('error')
-      setErrorMsg("Qurilma ovoz yozishni qo'llab-quvvatlamaydi")
-      return
-    }
+  const accent = isReserved
+    ? { dot: 'bg-amber-400', badge: 'bg-amber-50 text-amber-700 border-amber-200', label: 'Bron' }
+    : { dot: 'bg-red-500',   badge: 'bg-red-50 text-red-700 border-red-200',       label: 'Sotilgan' }
 
-    const mimeType = getBestMimeType()
-    if (mimeType === null) {
-      setStatus('error')
-      setErrorMsg("Ovoz yozish qo'llab-quvvatlanmaydi")
-      return
-    }
-
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      const mr = new MediaRecorder(stream, mimeType ? { mimeType } : {})
-      mimeRef.current = mr.mimeType || mimeType || 'audio/webm'
-      chunksRef.current = []
-
-      mr.ondataavailable = (ev) => { if (ev.data.size > 0) chunksRef.current.push(ev.data) }
-      mr.onerror = () => {
-        stream.getTracks().forEach(t => t.stop())
-        setStatus('error')
-        setErrorMsg("Yozish xatosi. Qayta urinib ko'ring.")
-      }
-      mr.onstop = async () => {
-        stream.getTracks().forEach(t => t.stop())
-        if (chunksRef.current.length === 0) { setStatus('idle'); return }
-        try {
-          setStatus('transcribing')
-          const blob = new Blob(chunksRef.current, { type: mimeRef.current })
-          const text = await transcribe(blob)
-          if (!text) {
-            setStatus('error')
-            setErrorMsg("Ovoz tanilmadi. Qayta urinib ko'ring.")
-            return
-          }
-          setTranscript(text)
-          setStatus('extracting')
-          const fields = await extractFields(text)
-          onExtracted(fields)
-          setStatus('done')
-          setTimeout(() => { setStatus('idle'); setTranscript('') }, 2500)
-        } catch (err) {
-          setStatus('error')
-          setErrorMsg(err?.code === 'transcribe_failed' ? "Ovoz xizmati ishlamayapti" : "Qayta urinib ko'ring")
-        }
-      }
-
-      mr.start(250) // iOS da chunk'lar kelmasa ham ishlaydi
-      mrRef.current = mr
-      setStatus('recording')
-    } catch (err) {
-      setStatus('error')
-      setErrorMsg(err?.name === 'NotAllowedError' ? "Mikrofon ruxsati berilmagan" : "Mikrofon ishlamayapti")
-    }
+  function fmtDate(str) {
+    if (!str) return null
+    const d = new Date(str)
+    const months = ['yan','fev','mar','apr','may','iyn','iyl','avg','sen','okt','noy','dek']
+    return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`
   }
-
-  function stopRecording(e) {
-    e?.preventDefault()
-    if (mrRef.current?.state === 'recording') mrRef.current.stop()
-  }
-
-  const isProcessing = status === 'transcribing' || status === 'extracting'
 
   return (
-    <div className="flex flex-col items-center gap-3 px-4">
-      <button
-        type="button"
-        onClick={startRecording}
-        onContextMenu={(e) => e.preventDefault()}
-        disabled={isProcessing}
-        style={{ touchAction: 'manipulation', WebkitUserSelect: 'none', userSelect: 'none', WebkitTouchCallout: 'none' }}
-        className={`w-24 h-24 rounded-full flex items-center justify-center transition-all select-none ${
-          status === 'recording'
-            ? 'bg-red-500 text-white scale-110 shadow-xl shadow-red-200'
-            : isProcessing
-            ? 'bg-muted text-muted-foreground cursor-wait'
-            : status === 'done'
-            ? 'bg-green-500 text-white scale-105'
-            : status === 'error'
-            ? 'bg-red-50 text-red-400 border-2 border-red-200'
-            : 'bg-muted text-muted-foreground hover:bg-secondary active:scale-95'
-        }`}
-      >
-        {isProcessing
-          ? <Loader2 size={40} className="animate-spin" style={{ pointerEvents: 'none' }} />
-          : status === 'done'
-          ? <CheckCircle size={40} style={{ pointerEvents: 'none' }} />
-          : <Mic size={40} style={{ pointerEvents: 'none' }} />
-        }
-      </button>
-      <div className="text-sm text-center leading-tight min-h-[20px]">
-        {status === 'recording'    && <span className="text-red-500 font-medium">Yozilmoqda... (qayta bosing)</span>}
-        {status === 'transcribing' && <span className="text-muted-foreground">Matn ajratilmoqda...</span>}
-        {status === 'extracting'   && <span className="text-muted-foreground">Ma'lumot olinmoqda...</span>}
-        {status === 'done'         && <span className="text-green-600 font-medium">To'ldirildi</span>}
-        {status === 'idle'         && <span className="text-muted-foreground">Bosing → gapiring → qayta bosing</span>}
-        {status === 'error'        && <span className="text-red-500 text-xs">{errorMsg}</span>}
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60"
+      style={{ backdropFilter: 'blur(4px)' }}
+      onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="relative bg-background rounded-2xl shadow-2xl border border-border w-full max-w-xs overflow-hidden">
+        {/* Header strip */}
+        <div className={`px-5 py-4 flex items-center gap-3 ${isReserved ? 'bg-amber-50 border-b border-amber-100' : 'bg-red-50 border-b border-red-100'}`}>
+          <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${accent.dot}`} />
+          <span className="font-black text-lg text-foreground tracking-tight flex-1">{apartment.address}</span>
+          <span className={`text-xs font-bold px-2.5 py-1 rounded-full border ${accent.badge}`}>{accent.label}</span>
+          <button onClick={onClose} className="w-7 h-7 rounded-full flex items-center justify-center bg-black/8 text-foreground hover:bg-black/15 transition-colors ml-1">
+            <X size={13} strokeWidth={2.5} />
+          </button>
+        </div>
+
+        {/* Info rows */}
+        <div className="px-5 py-4 flex flex-col gap-3">
+          {booking ? (
+            <>
+              {booking.ism && (
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-muted-foreground">{isReserved ? 'Kim uchun bron' : 'Xaridor'}</span>
+                  <span className="text-sm font-bold text-foreground">{booking.ism}</span>
+                </div>
+              )}
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-muted-foreground">Menejer</span>
+                <span className="text-sm font-semibold text-foreground">{booking.manager_name ?? '—'}</span>
+              </div>
+              {booking.created_at && (
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-muted-foreground">{isReserved ? 'Bron sanasi' : 'Sotilgan sana'}</span>
+                  <span className="text-sm font-semibold text-foreground">{fmtDate(booking.created_at)}</span>
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="flex items-center justify-center py-2">
+              <svg className="w-5 h-5 animate-spin text-muted-foreground" viewBox="0 0 24 24" fill="none">
+                <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeOpacity="0.2" />
+                <path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+              </svg>
+            </div>
+          )}
+          {apartment.size > 0 && (
+            <div className="flex items-center justify-between pt-1 border-t border-border">
+              <span className="text-xs text-muted-foreground">Maydon</span>
+              <span className="text-sm font-semibold text-foreground">{apartment.size} m²</span>
+            </div>
+          )}
+        </div>
       </div>
-      {transcript && (
-        <p className="text-xs text-muted-foreground text-center italic max-w-[220px] line-clamp-2">"{transcript}"</p>
-      )}
     </div>
   )
 }
@@ -514,7 +415,6 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
   const [tab, setTab] = useState('bron')
   const [bronForm, setBronForm] = useState(BRON_EMPTY)
   const [sotishForm, setSotishForm] = useState(SOTISH_EMPTY)
-  const [flash, setFlash] = useState(new Set())
   const [booked, setBooked] = useState(null)
   const [pdfLoading, setPdfLoading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -550,30 +450,24 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
     return () => window.removeEventListener('keydown', handler)
   }, [onClose])
 
+  // Boshqa inputga fokus o'tsa numpadni yop
+  useEffect(() => {
+    if (!phoneTarget) return
+    function onFocusIn(e) {
+      const el = e.target
+      if (el.tagName === 'INPUT' && el.type !== 'tel') setPhoneTarget(null)
+    }
+    document.addEventListener('focusin', onFocusIn)
+    return () => document.removeEventListener('focusin', onFocusIn)
+  }, [phoneTarget])
+
   if (!apartment) return null
 
   const cap = (s) => s ? s.charAt(0).toUpperCase() + s.slice(1) : s
 
-  const setBron = (key) => (e) => setBronForm((f) => ({ ...f, [key]: e.target.value }))
   const setBronCap = (key) => (e) => setBronForm((f) => ({ ...f, [key]: cap(e.target.value) }))
   const setSotish = (key) => (e) => setSotishForm((f) => ({ ...f, [key]: e.target.value }))
   const setSotishCap = (key) => (e) => setSotishForm((f) => ({ ...f, [key]: cap(e.target.value) }))
-
-  function handleExtracted(raw) {
-    // Faqat ism, familiya, telefon — boshqa hamma narsani e'tiborsiz qoldir
-    const fields = {}
-    if (raw.ism)      fields.ism      = cap(String(raw.ism))
-    if (raw.familiya) fields.familiya = cap(String(raw.familiya))
-    // GPT ba'zan "phone" kalit bilan qaytaradi — normallashtir
-    const rawPhone = raw.telefon || raw.phone || ''
-    if (rawPhone)     fields.telefon  = formatUzPhone(String(rawPhone))
-    if (!Object.keys(fields).length) return
-    setBronForm(f => ({ ...f, ...fields }))
-    setSotishForm(f => ({ ...f, ...fields }))
-    const filled = new Set(Object.keys(fields).filter(k => fields[k]))
-    setFlash(filled)
-    setTimeout(() => setFlash(new Set()), 1200)
-  }
 
   const assignedManager = assignedUserId
     ? managers.find(m => m.id === assignedUserId)
@@ -650,14 +544,54 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
     }
   }
 
+  const [calcActiveKey, setCalcActiveKey] = useState(null)
+
+  useEffect(() => {
+    if (!showCalc) return
+    function onKey(e) {
+      if (e.key >= '0' && e.key <= '9') {
+        e.preventDefault()
+        setCalcActiveKey(e.key)
+        setTimeout(() => setCalcActiveKey(null), 150)
+        setCalc(f => {
+          if (f.focus === 'oylar') return f
+          const raw = String(f[f.focus]).replace(/\s/g, '')
+          if (raw.length >= 12) return f
+          const next = raw + e.key
+          return { ...f, [f.focus]: Number(next).toLocaleString('ru-RU').replace(/,/g, ' ') }
+        })
+      } else if (e.key === 'Backspace') {
+        e.preventDefault()
+        setCalcActiveKey('⌫')
+        setTimeout(() => setCalcActiveKey(null), 150)
+        setCalc(f => {
+          if (f.focus === 'oylar') return f
+          const raw = String(f[f.focus]).replace(/\s/g, '').slice(0, -1)
+          return { ...f, [f.focus]: raw ? Number(raw).toLocaleString('ru-RU').replace(/,/g, ' ') : '' }
+        })
+      } else if (e.key === 'Delete') {
+        e.preventDefault()
+        setCalcActiveKey('C')
+        setTimeout(() => setCalcActiveKey(null), 150)
+        setCalc(f => f.focus === 'oylar' ? f : { ...f, [f.focus]: '' })
+      } else if (e.key === 'Escape') {
+        e.preventDefault()
+        setShowCalc(false)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [showCalc])
+
   const calcKeypad = (() => {
     const narxVal = Number(String(calc.narxM2).replace(/\s/g, ''))
     const downVal = Number(String(calc.boshlangich).replace(/\s/g, ''))
     const months  = parseInt(calc.oylar) || 12
     const total   = apartment.size * narxVal
-    const monthly = total > 0 ? Math.round((total - downVal) / months) : 0
 
     function pressKey(key) {
+      setCalcActiveKey(key)
+      setTimeout(() => setCalcActiveKey(null), 150)
       setCalc(f => {
         if (f.focus === 'oylar') return f
         const raw = String(f[f.focus]).replace(/\s/g, '')
@@ -688,9 +622,13 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
           {KEYS.map(k => (
             <button key={k} type="button" onPointerDown={(e) => { e.preventDefault(); pressKey(k) }}
               className={`rounded-xl text-lg font-semibold transition-all active:scale-95 select-none ${
-                k === '⌫' ? 'bg-red-50 text-red-500 border border-red-200 hover:bg-red-100'
-                : k === 'C' ? 'bg-muted text-muted-foreground border border-border hover:bg-muted/70'
-                : 'bg-background border border-border text-foreground hover:bg-amber-50 hover:border-amber-300'
+                calcActiveKey === k
+                  ? k === '⌫' ? 'bg-red-400 text-white border border-red-400 scale-95'
+                    : k === 'C' ? 'bg-muted-foreground/30 text-foreground border border-border scale-95'
+                    : 'bg-amber-400 text-white border border-amber-400 scale-95'
+                  : k === '⌫' ? 'bg-red-50 text-red-500 border border-red-200 hover:bg-red-100'
+                  : k === 'C' ? 'bg-muted text-muted-foreground border border-border hover:bg-muted/70'
+                  : 'bg-background border border-border text-foreground hover:bg-amber-50 hover:border-amber-300'
               }`}
             >{k}</button>
           ))}
@@ -778,12 +716,12 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
     <div className="flex flex-1 min-h-0">
       {showCalc ? calcLeftPanel() : (
         <div className="flex flex-col gap-4 px-5 py-4 overflow-y-auto border-r border-border" style={{ flex: '0 0 70%' }}>
-          <Field label="Ism" placeholder="Abdulloh" value={bronForm.ism} onChange={setBronCap('ism')} required autoComplete="given-name" flash={flash.has('ism')} />
-          <Field label="Familiya" placeholder="Karimov" value={bronForm.familiya} onChange={setBronCap('familiya')} required autoComplete="family-name" flash={flash.has('familiya')} />
+          <Field label="Ism" placeholder="Abdulloh" value={bronForm.ism} onChange={setBronCap('ism')} required autoComplete="given-name" />
+          <Field label="Familiya" placeholder="Karimov" value={bronForm.familiya} onChange={setBronCap('familiya')} required autoComplete="family-name" />
           <PhoneField label="Telefon raqam" value={bronForm.telefon}
-            flash={flash.has('telefon')}
             isOpen={phoneTarget === 'bron'}
-            onOpenNumpad={() => setPhoneTarget(t => t === 'bron' ? null : 'bron')}
+            onOpenNumpad={() => setPhoneTarget('bron')}
+            onClose={() => setPhoneTarget(null)}
           />
           {(bronForm.boshlangich || bronForm.narx_m2) ? (
             <div className="flex-1 rounded-2xl border-2 border-amber-200 bg-amber-50 px-5 py-4 flex flex-col justify-between">
@@ -810,7 +748,7 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
           ) : null}
         </div>
       )}
-      <div className={`flex ${showCalc || phoneTarget === 'bron' ? 'items-stretch' : 'items-center justify-center'}`} style={{ flex: '0 0 30%' }}>
+      <div className="flex items-stretch" style={{ flex: '0 0 30%' }}>
         {showCalc
           ? calcKeypad()
           : phoneTarget === 'bron'
@@ -819,7 +757,7 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
               onChange={(v) => setBronForm(f => ({ ...f, telefon: v }))}
               onClose={() => setPhoneTarget(null)}
             />
-          : <VoiceRecorder onExtracted={handleExtracted} />
+          : null
         }
       </div>
     </div>
@@ -834,7 +772,8 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
       </div>
       <PhoneField label="Telefon raqam" value={sotishForm.telefon}
         isOpen={phoneTarget === 'sotish'}
-        onOpenNumpad={() => setPhoneTarget(t => t === 'sotish' ? null : 'sotish')}
+        onOpenNumpad={() => setPhoneTarget('sotish')}
+        onClose={() => setPhoneTarget(null)}
       />
       <div className="grid grid-cols-2 gap-4">
         <MoneyField label="Boshlang'ich to'lov" value={sotishForm.boshlangich} onChange={(v) => setSotishForm((f) => ({ ...f, boshlangich: v }))} />
@@ -859,66 +798,10 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
     </div>
   )
 
-  // RESERVED yoki SOLD bo'lsa — faqat xabar ko'rsat, form ko'rsatma
+  // RESERVED yoki SOLD bo'lsa — minimal info card
   if (apartment.status === 'RESERVED' || apartment.status === 'SOLD') {
     const isReserved = apartment.status === 'RESERVED'
-    const Icon = isReserved ? Lock : ShoppingBag
-    const accent = isReserved
-      ? { bg: 'bg-amber-50', ring: 'ring-amber-200', icon: 'text-amber-500', badge: 'bg-amber-100 text-amber-700 border-amber-200', label: "Bron qilingan" }
-      : { bg: 'bg-red-50',   ring: 'ring-red-200',   icon: 'text-red-500',   badge: 'bg-red-100   text-red-700   border-red-200',   label: "Sotilgan" }
-    return (
-      <div
-        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60"
-        style={{ backdropFilter: 'blur(4px)' }}
-        onClick={(e) => e.target === e.currentTarget && onClose()}
-      >
-        <div className="relative bg-background rounded-3xl shadow-2xl border border-border flex flex-col items-center gap-5 px-8 py-10 w-full max-w-xs text-center">
-          {/* Yopish tugmasi */}
-          <button
-            onClick={onClose}
-            className="absolute top-4 right-4 w-8 h-8 rounded-full flex items-center justify-center text-muted-foreground hover:bg-muted transition-colors"
-          >
-            <X size={18} />
-          </button>
-
-          {/* Icon */}
-          <div className={`w-20 h-20 rounded-2xl flex items-center justify-center ${accent.bg} ring-2 ${accent.ring}`}>
-            <Icon size={36} className={accent.icon} strokeWidth={1.75} />
-          </div>
-
-          {/* Manzil */}
-          <div className="flex flex-col items-center gap-2">
-            <span className="text-2xl font-bold text-foreground tracking-tight">{apartment.address}</span>
-            <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${accent.badge}`}>
-              {accent.label}
-            </span>
-          </div>
-
-          {/* Maydon */}
-          {apartment.size > 0 && (
-            <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-              <Ruler size={14} />
-              <span>{apartment.size} m²</span>
-            </div>
-          )}
-
-          {/* Notes */}
-          {apartment.notes && (
-            <span className="px-3 py-1 rounded-full bg-amber-100 text-amber-800 text-xs font-semibold border border-amber-200">
-              {apartment.notes}
-            </span>
-          )}
-
-          {/* Yopish */}
-          <button
-            onClick={onClose}
-            className="w-full mt-1 py-3.5 rounded-2xl bg-muted text-sm font-semibold text-foreground hover:bg-muted/80 active:scale-[0.98] transition-all"
-          >
-            Yopish
-          </button>
-        </div>
-      </div>
-    )
+    return <StatusCard apartment={apartment} isReserved={isReserved} onClose={onClose} />
   }
 
   if (booked) {

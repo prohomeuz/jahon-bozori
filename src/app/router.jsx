@@ -10,6 +10,7 @@ const AdminLayout   = lazy(() => import('@/pages/admin/ui/AdminLayout'))
 const DashboardPage = lazy(() => import('@/pages/admin/ui/DashboardPage'))
 const BookingsPage  = lazy(() => import('@/pages/admin/ui/BookingsPage'))
 const ManagersPage  = lazy(() => import('@/pages/admin/ui/ManagersPage'))
+const PricesPage    = lazy(() => import('@/pages/admin/ui/PricesPage'))
 
 function Loader() {
   return (
@@ -59,6 +60,7 @@ export default function Router() {
               <Route index element={<DashboardPage />} />
               <Route path="bookings" element={<BookingsPage />} />
               <Route path="managers" element={<ManagersPage />} />
+              <Route path="prices" element={<PricesPage />} />
             </Route>
           </Route>
         </Routes>
