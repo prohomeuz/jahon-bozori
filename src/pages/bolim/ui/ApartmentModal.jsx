@@ -160,7 +160,7 @@ async function downloadContractPDF({ apartment, floor, blockId, bolimNum, form, 
 }
 
 const INPUT =
-  'w-full rounded-xl border border-border bg-background px-4 py-3.5 text-base text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring transition-shadow'
+  'w-full rounded-xl border border-border bg-background px-4 py-3.5 text-base text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring transition-shadow uppercase placeholder:uppercase'
 const LABEL = 'block text-sm font-medium text-foreground mb-1.5'
 // Faqat o'zbek raqamlar: +998 XX XXX XX XX
 function formatUzPhone(raw) {
@@ -436,7 +436,15 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
         if (price) setCalc(f => ({ ...f, narxM2: String(price) }))
       })
       .catch(() => {})
-  }, [showCalc]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [showCalc, calc.narxM2]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  function fetchCalcPrice() {
+    const [block, bolimStr] = apartment.address.split('-')
+    apiFetch(`/api/prices?block=${block}&bolim=${parseInt(bolimStr)}&floor=${floor}`)
+      .then(r => r.json())
+      .then(({ price }) => { if (price) setCalc(f => ({ ...f, narxM2: String(price) })) })
+      .catch(() => {})
+  }
 
   useEffect(() => {
     apiFetch('/api/managers').then(r => r.json()).then(list => {
@@ -463,7 +471,7 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
 
   if (!apartment) return null
 
-  const cap = (s) => s ? s.charAt(0).toUpperCase() + s.slice(1) : s
+  const cap = (s) => s ? s.toUpperCase() : s
 
   const setBronCap = (key) => (e) => setBronForm((f) => ({ ...f, [key]: cap(e.target.value) }))
   const setSotish = (key) => (e) => setSotishForm((f) => ({ ...f, [key]: e.target.value }))
@@ -864,7 +872,14 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
           </button>
           <div className="w-px h-10 bg-border mx-1 shrink-0" />
           <button
-            onClick={() => { setBronForm(BRON_EMPTY); setSotishForm(SOTISH_EMPTY); setFlash(new Set()) }}
+            onClick={() => {
+              if (showCalc) {
+                setCalc({ narxM2: '', boshlangich: '', oylar: '12', focus: 'narxM2' })
+                fetchCalcPrice()
+              } else {
+                setBronForm(BRON_EMPTY); setSotishForm(SOTISH_EMPTY); setFlash(new Set())
+              }
+            }}
             className="w-14 h-14 rounded-full flex items-center justify-center text-muted-foreground hover:bg-accent hover:text-foreground transition-colors shrink-0"
             title="Formani tozalash"
           >

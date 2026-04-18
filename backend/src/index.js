@@ -59,7 +59,27 @@ const sseClients = new Set()
 
 function broadcast(event, data) {
   const msg = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`
-  for (const send of sseClients) send(msg)
+  for (const send of sseClients) {
+    try { send(msg) } catch { sseClients.delete(send) }
+  }
+}
+
+// ─── RATE LIMITER ─────────────────────────────────────────────────────────────
+const _rateMap = new Map()
+setInterval(() => {
+  const now = Date.now()
+  for (const [k, v] of _rateMap) if (now > v.resetAt) _rateMap.delete(k)
+}, 60_000).unref()
+
+function rateLimit(key, max = 10, windowMs = 60_000) {
+  const now = Date.now()
+  let entry = _rateMap.get(key)
+  if (!entry || now > entry.resetAt) {
+    entry = { count: 0, resetAt: now + windowMs }
+    _rateMap.set(key, entry)
+  }
+  entry.count++
+  return entry.count <= max
 }
 
 app.get('/api/events', async (c) => {
@@ -74,12 +94,16 @@ app.get('/api/events', async (c) => {
   return new Response(
     new ReadableStream({
       start(controller) {
-        const send = (msg) => controller.enqueue(new TextEncoder().encode(msg))
+        const enc = new TextEncoder()
+        const send = (msg) => {
+          try { controller.enqueue(enc.encode(msg)) }
+          catch { sseClients.delete(send) }
+        }
         sseClients.add(send)
-        controller.enqueue(new TextEncoder().encode(': connected\n\n'))
+        try { controller.enqueue(enc.encode(': connected\n\n')) } catch {}
         c.req.raw.signal.addEventListener('abort', () => {
           sseClients.delete(send)
-          controller.close()
+          try { controller.close() } catch {}
         })
       },
     }),
@@ -94,12 +118,12 @@ app.get('/api/events', async (c) => {
 })
 
 // ─── ADMIN SEED ──────────────────────────────────────────────────────────────
+// MUHIM: faqat admin umuman yo'q bo'lsa yaratiladi.
+// Mavjud admin bilan hech narsa qilinmaydi — DELETE/UPDATE hech qachon avtomatik ishlamaydi.
 {
-  const admin = db.prepare("SELECT * FROM users WHERE role='admin'").get()
-  if (!admin || !admin.plain_password || admin.plain_password.length !== 8) {
-    db.exec("UPDATE bookings SET user_id=NULL")
-    db.exec("DELETE FROM users")
-    db.prepare("INSERT INTO users (username, password, plain_password, role, name, telegram_id) VALUES (?,?,?,'admin',?,NULL)")
+  const admin = db.prepare("SELECT id FROM users WHERE role='admin'").get()
+  if (!admin) {
+    db.prepare("INSERT INTO users (username, password, plain_password, role, name, telegram_id, created_at) VALUES (?,?,?,'admin',?,NULL,datetime('now','+5 hours'))")
       .run('00001111', hashPassword('00001111'), '00001111', 'Raxmatulloh Boqijonov')
     console.log('[seed] Admin yaratildi: Raxmatulloh Boqijonov (parol: 00001111)')
   }
@@ -108,6 +132,12 @@ app.get('/api/events', async (c) => {
 // ─── AUTH ────────────────────────────────────────────────────────────────────
 
 app.post('/api/auth/login', async (c) => {
+  const ip = c.req.header('x-forwarded-for')?.split(',')[0].trim()
+          ?? c.req.header('x-real-ip')
+          ?? 'unknown'
+  if (!rateLimit(ip, 20, 60_000))
+    return c.json({ error: "Juda ko'p urinish. 1 daqiqa kuting." }, 429)
+
   const { password } = await c.req.json()
   if (!password || password.length !== 8 || !/^\d+$/.test(password))
     return c.json({ error: "Parol 8 ta raqamdan iborat bo'lishi kerak" }, 400)
@@ -253,8 +283,15 @@ app.patch('/api/apartments/:id/status', requireAuth, requireAdmin, async (c) => 
   const id = c.req.param('id')
   const { status } = await c.req.json()
   if (!['EMPTY', 'RESERVED', 'SOLD'].includes(status)) return c.json({ error: "Status: EMPTY | RESERVED | SOLD" }, 400)
-  q.updateStatus.run({ status, id })
-  if (status === 'EMPTY') q.cancelBooking.run({ apartment_id: id })
+  db.exec('BEGIN')
+  try {
+    q.updateStatus.run({ status, id })
+    if (status === 'EMPTY') q.cancelBooking.run({ apartment_id: id })
+    db.exec('COMMIT')
+  } catch (e) {
+    db.exec('ROLLBACK')
+    return c.json({ error: e.message }, 500)
+  }
   broadcast('apartment', { id, status })
   broadcast('booking', { cancelled: true })
   return c.json({ ok: true })

@@ -17,7 +17,8 @@ export function verifyPassword(password, stored) {
 }
 
 export async function createToken(user) {
-  return sign({ sub: user.id, role: user.role, name: user.name }, SECRET, 'HS256')
+  const exp = Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 30 // 30 kun
+  return sign({ sub: user.id, role: user.role, name: user.name, exp }, SECRET, 'HS256')
 }
 
 export async function requireAuth(c, next) {

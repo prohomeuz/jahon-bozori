@@ -8,6 +8,11 @@ export const db = new DatabaseSync(dbPath)
 
 db.exec(`PRAGMA journal_mode = WAL`)
 db.exec(`PRAGMA foreign_keys = ON`)
+db.exec(`PRAGMA synchronous = NORMAL`)   // WAL bilan crash-safe, FULLdan tezroq
+db.exec(`PRAGMA cache_size = -32000`)    // 32MB page cache
+db.exec(`PRAGMA busy_timeout = 5000`)    // parallel yozuvda 5s kutadi, xato bermaydi
+// Startup checkpointi — WAL faylni asosiy DBga ko'chirib, faylni nolga tushiradi
+db.exec(`PRAGMA wal_checkpoint(TRUNCATE)`)
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS users (
@@ -16,7 +21,7 @@ db.exec(`
     password   TEXT NOT NULL,
     role       TEXT NOT NULL CHECK(role IN ('admin', 'salesmanager')),
     name       TEXT NOT NULL DEFAULT '',
-    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    created_at TEXT NOT NULL DEFAULT (datetime('now', '+5 hours'))
   );
 
   CREATE TABLE IF NOT EXISTS apartments (
@@ -40,7 +45,7 @@ db.exec(`
     oylar        INTEGER NOT NULL,
     passport     TEXT,
     manzil       TEXT,
-    created_at   TEXT NOT NULL DEFAULT (datetime('now'))
+    created_at   TEXT NOT NULL DEFAULT (datetime('now', '+5 hours'))
   );
 `)
 
@@ -75,7 +80,7 @@ try {
     SELECT DISTINCT block, bolim, floor, 1000 FROM apartments`)
 } catch {}
 // Telegram subscribers — /start bosgan har kim
-try { db.exec(`CREATE TABLE IF NOT EXISTS telegram_subscribers (chat_id TEXT PRIMARY KEY, first_name TEXT, joined_at TEXT NOT NULL DEFAULT (datetime('now')))`) } catch {}
+try { db.exec(`CREATE TABLE IF NOT EXISTS telegram_subscribers (chat_id TEXT PRIMARY KEY, first_name TEXT, joined_at TEXT NOT NULL DEFAULT (datetime('now', '+5 hours')))`) } catch {}
 // Translate Chinese notes → Uzbek
 try { db.exec(`UPDATE apartments SET notes = 'Ko''cha bo''yi'           WHERE notes = '临街铺'`) } catch {}
 try { db.exec(`UPDATE apartments SET notes = 'Ko''cha bo''yi'           WHERE notes = '临街商铺'`) } catch {}
@@ -88,7 +93,7 @@ export const q = {
   // users
   userByPlainPassword: db.prepare('SELECT * FROM users WHERE plain_password=:plain_password'),
   userById:            db.prepare('SELECT id, role, name, created_at FROM users WHERE id=:id'),
-  insertUser:          db.prepare('INSERT INTO users (username, password, plain_password, role, name, telegram_id) VALUES (:plain_password, :password, :plain_password, :role, :name, NULL)'),
+  insertUser:          db.prepare("INSERT INTO users (username, password, plain_password, role, name, telegram_id, created_at) VALUES (:plain_password, :password, :plain_password, :role, :name, NULL, datetime('now', '+5 hours'))"),
   allUsers:            db.prepare("SELECT id, name, plain_password, role, created_at FROM users WHERE role='salesmanager' ORDER BY created_at DESC"),
   userTelegramId:      db.prepare('SELECT telegram_id FROM users WHERE id=:id'),
 
@@ -103,7 +108,7 @@ export const q = {
   count:        db.prepare('SELECT COUNT(*) AS n FROM apartments'),
 
   // bookings
-  insertBooking:  db.prepare('INSERT INTO bookings (apartment_id,user_id,type,ism,familiya,boshlangich,oylar,umumiy,passport,manzil,phone,passport_place,narx_m2) VALUES (:apartment_id,:user_id,:type,:ism,:familiya,:boshlangich,:oylar,:umumiy,:passport,:manzil,:phone,:passport_place,:narx_m2)'),
+  insertBooking:  db.prepare("INSERT INTO bookings (apartment_id,user_id,type,ism,familiya,boshlangich,oylar,umumiy,passport,manzil,phone,passport_place,narx_m2,created_at) VALUES (:apartment_id,:user_id,:type,:ism,:familiya,:boshlangich,:oylar,:umumiy,:passport,:manzil,:phone,:passport_place,:narx_m2,datetime('now', '+5 hours'))"),
   lastBooking:    db.prepare('SELECT b.*, u.name AS manager_name FROM bookings b LEFT JOIN users u ON b.user_id=u.id WHERE b.id=last_insert_rowid()'),
   bookingById:    db.prepare('SELECT b.*, u.telegram_id AS manager_tg_id, u.name AS manager_name FROM bookings b LEFT JOIN users u ON b.user_id=u.id WHERE b.id=:id'),
   allBookings:    db.prepare('SELECT b.*, u.name AS manager_name FROM bookings b LEFT JOIN users u ON b.user_id=u.id WHERE b.cancelled_at IS NULL ORDER BY b.created_at DESC LIMIT :limit OFFSET :offset'),
@@ -111,7 +116,7 @@ export const q = {
   myBookings:     db.prepare('SELECT b.*, u.name AS manager_name FROM bookings b LEFT JOIN users u ON b.user_id=u.id WHERE b.user_id=:user_id AND b.cancelled_at IS NULL ORDER BY b.created_at DESC LIMIT :limit OFFSET :offset'),
   myCancelled:    db.prepare('SELECT b.*, u.name AS manager_name FROM bookings b LEFT JOIN users u ON b.user_id=u.id WHERE b.user_id=:user_id AND b.cancelled_at IS NOT NULL ORDER BY b.cancelled_at DESC LIMIT :limit OFFSET :offset'),
   aptBookings:    db.prepare('SELECT b.*, u.name AS manager_name FROM bookings b LEFT JOIN users u ON b.user_id=u.id WHERE b.apartment_id=:apartment_id ORDER BY b.created_at DESC'),
-  cancelBooking:  db.prepare("UPDATE bookings SET cancelled_at=datetime('now') WHERE apartment_id=:apartment_id AND cancelled_at IS NULL"),
+  cancelBooking:  db.prepare("UPDATE bookings SET cancelled_at=datetime('now', '+5 hours') WHERE apartment_id=:apartment_id AND cancelled_at IS NULL"),
 
   // dashboard stats
   statsAll:       db.prepare("SELECT block, status, COUNT(*) AS n FROM apartments GROUP BY block, status"),

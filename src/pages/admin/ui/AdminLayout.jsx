@@ -7,8 +7,8 @@ import { LayoutDashboard, Users, ClipboardList, LogOut, Home, PanelLeftClose, Pa
 const NAV = [
   { to: '/admin',          label: 'Dashboard',       icon: LayoutDashboard, end: true },
   { to: '/admin/bookings', label: 'Bitimlar',         icon: ClipboardList },
-  { to: '/admin/prices',   label: 'Narxlar',          icon: Tag,            adminOnly: true },
   { to: '/admin/managers', label: 'Salesmanagerlar',  icon: Users,          adminOnly: true },
+  { to: '/admin/prices',   label: 'Narxlar',          icon: Tag,            adminOnly: true },
 ]
 
 const PAD = ['1','2','3','4','5','6','7','8','9','','0','⌫']

@@ -125,6 +125,7 @@ function UserModal({ user, onClose, onDone }) {
               placeholder="Abdulloh Karimov"
               value={name}
               onChange={e => setName(e.target.value)}
+              onBlur={() => { if (name.trim()) inputRef.current?.focus({ preventScroll: true }) }}
               required
             />
           </div>

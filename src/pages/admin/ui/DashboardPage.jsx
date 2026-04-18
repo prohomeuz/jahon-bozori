@@ -83,7 +83,6 @@ function BlockCard({ blockId, stats }) {
 
 /* ── Stacked horizontal bar ───────────────────────────────────────────────── */
 function StackedBar({ label, sold, reserved, empty, maxTotal }) {
-  const [hovered, setHovered] = useState(null)
   const total = sold + reserved + empty
   const w = v => maxTotal > 0 ? (v / maxTotal * 100) : 0
 
@@ -92,40 +91,35 @@ function StackedBar({ label, sold, reserved, empty, maxTotal }) {
     { key: 'reserved', value: reserved, color: C.RESERVED, labelText: "Bron" },
     { key: 'empty',    value: empty,    color: C.EMPTY,    labelText: "Bo'sh" },
   ]
+  const visible = segments.filter(s => s.value > 0)
+  const isMulti = visible.length > 1
 
   return (
     <div className="flex items-center gap-3">
       <span className="text-xs text-muted-foreground w-5 text-right shrink-0 tabular-nums font-medium">{label}</span>
-      <div className="flex-1 relative flex h-5 rounded-lg overflow-visible bg-muted/40 min-w-0">
-        <div className="flex w-full h-full rounded-lg overflow-hidden">
-          {segments.map(({ key, value, color }) =>
-            value > 0 ? (
-              <div
-                key={key}
-                style={{ width: `${w(value)}%`, background: color }}
-                className="h-full transition-all duration-500 cursor-pointer"
-                onMouseEnter={() => setHovered(key)}
-                onMouseLeave={() => setHovered(null)}
-              />
-            ) : null
-          )}
-        </div>
-        {hovered && (() => {
-          const seg = segments.find(s => s.key === hovered)
-          return (
+      <div className="flex-1 flex flex-col gap-1 min-w-0">
+        {/* Bar */}
+        <div className="flex h-5 rounded-lg overflow-hidden bg-muted/40 w-full">
+          {visible.map(({ key, value, color }) => (
             <div
-              className="absolute bottom-7 left-1/2 -translate-x-1/2 z-50 pointer-events-none"
-              style={{ whiteSpace: 'nowrap' }}
-            >
-              <div className="bg-foreground text-background text-xs font-semibold rounded-lg px-3 py-1.5 shadow-lg flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full shrink-0" style={{ background: seg.color }} />
-                <span>{seg.labelText}:</span>
-                <span>{seg.value}</span>
+              key={key}
+              style={{ width: `${w(value)}%`, background: color }}
+              className="h-full transition-all duration-500"
+            />
+          ))}
+        </div>
+        {/* Always-visible breakdown — only when multiple segments exist */}
+        {isMulti && (
+          <div className="flex items-center gap-3">
+            {visible.map(({ key, value, color, labelText }) => (
+              <div key={key} className="flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: color }} />
+                <span className="text-[10px] text-muted-foreground">{labelText}</span>
+                <span className="text-[10px] font-bold tabular-nums" style={{ color }}>{value}</span>
               </div>
-              <div className="w-2 h-2 bg-foreground rotate-45 mx-auto -mt-1" />
-            </div>
-          )
-        })()}
+            ))}
+          </div>
+        )}
       </div>
       <span className="text-xs text-muted-foreground w-7 text-right tabular-nums shrink-0">{total}</span>
     </div>
