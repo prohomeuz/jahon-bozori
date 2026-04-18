@@ -3,7 +3,7 @@ import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
-const dbPath = process.env.DB_PATH ?? join(__dirname, '../../db.sqlite')
+export const dbPath = process.env.DB_PATH ?? join(__dirname, '../../db.sqlite')
 export const db = new DatabaseSync(dbPath)
 
 db.exec(`PRAGMA journal_mode = WAL`)
@@ -81,6 +81,8 @@ try {
 } catch {}
 // Telegram subscribers — /start bosgan har kim
 try { db.exec(`CREATE TABLE IF NOT EXISTS telegram_subscribers (chat_id TEXT PRIMARY KEY, first_name TEXT, joined_at TEXT NOT NULL DEFAULT (datetime('now', '+5 hours')))`) } catch {}
+// Backup metadata — oxirgi yuborilgan backup message_id va chat_id
+try { db.exec(`CREATE TABLE IF NOT EXISTS backup_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)`) } catch {}
 // Translate Chinese notes → Uzbek
 try { db.exec(`UPDATE apartments SET notes = 'Ko''cha bo''yi'           WHERE notes = '临街铺'`) } catch {}
 try { db.exec(`UPDATE apartments SET notes = 'Ko''cha bo''yi'           WHERE notes = '临街商铺'`) } catch {}

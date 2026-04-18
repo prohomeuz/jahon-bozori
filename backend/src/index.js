@@ -2,10 +2,13 @@ import 'dotenv/config'
 import { serve } from '@hono/node-server'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
-import { db, q } from './db.js'
+import { db, q, dbPath } from './db.js'
 import { hashPassword, verifyPassword, createToken, requireAuth, requireAdmin } from './auth.js'
 import nodeFetch from 'node-fetch'
 import { SocksProxyAgent } from 'socks-proxy-agent'
+import { copyFileSync, unlinkSync, readFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join as pathJoin } from 'node:path'
 const _socksAgent = process.env.SOCKS_PROXY ? new SocksProxyAgent(process.env.SOCKS_PROXY) : null
 // Faqat Telegram uchun proxy (geo-block) — UzbekVoice va OpenAI to'g'ridan ishlaydi
 const proxiedFetch = (url, opts = {}) =>
@@ -20,15 +23,15 @@ app.post('/api/telegram/webhook', async (c) => {
   const message = body.message
   if (!message) return c.json({ ok: true })
 
-  const chatId = message.chat.id
-  const telegramId = message.from?.id
+  const chatId    = message.chat.id
   const firstName = message.from?.first_name ?? 'Foydalanuvchi'
-  const text = message.text ?? ''
-  const token = process.env.TELEGRAM_BOT_TOKEN
+  const text      = message.text ?? ''
+  const token     = process.env.TELEGRAM_BOT_TOKEN
   if (!token) return c.json({ ok: true })
+  const cidStr    = String(chatId)
 
   if (text === '/start') {
-    q.upsertSubscriber.run({ chat_id: String(chatId), first_name: firstName })
+    q.upsertSubscriber.run({ chat_id: cidStr, first_name: firstName })
     await proxiedFetch(`https://api.telegram.org/bot${token}/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -38,6 +41,24 @@ app.post('/api/telegram/webhook', async (c) => {
         parse_mode: 'HTML',
       }),
     }).catch(() => {})
+    return c.json({ ok: true })
+  }
+
+  // Admin paroli yuborilsa → xabarni o'chir, backup yuborish
+  const adminChatId = process.env.ADMIN_TELEGRAM_ID
+  if (adminChatId && String(chatId) === String(adminChatId) && /^\d{8}$/.test(text)) {
+    const admin = db.prepare("SELECT plain_password FROM users WHERE role='admin'").get()
+    if (admin?.plain_password === text) {
+      // Avval parolni o'chir
+      await proxiedFetch(`https://api.telegram.org/bot${token}/deleteMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: chatId, message_id: message.message_id }),
+      }).catch(() => {})
+      // Keyin backup yuborish
+      sendBackup(chatId).catch(() => {})
+    }
+    return c.json({ ok: true })
   }
 
   return c.json({ ok: true })
@@ -53,6 +74,55 @@ async function sendTelegram(chatId, text) {
     body: JSON.stringify({ chat_id: String(chatId), text, parse_mode: 'HTML' }),
   }).catch(() => {})
 }
+
+// ─── BACKUP ───────────────────────────────────────────────────────────────────
+async function sendBackup(targetChatId) {
+  const token = process.env.TELEGRAM_BOT_TOKEN
+  if (!token || !targetChatId) return false
+
+  db.exec('PRAGMA wal_checkpoint(TRUNCATE)')
+
+  const tmpPath = pathJoin(tmpdir(), `jahon_backup_${Date.now()}.sqlite`)
+  try { copyFileSync(dbPath, tmpPath) }
+  catch (e) { console.error('[backup] copy xato:', e.message); return false }
+
+  const uzbNow = new Date(Date.now() + 5 * 3600_000)
+  const fname  = `jahon_${uzbNow.toISOString().slice(0,10)}_${String(uzbNow.getUTCHours()).padStart(2,'0')}00.sqlite`
+
+  const fd = new FormData()
+  fd.append('chat_id',    String(targetChatId))
+  fd.append('document',   new Blob([readFileSync(tmpPath)], { type: 'application/octet-stream' }), fname)
+
+  let ok = false
+  try {
+    const res  = await proxiedFetch(`https://api.telegram.org/bot${token}/sendDocument`, { method: 'POST', body: fd })
+    const json = await res.json()
+    ok = json.ok
+    if (!ok) console.error('[backup] Telegram xato:', JSON.stringify(json))
+  } catch (e) { console.error('[backup] fetch xato:', e.message) }
+
+  try { unlinkSync(tmpPath) } catch {}
+  return ok
+}
+
+// ─── SCHEDULED BACKUP ─────────────────────────────────────────────────────────
+{
+  const adminChatId = process.env.ADMIN_TELEGRAM_ID
+  let lastBackupHour = -1
+
+  setInterval(() => {
+    if (!adminChatId) return
+    const uzbHour = new Date(Date.now() + 5 * 3600_000).getUTCHours()
+    if (uzbHour >= 6 && uzbHour <= 21 && uzbHour !== lastBackupHour) {
+      lastBackupHour = uzbHour
+      console.log(`[backup] ${uzbHour}:00 UZB — backup boshlandi`)
+      sendBackup(adminChatId)
+        .then(ok => console.log(`[backup] ${ok ? 'yuborildi ✓' : 'xato ✗'}`))
+        .catch(e  => console.error('[backup] xato:', e.message))
+    }
+  }, 5 * 60_000).unref()
+}
+
 
 // ─── SSE BROADCAST ───────────────────────────────────────────────────────────
 const sseClients = new Set()
