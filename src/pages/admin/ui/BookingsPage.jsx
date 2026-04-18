@@ -88,10 +88,12 @@ async function downloadBookingPDF(b) {
   const bolimNum = parseInt(bolimStr)
   const floor = aptStr ? parseInt(aptStr[0]) : 1
 
-  const [{ pdf }, aptRes] = await Promise.all([
+  const [{ pdf }, aptRes, qrImg] = await Promise.all([
     import('@react-pdf/renderer'),
     apiFetch(`/api/apartments?block=${blockId}&bolim=${bolimNum}&floor=${floor}`).then(r => r.json()),
+    import('@/assets/qrcode.png'),
   ])
+  const qrDataUrl = qrImg.default
 
   const aptData = Array.isArray(aptRes) ? aptRes.find(a => a.address === b.apartment_id) : null
   const apartment = aptData ?? { address: b.apartment_id, size: 0, status: b.type === 'sotish' ? 'SOLD' : 'RESERVED' }
@@ -143,6 +145,8 @@ async function downloadBookingPDF(b) {
       type={b.type}
       date={date}
       floorImgSrc={floorImgSrc}
+      qrDataUrl={qrDataUrl}
+      managerName={b.manager_name || ''}
       logoSrc={logoSrc}
     />
   ).toBlob()
@@ -283,7 +287,7 @@ function BookingRow({ b, isAdmin, cancelled, onReset, scrolled }) {
   )
 }
 
-function BookingsTable({ cancelled, isAdmin, onReset, search, typeFilter }) {
+function BookingsTable({ cancelled, isAdmin, onReset, search, typeFilter, dateFrom, dateTo }) {
   const [page, setPage]       = useState(0)
   const [scrolled, setScrolled] = useState(false)
   const scrollRef = useRef(null)
@@ -314,10 +318,14 @@ function BookingsTable({ cancelled, isAdmin, onReset, search, typeFilter }) {
       b.familiya.toLowerCase().includes(q) ||
       (b.phone || '').includes(q)
     const matchType = typeFilter === 'all' || b.type === typeFilter
-    return matchSearch && matchType
+    const dateField = cancelled ? b.cancelled_at : b.created_at
+    const dateStr = dateField ? dateField.slice(0, 10) : ''
+    const matchFrom = !dateFrom || dateStr >= dateFrom
+    const matchTo   = !dateTo   || dateStr <= dateTo
+    return matchSearch && matchType && matchFrom && matchTo
   })
 
-  useEffect(() => { setPage(0) }, [search, typeFilter])
+  useEffect(() => { setPage(0) }, [search, typeFilter, dateFrom, dateTo])
 
   const colSpan = isAdmin ? 5 : 4
 
@@ -406,6 +414,8 @@ export default function BookingsPage() {
   const [tab, setTab]               = useState('active')
   const [search, setSearch]         = useState('')
   const [typeFilter, setTypeFilter] = useState('all')
+  const [dateFrom, setDateFrom]     = useState('')
+  const [dateTo, setDateTo]         = useState('')
 
   function onReset() {
     queryClient.invalidateQueries({ queryKey: ['bookings'] })
@@ -427,7 +437,7 @@ export default function BookingsPage() {
             ].map(t => (
               <button
                 key={t.key}
-                onClick={() => { setTab(t.key); setSearch(''); setTypeFilter('all') }}
+                onClick={() => { setTab(t.key); setSearch(''); setTypeFilter('all'); setDateFrom(''); setDateTo('') }}
                 className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors ${
                   tab === t.key
                     ? 'bg-background text-foreground shadow-sm'
@@ -471,6 +481,30 @@ export default function BookingsPage() {
               </button>
             ))}
           </div>
+
+          <div className="flex items-center gap-1.5">
+            <input
+              type="date"
+              value={dateFrom}
+              onChange={e => setDateFrom(e.target.value)}
+              className="text-xs px-2.5 py-2 rounded-xl border border-border bg-background focus:outline-none focus:ring-2 focus:ring-ring text-muted-foreground"
+            />
+            <span className="text-muted-foreground text-xs">—</span>
+            <input
+              type="date"
+              value={dateTo}
+              onChange={e => setDateTo(e.target.value)}
+              className="text-xs px-2.5 py-2 rounded-xl border border-border bg-background focus:outline-none focus:ring-2 focus:ring-ring text-muted-foreground"
+            />
+            {(dateFrom || dateTo) && (
+              <button
+                onClick={() => { setDateFrom(''); setDateTo('') }}
+                className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+              >
+                <X size={13} />
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -481,6 +515,8 @@ export default function BookingsPage() {
         onReset={onReset}
         search={search}
         typeFilter={typeFilter}
+        dateFrom={dateFrom}
+        dateTo={dateTo}
       />
     </div>
   )

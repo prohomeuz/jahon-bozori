@@ -916,7 +916,7 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
                     className="w-full rounded-xl border border-border bg-background px-4 py-3 text-base text-foreground focus:outline-none focus:ring-2 focus:ring-ring appearance-none pr-10"
                   >
                     <option value="">{currentUser?.name ?? 'Men'} (o'zim)</option>
-                    {managers.filter(m => m.id !== currentUser?.id).map(m => (
+                    {managers.filter(m => m.id !== currentUser?.sub).map(m => (
                       <option key={m.id} value={m.id}>{m.name}</option>
                     ))}
                   </select>

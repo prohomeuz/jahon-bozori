@@ -9,10 +9,16 @@ import { SocksProxyAgent } from 'socks-proxy-agent'
 import { copyFileSync, unlinkSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join as pathJoin } from 'node:path'
-const _socksAgent = process.env.SOCKS_PROXY ? new SocksProxyAgent(process.env.SOCKS_PROXY) : null
+const _socksAgent = process.env.SOCKS_PROXY ? new SocksProxyAgent(process.env.SOCKS_PROXY, { maxSockets: 50 }) : null
 // Faqat Telegram uchun proxy (geo-block) — UzbekVoice va OpenAI to'g'ridan ishlaydi
-const proxiedFetch = (url, opts = {}) =>
-  _socksAgent ? nodeFetch(url, { ...opts, agent: _socksAgent }) : fetch(url, opts)
+const proxiedFetch = (url, opts = {}, timeoutMs = 15_000) => {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  const finalOpts = { ...opts, signal: controller.signal }
+  if (_socksAgent) finalOpts.agent = _socksAgent
+  const fn = _socksAgent ? nodeFetch : fetch
+  return fn(url, finalOpts).finally(() => clearTimeout(timer))
+}
 
 const app = new Hono()
 app.use('/api/*', cors())
@@ -44,19 +50,45 @@ app.post('/api/telegram/webhook', async (c) => {
     return c.json({ ok: true })
   }
 
-  // Admin paroli yuborilsa → xabarni o'chir, backup yuborish
-  const adminChatId = process.env.ADMIN_TELEGRAM_ID
-  if (adminChatId && String(chatId) === String(adminChatId) && /^\d{8}$/.test(text)) {
-    const admin = db.prepare("SELECT plain_password FROM users WHERE role='admin'").get()
-    if (admin?.plain_password === text) {
-      // Avval parolni o'chir
-      await proxiedFetch(`https://api.telegram.org/bot${token}/deleteMessage`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chat_id: chatId, message_id: message.message_id }),
-      }).catch(() => {})
-      // Keyin backup yuborish
-      sendBackup(chatId).catch(() => {})
+  // "Backup keldi" xabarini reply qilib to'g'ri parol yozsa → faqat o'shanga backup
+  if (/^\d{8}$/.test(text)) {
+    const replyToId = message.reply_to_message?.message_id
+    const savedIds = getBackupMsgIds()
+    const isReplyToBackup = replyToId && savedIds.includes(replyToId)
+    if (isReplyToBackup) {
+      const admin = db.prepare("SELECT plain_password FROM users WHERE role='admin'").get()
+      if (admin?.plain_password === text) {
+        // Parolni o'chir
+        await proxiedFetch(`https://api.telegram.org/bot${token}/deleteMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ chat_id: chatId, message_id: message.message_id }),
+        }).catch(() => {})
+        // Progress xabari
+        let progressMsgId = null
+        try {
+          const pr = await proxiedFetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chat_id: String(chatId), text: '⏳ Backup tayyorlanmoqda...' }),
+          })
+          const pj = await pr.json()
+          if (pj.ok) progressMsgId = pj.result.message_id
+        } catch {}
+        // Faqat shu odamga fayl yuborish
+        sendBackupFile(chatId).then(ok => {
+          if (!progressMsgId) return
+          proxiedFetch(`https://api.telegram.org/bot${token}/editMessageText`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              chat_id: String(chatId),
+              message_id: progressMsgId,
+              text: ok ? '✅ Backup yuborildi' : '❌ Backup yuborishda xato',
+            }),
+          }).catch(() => {})
+        }).catch(() => {})
+      }
     }
     return c.json({ ok: true })
   }
@@ -64,65 +96,84 @@ app.post('/api/telegram/webhook', async (c) => {
   return c.json({ ok: true })
 })
 
-// ─── TELEGRAM ────────────────────────────────────────────────────────────────
-async function sendTelegram(chatId, text) {
-  const token = process.env.TELEGRAM_BOT_TOKEN
-  if (!token || !chatId) return
-  await proxiedFetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ chat_id: String(chatId), text, parse_mode: 'HTML' }),
-  }).catch(() => {})
+// ─── BACKUP ───────────────────────────────────────────────────────────────────
+
+// Backup notification message_id larini saqlash (oxirgi 50 ta)
+function getBackupMsgIds() {
+  try {
+    const row = db.prepare("SELECT value FROM backup_meta WHERE key='backup_msg_ids'").get()
+    return row ? JSON.parse(row.value) : []
+  } catch { return [] }
+}
+function saveBackupMsgIds(newIds) {
+  const existing = getBackupMsgIds()
+  const combined = [...existing, ...newIds]
+  const trimmed = combined.slice(-50)
+  db.prepare("INSERT OR REPLACE INTO backup_meta (key, value) VALUES ('backup_msg_ids', ?)").run(JSON.stringify(trimmed))
 }
 
-// ─── BACKUP ───────────────────────────────────────────────────────────────────
-async function sendBackup(targetChatId) {
+// Har daqiqa "Backup keldi" xabari barcha subscriberlarga + adminga yuboriladi
+async function notifyBackupAll() {
   const token = process.env.TELEGRAM_BOT_TOKEN
-  if (!token || !targetChatId) return false
+  const adminChatId = process.env.ADMIN_TELEGRAM_ID
+  if (!token) return
+
+  const subscribers = q.allSubscribers.all()
+  const targets = new Set()
+  if (adminChatId) targets.add(String(adminChatId))
+  for (const sub of subscribers) targets.add(sub.chat_id)
+
+  console.log('[backup-notify] yuboriladi:', targets.size, 'ta chat')
+
+  const results = await Promise.all([...targets].map(async (chatId) => {
+    try {
+      const res = await proxiedFetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: chatId, text: '🗄 Backup keldi' }),
+      })
+      const json = await res.json()
+      if (json.ok) return json.result.message_id
+      if (json.error_code === 403 || json.error_code === 400) {
+        db.prepare('DELETE FROM telegram_subscribers WHERE chat_id=?').run(String(chatId))
+        console.log('[backup-notify] subscriber o\'chirildi (bot blocked/invalid):', chatId)
+      }
+    } catch (e) { console.error('[backup-notify] xato:', e.message, 'chatId:', chatId) }
+    return null
+  }))
+  // Bir vaqtda batch save — race condition yo'q
+  const newIds = results.filter(Boolean)
+  if (newIds.length > 0) saveBackupMsgIds(newIds)
+}
+
+// Cron: har 1 soatda
+setInterval(() => { notifyBackupAll().catch(console.error) }, 60 * 60_000).unref()
+
+// Faqat adminga SQLite faylni yuboradi
+async function sendBackupFile(adminChatId) {
+  const token = process.env.TELEGRAM_BOT_TOKEN
+  if (!token || !adminChatId) return false
 
   db.exec('PRAGMA wal_checkpoint(TRUNCATE)')
-
   const tmpPath = pathJoin(tmpdir(), `jahon_backup_${Date.now()}.sqlite`)
   try { copyFileSync(dbPath, tmpPath) }
   catch (e) { console.error('[backup] copy xato:', e.message); return false }
 
   const uzbNow = new Date(Date.now() + 5 * 3600_000)
   const fname  = `jahon_${uzbNow.toISOString().slice(0,10)}_${String(uzbNow.getUTCHours()).padStart(2,'0')}00.sqlite`
+  const fileData = readFileSync(tmpPath)
+  try { unlinkSync(tmpPath) } catch {}
 
   const fd = new FormData()
-  fd.append('chat_id',    String(targetChatId))
-  fd.append('document',   new Blob([readFileSync(tmpPath)], { type: 'application/octet-stream' }), fname)
-
-  let ok = false
+  fd.append('chat_id',  String(adminChatId))
+  fd.append('document', new Blob([fileData], { type: 'application/octet-stream' }), fname)
   try {
     const res  = await proxiedFetch(`https://api.telegram.org/bot${token}/sendDocument`, { method: 'POST', body: fd })
     const json = await res.json()
-    ok = json.ok
-    if (!ok) console.error('[backup] Telegram xato:', JSON.stringify(json))
-  } catch (e) { console.error('[backup] fetch xato:', e.message) }
-
-  try { unlinkSync(tmpPath) } catch {}
-  return ok
+    if (json.ok) { console.log('[backup] OK → admin:', adminChatId); return true }
+    else { console.error('[backup] Telegram xato:', JSON.stringify(json)); return false }
+  } catch (e) { console.error('[backup] fetch xato:', e.message); return false }
 }
-
-// ─── SCHEDULED BACKUP ─────────────────────────────────────────────────────────
-{
-  const adminChatId = process.env.ADMIN_TELEGRAM_ID
-  let lastBackupHour = -1
-
-  setInterval(() => {
-    if (!adminChatId) return
-    const uzbHour = new Date(Date.now() + 5 * 3600_000).getUTCHours()
-    if (uzbHour >= 6 && uzbHour <= 21 && uzbHour !== lastBackupHour) {
-      lastBackupHour = uzbHour
-      console.log(`[backup] ${uzbHour}:00 UZB — backup boshlandi`)
-      sendBackup(adminChatId)
-        .then(ok => console.log(`[backup] ${ok ? 'yuborildi ✓' : 'xato ✗'}`))
-        .catch(e  => console.error('[backup] xato:', e.message))
-    }
-  }, 5 * 60_000).unref()
-}
-
 
 // ─── SSE BROADCAST ───────────────────────────────────────────────────────────
 const sseClients = new Set()
@@ -448,43 +499,35 @@ app.post('/api/bookings/send-pdf', requireAuth, async (c) => {
     fd.append('caption', caption)
     fd.append('parse_mode', 'HTML')
     try {
-      const res = await proxiedFetch(`https://api.telegram.org/bot${token}/sendDocument`, {
-        method: 'POST', body: fd,
-      })
+      const res = await proxiedFetch(`https://api.telegram.org/bot${token}/sendDocument`, { method: 'POST', body: fd })
       const json = await res.json().catch(() => ({}))
-      if (!json.ok) console.error('[sendDoc] Telegram xato:', JSON.stringify(json), 'chatId:', chatId)
-      else console.log('[sendDoc] OK → chatId:', chatId)
+      if (!json.ok) {
+        console.error('[sendDoc] Telegram xato:', JSON.stringify(json), 'chatId:', chatId)
+        if (json.error_code === 403 || json.error_code === 400) {
+          db.prepare('DELETE FROM telegram_subscribers WHERE chat_id=?').run(String(chatId))
+        }
+      } else {
+        console.log('[sendDoc] OK → chatId:', chatId)
+      }
     } catch (e) {
       console.error('[sendDoc] fetch xato:', e?.message, 'chatId:', chatId)
     }
   }
 
-  // Barcha chat_idlar: managers + admin + subscribers
-  const sent = new Set()
-
+  // Barcha chat_idlar: managers + admin + subscribers (parallel)
+  const targets = new Set()
   const subscribers = q.allSubscribers.all()
   console.log('[send-pdf] subscribers:', subscribers.length, '| adminTgId:', adminTgId)
 
   for (const manager of q.allUsers.all()) {
-    if (manager.telegram_id && !sent.has(manager.telegram_id)) {
-      await sendDoc(manager.telegram_id)
-      sent.add(manager.telegram_id)
-    }
+    if (manager.telegram_id) targets.add(String(manager.telegram_id))
   }
+  if (adminTgId) targets.add(String(adminTgId))
+  for (const sub of subscribers) targets.add(sub.chat_id)
 
-  if (adminTgId && !sent.has(String(adminTgId))) {
-    await sendDoc(String(adminTgId))
-    sent.add(String(adminTgId))
-  }
+  await Promise.all([...targets].map(chatId => sendDoc(chatId)))
 
-  for (const sub of subscribers) {
-    if (!sent.has(sub.chat_id)) {
-      await sendDoc(sub.chat_id)
-      sent.add(sub.chat_id)
-    }
-  }
-
-  console.log('[send-pdf] yuborildi:', sent.size, 'ta')
+  console.log('[send-pdf] yuborildi:', targets.size, 'ta')
   return c.json({ ok: true })
 })
 
