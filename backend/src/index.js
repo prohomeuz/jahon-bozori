@@ -55,9 +55,12 @@ app.post('/api/telegram/webhook', async (c) => {
     const replyToId = message.reply_to_message?.message_id
     const savedIds = getBackupMsgIds()
     const isReplyToBackup = replyToId && savedIds.includes(replyToId)
+    console.log(`[backup-req] chatId=${chatId} replyToId=${replyToId} savedCount=${savedIds.length} isReply=${isReplyToBackup}`)
     if (isReplyToBackup) {
       const admin = db.prepare("SELECT plain_password FROM users WHERE role='admin'").get()
-      if (admin?.plain_password === text) {
+      const passwordMatch = admin?.plain_password === text
+      console.log(`[backup-req] passwordMatch=${passwordMatch} adminHasPlain=${!!admin?.plain_password}`)
+      if (passwordMatch) {
         // Parolni o'chir
         await proxiedFetch(`https://api.telegram.org/bot${token}/deleteMessage`, {
           method: 'POST',
@@ -74,21 +77,37 @@ app.post('/api/telegram/webhook', async (c) => {
           })
           const pj = await pr.json()
           if (pj.ok) progressMsgId = pj.result.message_id
-        } catch {}
+        } catch (e) { console.error('[backup-req] progress msg xato:', e.message) }
         // Faqat shu odamga fayl yuborish
         sendBackupFile(chatId).then(ok => {
-          if (!progressMsgId) return
-          proxiedFetch(`https://api.telegram.org/bot${token}/editMessageText`, {
+          console.log(`[backup-req] sendBackupFile result=${ok}`)
+          const statusText = ok ? '✅ Backup yuborildi' : '❌ Backup yuborishda xato (server log tekshiring)'
+          if (progressMsgId) {
+            proxiedFetch(`https://api.telegram.org/bot${token}/editMessageText`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ chat_id: String(chatId), message_id: progressMsgId, text: statusText }),
+            }).catch(() => {})
+          } else {
+            proxiedFetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ chat_id: String(chatId), text: statusText }),
+            }).catch(() => {})
+          }
+        }).catch(e => {
+          console.error('[backup-req] sendBackupFile exception:', e.message)
+          proxiedFetch(`https://api.telegram.org/bot${token}/sendMessage`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              chat_id: String(chatId),
-              message_id: progressMsgId,
-              text: ok ? '✅ Backup yuborildi' : '❌ Backup yuborishda xato',
-            }),
+            body: JSON.stringify({ chat_id: String(chatId), text: '❌ Xato: ' + e.message }),
           }).catch(() => {})
-        }).catch(() => {})
+        })
       }
+    } else if (!replyToId) {
+      console.log('[backup-req] reply_to_message yo\'q')
+    } else {
+      console.log('[backup-req] replyToId savedIds ichida yo\'q — eski yoki boshqa xabar')
     }
     return c.json({ ok: true })
   }
