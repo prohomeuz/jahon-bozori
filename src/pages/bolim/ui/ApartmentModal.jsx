@@ -166,8 +166,8 @@ const LABEL = 'block text-sm font-medium text-foreground mb-1.5'
 function formatUzPhone(raw) {
   // Faqat raqamlar
   let digits = String(raw ?? '').replace(/\D/g, '')
-  // 998 bilan boshlanganini olib tashla, 0 bilan boshlanganini olib tashla
-  if (digits.startsWith('998')) digits = digits.slice(3)
+  // Faqat to'liq xalqaro format (12+ raqam) bo'lsa 998 ni olib tashla
+  if (digits.startsWith('998') && digits.length > 9) digits = digits.slice(3)
   else if (digits.startsWith('0')) digits = digits.slice(1)
   // Max 9 raqam (operator + nomer)
   digits = digits.slice(0, 9)
@@ -212,9 +212,10 @@ function PhoneField({ label, value, onOpenNumpad, isOpen, error }) {
 const PHONE_KEYS = ['1','2','3','4','5','6','7','8','9','','0','⌫']
 
 function getRawDigits(val) {
-  let d = String(val ?? '').replace(/\D/g, '')
-  if (d.startsWith('998')) d = d.slice(3)
-  else if (d.startsWith('0')) d = d.slice(1)
+  let str = String(val ?? '')
+  if (str.startsWith('+998')) str = str.slice(4)
+  let d = str.replace(/\D/g, '')
+  if (d.startsWith('0')) d = d.slice(1)
   return d.slice(0, 9)
 }
 
