@@ -54,10 +54,13 @@ app.post('/api/telegram/webhook', async (c) => {
   if (/^\d{8}$/.test(text)) {
     const replyToId = message.reply_to_message?.message_id
     const savedIds = getBackupMsgIds()
-    const isReplyToBackup = replyToId && savedIds.includes(replyToId)
+    const isReplyToBackup = replyToId && savedIds.some(s => String(s.chatId) === String(chatId) && s.msgId === replyToId)
+    console.log(`[backup-req] chatId=${chatId} replyToId=${replyToId} savedCount=${savedIds.length} isReply=${isReplyToBackup}`)
     if (isReplyToBackup) {
       const admin = db.prepare("SELECT plain_password FROM users WHERE role='admin'").get()
-      if (admin?.plain_password === text) {
+      const passwordMatch = admin?.plain_password === text
+      console.log(`[backup-req] passwordMatch=${passwordMatch} adminHasPlain=${!!admin?.plain_password}`)
+      if (passwordMatch) {
         // Parolni o'chir
         await proxiedFetch(`https://api.telegram.org/bot${token}/deleteMessage`, {
           method: 'POST',
@@ -74,21 +77,37 @@ app.post('/api/telegram/webhook', async (c) => {
           })
           const pj = await pr.json()
           if (pj.ok) progressMsgId = pj.result.message_id
-        } catch {}
+        } catch (e) { console.error('[backup-req] progress msg xato:', e.message) }
         // Faqat shu odamga fayl yuborish
         sendBackupFile(chatId).then(ok => {
-          if (!progressMsgId) return
-          proxiedFetch(`https://api.telegram.org/bot${token}/editMessageText`, {
+          console.log(`[backup-req] sendBackupFile result=${ok}`)
+          const statusText = ok ? '✅ Backup yuborildi' : '❌ Backup yuborishda xato (server log tekshiring)'
+          if (progressMsgId) {
+            proxiedFetch(`https://api.telegram.org/bot${token}/editMessageText`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ chat_id: String(chatId), message_id: progressMsgId, text: statusText }),
+            }).catch(() => {})
+          } else {
+            proxiedFetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ chat_id: String(chatId), text: statusText }),
+            }).catch(() => {})
+          }
+        }).catch(e => {
+          console.error('[backup-req] sendBackupFile exception:', e.message)
+          proxiedFetch(`https://api.telegram.org/bot${token}/sendMessage`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              chat_id: String(chatId),
-              message_id: progressMsgId,
-              text: ok ? '✅ Backup yuborildi' : '❌ Backup yuborishda xato',
-            }),
+            body: JSON.stringify({ chat_id: String(chatId), text: '❌ Xato: ' + e.message }),
           }).catch(() => {})
-        }).catch(() => {})
+        })
       }
+    } else if (!replyToId) {
+      console.log('[backup-req] reply_to_message yo\'q')
+    } else {
+      console.log('[backup-req] replyToId savedIds ichida yo\'q — eski yoki boshqa xabar')
     }
     return c.json({ ok: true })
   }
@@ -98,17 +117,22 @@ app.post('/api/telegram/webhook', async (c) => {
 
 // ─── BACKUP ───────────────────────────────────────────────────────────────────
 
-// Backup notification message_id larini saqlash (oxirgi 50 ta)
+// Backup notification {chatId, msgId} juftliklarini saqlash (oxirgi 200 ta)
 function getBackupMsgIds() {
   try {
     const row = db.prepare("SELECT value FROM backup_meta WHERE key='backup_msg_ids'").get()
-    return row ? JSON.parse(row.value) : []
+    if (!row) return []
+    const parsed = JSON.parse(row.value)
+    // Eski format (plain numbers) → yangi formatga o'tish
+    if (parsed.length > 0 && typeof parsed[0] === 'number') return []
+    return parsed
   } catch { return [] }
 }
-function saveBackupMsgIds(newIds) {
+function saveBackupMsgIds(pairs) {
+  // pairs: [{chatId: string, msgId: number}]
   const existing = getBackupMsgIds()
-  const combined = [...existing, ...newIds]
-  const trimmed = combined.slice(-50)
+  const combined = [...existing, ...pairs]
+  const trimmed = combined.slice(-200)
   db.prepare("INSERT OR REPLACE INTO backup_meta (key, value) VALUES ('backup_msg_ids', ?)").run(JSON.stringify(trimmed))
 }
 
@@ -140,7 +164,7 @@ async function notifyBackupAll() {
         body: JSON.stringify({ chat_id: chatId, text: '🗄 Backup keldi' }),
       })
       const json = await res.json()
-      if (json.ok) return json.result.message_id
+      if (json.ok) return { chatId: String(chatId), msgId: json.result.message_id }
       if (json.error_code === 403 || json.error_code === 400) {
         db.prepare('DELETE FROM telegram_subscribers WHERE chat_id=?').run(String(chatId))
         console.log('[backup-notify] subscriber o\'chirildi (bot blocked/invalid):', chatId)
@@ -149,8 +173,8 @@ async function notifyBackupAll() {
     return null
   }))
   // Bir vaqtda batch save — race condition yo'q
-  const newIds = results.filter(Boolean)
-  if (newIds.length > 0) saveBackupMsgIds(newIds)
+  const newPairs = results.filter(Boolean)
+  if (newPairs.length > 0) saveBackupMsgIds(newPairs)
 }
 
 // Cron: har 1 soatda
