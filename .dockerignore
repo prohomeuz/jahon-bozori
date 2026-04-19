@@ -7,7 +7,7 @@
 node_modules
 backend/node_modules
 
-# dist/ hostda build qilinadi va frontend Docker image'ga COPY qilinadi — ignore qilinmaydi
+# dist/ — multi-stage Docker build ichida yaratiladi (ignore qilinmaydi)
 
 # ── Database — volume orqali mount bo'ladi, image ichiga kirmasin ─────────────
 *.sqlite
