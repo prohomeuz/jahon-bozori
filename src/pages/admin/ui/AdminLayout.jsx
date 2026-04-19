@@ -216,7 +216,6 @@ export default function AdminLayout() {
     async function connect() {
       try {
         const res = await fetch(`/api/events?token=${token}`, {
-          headers: { 'ngrok-skip-browser-warning': '1' },
           signal: controller.signal,
         })
         if (!res.ok || !res.body) return

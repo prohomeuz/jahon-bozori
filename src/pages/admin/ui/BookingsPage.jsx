@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { getUser, apiFetch } from '@/shared/lib/auth'
 import { useRealtimeApts } from '@/shared/hooks/useRealtimeApts'
-import { Search, Download, X, FileText } from 'lucide-react'
+import { Search, Download, X, FileText, Eye } from 'lucide-react'
 import { ContractPDF } from '@/pages/bolim/ui/ContractPDF'
 
 const allBlockImgs = import.meta.glob('@/assets/blocks/**/*.{png,jpg,webp}', { eager: true })
@@ -164,10 +164,67 @@ const TYPE_BADGE = {
 }
 const TYPE_LABEL = { bron: 'Bron', sotish: 'Sotish' }
 
+function fmtDate(str) {
+  if (!str) return '—'
+  const d = new Date(str)
+  const months = ['Yanvar','Fevral','Mart','Aprel','May','Iyun','Iyul','Avgust','Sentabr','Oktabr','Noyabr','Dekabr']
+  return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`
+}
+
+function fmtMoney(val) {
+  if (!val) return null
+  const num = Number(String(val).replace(/\s/g, ''))
+  if (!num) return null
+  return num.toLocaleString('ru-RU').replace(/,/g, ' ') + ' USD'
+}
+
+function SotishDetailModal({ booking, onClose }) {
+  const rows = [
+    ['Xaridor', `${booking.ism || ''} ${booking.familiya || ''}`.trim() || '—'],
+    ['Telefon', booking.phone || '—'],
+    ['Menejer', booking.manager_name || '—'],
+    ['Sana', fmtDate(booking.created_at)],
+    fmtMoney(booking.boshlangich) && ["Boshlang'ich to'lov", fmtMoney(booking.boshlangich)],
+    booking.oylar && ['Muddat', `${booking.oylar} oy`],
+    fmtMoney(booking.narx_m2) && ['Narx/m²', fmtMoney(booking.narx_m2)],
+    fmtMoney(booking.umumiy) && ['Umumiy narx', fmtMoney(booking.umumiy)],
+    booking.passport && ['Passport', booking.passport],
+    booking.passport_place && ['Passport berilgan joy', booking.passport_place],
+    booking.manzil && ['Manzil', booking.manzil],
+  ].filter(Boolean)
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+      style={{ backdropFilter: 'blur(4px)' }}
+      onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="bg-background rounded-2xl shadow-2xl border border-border w-full max-w-md overflow-hidden">
+        <div className="px-6 py-5 flex items-center gap-3 bg-emerald-50 border-b border-emerald-100">
+          <span className="w-3 h-3 rounded-full bg-emerald-500 shrink-0" />
+          <span className="font-black text-xl text-foreground tracking-tight flex-1">{booking.apartment_id}</span>
+          <span className="text-xs font-bold px-2.5 py-1 rounded-full border bg-emerald-100 text-emerald-700 border-emerald-200">Sotilgan</span>
+          <button onClick={onClose}
+            className="w-8 h-8 rounded-full flex items-center justify-center bg-black/8 text-foreground hover:bg-black/15 transition-colors ml-1">
+            <X size={15} strokeWidth={2.5} />
+          </button>
+        </div>
+        <div className="px-6 py-5 flex flex-col gap-3.5 max-h-[70vh] overflow-y-auto">
+          {rows.map(([label, value]) => (
+            <div key={label} className="flex items-start justify-between gap-6">
+              <span className="text-sm text-muted-foreground shrink-0">{label}</span>
+              <span className="text-sm font-bold text-foreground text-right">{value}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function BookingRow({ b, isAdmin, cancelled, onReset, scrolled }) {
   const [loading, setLoading]         = useState(false)
   const [pdfLoading, setPdfLoading]   = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
+  const [showDetail, setShowDetail]   = useState(false)
 
   const [block, bolim, aptStr] = b.apartment_id.split('-')
   const floor = aptStr ? aptStr[0] : '?'
@@ -190,78 +247,94 @@ function BookingRow({ b, isAdmin, cancelled, onReset, scrolled }) {
   }
 
   return (
-    <tr
-      className={`border-t border-border transition-colors duration-300 ${
-        cancelled ? 'opacity-55' : 'hover:bg-muted/40'
-      }`}
-    >
-      {/* Xonadon — sticky left */}
-      <td className={`px-4 py-3 whitespace-nowrap sticky left-0 transition-shadow ${
-        cancelled ? 'bg-card opacity-100' : 'bg-card'
-      } ${scrolled ? 'shadow-[4px_0_12px_-2px_rgba(0,0,0,0.08)]' : ''}`}>
-        <p className="font-mono font-bold text-sm">{b.apartment_id}</p>
-        <p className="text-xs text-muted-foreground mt-0.5">
-          {block}-blok · {bolim}-bo'lim · {floor}-qavat
-        </p>
-      </td>
-
-      {/* Mijoz */}
-      <td className="px-4 py-3">
-        <p className="text-sm font-medium">{b.ism} {b.familiya}</p>
-        {b.phone && <p className="text-xs text-muted-foreground mt-0.5">{b.phone}</p>}
-      </td>
-
-      {/* Manager — faqat admin */}
-      {isAdmin && (
-        <td className="px-4 py-3 text-sm text-muted-foreground whitespace-nowrap">
-          {b.manager_name || '—'}
+    <>
+      <tr
+        className={`border-t border-border transition-colors duration-300 ${
+          cancelled ? 'opacity-55' : 'hover:bg-muted/40'
+        } ${b.type === 'sotish' && !cancelled ? 'cursor-pointer' : ''}`}
+        onDoubleClick={() => b.type === 'sotish' && !cancelled && setShowDetail(true)}
+      >
+        {/* Xonadon — sticky left */}
+        <td className={`px-4 py-3 whitespace-nowrap sticky left-0 transition-shadow ${
+          cancelled ? 'bg-card opacity-100' : 'bg-card'
+        } ${scrolled ? 'shadow-[4px_0_12px_-2px_rgba(0,0,0,0.08)]' : ''}`}>
+          <p className="font-mono font-bold text-sm">{b.apartment_id}</p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            {block}-blok · {bolim}-bo'lim · {floor}-qavat
+          </p>
         </td>
-      )}
 
-      {/* Sana */}
-      <td className="px-4 py-3 whitespace-nowrap">
-        {cancelled ? (
-          <p className="text-xs text-red-500 font-medium">
-            {new Date(b.cancelled_at).toLocaleString('uz-UZ')}
-          </p>
-        ) : (
-          <p className="text-xs text-muted-foreground">
-            {new Date(b.created_at).toLocaleString('uz-UZ')}
-          </p>
+        {/* Mijoz */}
+        <td className="px-4 py-3">
+          <p className="text-sm font-medium">{b.ism} {b.familiya}</p>
+          <div className="flex items-center gap-2 mt-0.5">
+            {b.phone && <p className="text-xs text-muted-foreground">{b.phone}</p>}
+            <span className={`text-xs font-semibold px-1.5 py-0.5 rounded-full ${TYPE_BADGE[b.type] ?? ''}`}>
+              {TYPE_LABEL[b.type] ?? b.type}
+            </span>
+          </div>
+        </td>
+
+        {/* Manager — faqat admin */}
+        {isAdmin && (
+          <td className="px-4 py-3 text-sm text-muted-foreground whitespace-nowrap">
+            {b.manager_name || '—'}
+          </td>
         )}
-      </td>
 
-      {/* Amallar */}
-      <td className="px-4 py-3">
-        <div className="flex items-center gap-2">
-          <button
-            onClick={handleDownloadPDF}
-            disabled={pdfLoading}
-            title="Shartnoma yuklab olish"
-            className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border border-border text-muted-foreground hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 transition-colors disabled:opacity-40"
-          >
-            {pdfLoading
-              ? <FileText size={13} className="animate-pulse" />
-              : <Download size={13} />
-            }
-            Bron
-          </button>
-          {isAdmin && !cancelled && (
-            <button
-              onClick={() => setShowConfirm(true)}
-              disabled={loading}
-              title="Bitimni bekor qilish"
-              className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border border-border text-muted-foreground hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors disabled:opacity-40"
-            >
-              <X size={13} />
-              Bekor
-            </button>
+        {/* Sana */}
+        <td className="px-4 py-3 whitespace-nowrap">
+          {cancelled ? (
+            <p className="text-xs text-red-500 font-medium">
+              {new Date(b.cancelled_at).toLocaleString('uz-UZ')}
+            </p>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              {new Date(b.created_at).toLocaleString('uz-UZ')}
+            </p>
           )}
-        </div>
-      </td>
+        </td>
+
+        {/* Amallar */}
+        <td className="px-4 py-3">
+          <div className="flex items-center gap-2">
+            {b.type === 'bron' ? (
+              <button
+                onClick={handleDownloadPDF}
+                disabled={pdfLoading}
+                title="Shartnoma yuklab olish"
+                className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border border-border text-muted-foreground hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 transition-colors disabled:opacity-40"
+              >
+                {pdfLoading ? <FileText size={13} className="animate-pulse" /> : <Download size={13} />}
+                Shartnoma
+              </button>
+            ) : (
+              <button
+                onClick={() => setShowDetail(true)}
+                title="Batafsil ko'rish"
+                className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border border-border text-muted-foreground hover:bg-emerald-50 hover:text-emerald-600 hover:border-emerald-200 transition-colors"
+              >
+                <Eye size={13} />
+                Ko'rish
+              </button>
+            )}
+            {isAdmin && !cancelled && (
+              <button
+                onClick={() => setShowConfirm(true)}
+                disabled={loading}
+                title="Bitimni bekor qilish"
+                className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border border-border text-muted-foreground hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors disabled:opacity-40"
+              >
+                <X size={13} />
+                Bekor
+              </button>
+            )}
+          </div>
+        </td>
+      </tr>
 
       {showConfirm && (
-        <td className="p-0 border-0">
+        <tr><td className="p-0 border-0">
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
             onClick={e => e.target === e.currentTarget && setShowConfirm(false)}>
             <div className="bg-background border border-border rounded-2xl p-6 w-full max-w-sm shadow-2xl">
@@ -281,9 +354,15 @@ function BookingRow({ b, isAdmin, cancelled, onReset, scrolled }) {
               </div>
             </div>
           </div>
-        </td>
+        </td></tr>
       )}
-    </tr>
+
+      {showDetail && (
+        <tr><td className="p-0 border-0">
+          <SotishDetailModal booking={b} onClose={() => setShowDetail(false)} />
+        </td></tr>
+      )}
+    </>
   )
 }
 

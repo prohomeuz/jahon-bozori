@@ -65,7 +65,7 @@ export default function HomePage() {
           src={GENPLAN}
           className="absolute inset-0 w-full h-full object-contain"
           draggable={false}
-          fetchpriority="high"
+          fetchPriority="high"
           onLoad={() => { imgCache.add(GENPLAN); setImgLoaded(true) }}
           style={{
             filter: imgLoaded ? 'blur(0px)' : 'blur(20px)',

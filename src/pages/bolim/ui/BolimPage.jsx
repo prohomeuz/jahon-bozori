@@ -97,7 +97,6 @@ function PanZoomPane({ src, alt, overlay, aptByAddress, onSelect, ready }) {
                     status === 'SOLD'     ? '#b91c1c' :
                     '#111'
                   const sharedProps = {
-                    key: r.id,
                     fill: isHovered ? hoverColor : baseColor,
                     stroke: strokeColor,
                     strokeWidth: 4,
@@ -107,8 +106,8 @@ function PanZoomPane({ src, alt, overlay, aptByAddress, onSelect, ready }) {
                     onDoubleClick: () => !gesturedRef.current && apt && onSelect?.(apt),
                   }
                   return r.d
-                    ? <path {...sharedProps} d={r.d} />
-                    : <rect {...sharedProps} x={r.x} y={r.y} width={r.width} height={r.height} />
+                    ? <path key={r.id} {...sharedProps} d={r.d} />
+                    : <rect key={r.id} {...sharedProps} x={r.x} y={r.y} width={r.width} height={r.height} />
                 })}
               </svg>
             )}

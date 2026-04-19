@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback } from 'react'
-import { useZoom } from '../lib/useZoom'
+import { useZoom } from '@/shared/hooks/useZoom'
 import { usePan } from '../lib/usePan'
 import { Joystick } from './Joystick'
 import { ZoomControls } from './ZoomControls'

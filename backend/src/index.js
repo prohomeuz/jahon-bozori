@@ -112,8 +112,15 @@ function saveBackupMsgIds(newIds) {
   db.prepare("INSERT OR REPLACE INTO backup_meta (key, value) VALUES ('backup_msg_ids', ?)").run(JSON.stringify(trimmed))
 }
 
-// Har daqiqa "Backup keldi" xabari barcha subscriberlarga + adminga yuboriladi
+// Har soatda "Backup keldi" xabari barcha subscriberlarga + adminga yuboriladi
+// Faqat UZB vaqti 06:00–20:59 orasida (UTC+5)
 async function notifyBackupAll() {
+  const uzbHour = new Date(Date.now() + 5 * 3600_000).getUTCHours()
+  if (uzbHour < 6 || uzbHour >= 21) {
+    console.log('[backup-notify] soat', uzbHour, "UZB — vaqt tashqarida (06:00–21:00), o'tkazib yuborildi")
+    return
+  }
+
   const token = process.env.TELEGRAM_BOT_TOKEN
   const adminChatId = process.env.ADMIN_TELEGRAM_ID
   if (!token) return
@@ -239,14 +246,14 @@ app.get('/api/events', async (c) => {
 })
 
 // ─── ADMIN SEED ──────────────────────────────────────────────────────────────
-// MUHIM: faqat admin umuman yo'q bo'lsa yaratiladi.
-// Mavjud admin bilan hech narsa qilinmaydi — DELETE/UPDATE hech qachon avtomatik ishlamaydi.
+// Faqat admin umuman yo'q bo'lsa yaratiladi (yangi server / bo'sh DB).
 {
   const admin = db.prepare("SELECT id FROM users WHERE role='admin'").get()
   if (!admin) {
+    const defaultPass = process.env.ADMIN_DEFAULT_PASSWORD ?? '00001111'
     db.prepare("INSERT INTO users (username, password, plain_password, role, name, telegram_id, created_at) VALUES (?,?,?,'admin',?,NULL,datetime('now','+5 hours'))")
-      .run('00001111', hashPassword('00001111'), '00001111', 'Raxmatulloh Boqijonov')
-    console.log('[seed] Admin yaratildi: Raxmatulloh Boqijonov (parol: 00001111)')
+      .run(defaultPass, hashPassword(defaultPass), defaultPass, 'Admin')
+    console.log(`[seed] Admin yaratildi (parol: ${defaultPass})`)
   }
 }
 
@@ -374,7 +381,7 @@ app.get('/api/apartments/booking', requireAuth, (c) => {
   if (!aptId) return c.json({ error: 'id required' }, 400)
   const row = q.aptBookings.get({ apartment_id: aptId })
   if (!row) return c.json(null)
-  return c.json({ ism: row.ism, manager_name: row.manager_name, created_at: row.created_at, type: row.type })
+  return c.json({ id: row.id, user_id: row.user_id, ism: row.ism, manager_name: row.manager_name, created_at: row.created_at, type: row.type })
 })
 
 // ─── PRICES ───────────────────────────────────────────────────────────────────
@@ -465,6 +472,33 @@ app.get('/api/bookings', requireAuth, (c) => {
 
 app.get('/api/bookings/apartment/:id', requireAuth, (c) => {
   return c.json(q.aptBookings.all({ apartment_id: c.req.param('id') }))
+})
+
+app.patch('/api/bookings/:id/convert', requireAuth, async (c) => {
+  const { sub: userId } = c.get('user')
+  const id = parseInt(c.req.param('id'))
+  const booking = db.prepare('SELECT * FROM bookings WHERE id=? AND cancelled_at IS NULL').get(id)
+  if (!booking) return c.json({ error: 'Topilmadi' }, 404)
+  if (booking.type !== 'bron') return c.json({ error: "Faqat bron qilingan do'konni sotishga o'tkazish mumkin" }, 400)
+  if (booking.user_id !== userId) return c.json({ error: "Ruxsat yo'q" }, 403)
+
+  const body = await c.req.json().catch(() => ({}))
+  const { passport, passport_place, manzil } = body
+
+  db.exec('BEGIN')
+  try {
+    db.prepare('UPDATE bookings SET type=?, passport=COALESCE(?,passport), passport_place=COALESCE(?,passport_place), manzil=COALESCE(?,manzil) WHERE id=?')
+      .run('sotish', passport || null, passport_place || null, manzil || null, id)
+    db.prepare("UPDATE apartments SET status='SOLD' WHERE id=?").run(booking.apartment_id)
+    db.exec('COMMIT')
+  } catch (e) {
+    db.exec('ROLLBACK')
+    return c.json({ error: e.message }, 500)
+  }
+
+  broadcast('apartment', { id: booking.apartment_id, status: 'SOLD' })
+  broadcast('booking', { updated: true })
+  return c.json({ ok: true })
 })
 
 app.post('/api/bookings/send-pdf', requireAuth, async (c) => {
@@ -598,6 +632,28 @@ app.get('/api/stats/snapshot', requireAuth, (c) => {
 // ─── HEALTH CHECK ────────────────────────────────────────────────────────────
 app.get('/api/health', (c) => c.json({ ok: true }))
 
+// ─── TELEGRAM WEBHOOK SETUP ──────────────────────────────────────────────────
+async function setupTelegramWebhook() {
+  const token = process.env.TELEGRAM_BOT_TOKEN
+  const domain = process.env.WEBHOOK_DOMAIN // e.g. https://jahonbozori.uz
+  if (!token || !domain) {
+    if (token && !domain) console.log('[telegram] WEBHOOK_DOMAIN yo\'q — webhook o\'rnatilmadi')
+    return
+  }
+  const webhookUrl = `${domain.replace(/\/$/, '')}/api/telegram/webhook`
+  try {
+    const res = await proxiedFetch(`https://api.telegram.org/bot${token}/setWebhook`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: webhookUrl, drop_pending_updates: false }),
+    })
+    const json = await res.json()
+    if (json.ok) console.log(`[telegram] Webhook o'rnatildi: ${webhookUrl}`)
+    else console.error('[telegram] Webhook xato:', json.description)
+  } catch (e) { console.error('[telegram] Webhook setup xato:', e.message) }
+}
+
 const port = parseInt(process.env.PORT ?? '3001')
 serve({ fetch: app.fetch, port })
-console.log(`Backend: http://localhost:${port}`)
+console.log(`[backend] http://localhost:${port}`)
+setupTelegramWebhook().catch(() => {})

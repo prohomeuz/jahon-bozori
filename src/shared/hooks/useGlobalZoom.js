@@ -1,5 +1,5 @@
 import { useRef } from 'react'
-import { useZoom } from '@/pages/home/lib/useZoom'
+import { useZoom } from '@/shared/hooks/useZoom'
 
 const COOKIE_KEY = 'gz'
 

@@ -4,9 +4,11 @@ FROM node:22-alpine
 
 WORKDIR /app
 
-# Package fayllari va node_modules ni hostdan ko'chirish (internet kerak emas)
+# Avval faqat package fayllar — layer cache (src o'zgarganda npm install qayta ishlamaydi)
 COPY backend/package*.json ./
-COPY backend/node_modules ./node_modules
+
+# Production dependencies only
+RUN npm ci --omit=dev
 
 # Backend source kodni ko'chirish
 COPY backend/src ./src

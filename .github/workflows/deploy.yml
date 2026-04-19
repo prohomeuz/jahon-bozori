@@ -1,6 +1,5 @@
 name: Deploy to Production
 
-# main branchga push yoki PR merge bo'lganda ishga tushadi
 on:
   push:
     branches:
@@ -8,7 +7,7 @@ on:
 
 jobs:
   deploy:
-    name: Deploy to Cantabo Server
+    name: Deploy to Server
     runs-on: ubuntu-latest
 
     steps:
@@ -21,20 +20,6 @@ jobs:
           port:     ${{ secrets.SERVER_PORT || 22 }}
           script: |
             set -e
-
-            echo "📦 Loyiha papkasiga o'tish..."
             cd ${{ secrets.DEPLOY_PATH }}
-
-            echo "⬇️  Yangi kodni olish..."
-            git fetch origin main
-            git reset --hard origin/main
-
-            echo "🐳 Docker image build va restart..."
-            docker compose build --no-cache
-            docker compose up -d --remove-orphans
-
-            echo "🧹 Eski image'larni tozalash..."
-            docker image prune -f
-
-            echo "✅ Deploy muvaffaqiyatli tugadi!"
-            docker compose ps
+            chmod +x deploy.sh
+            ./deploy.sh

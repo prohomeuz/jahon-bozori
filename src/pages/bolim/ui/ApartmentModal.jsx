@@ -180,29 +180,31 @@ function formatUzPhone(raw) {
   return out
 }
 
-function Field({ label, ...props }) {
+function Field({ label, error, ...props }) {
   return (
     <div>
       <label className={LABEL}>{label}</label>
-      <input className={INPUT} {...props} />
+      <input className={INPUT + (error ? ' border-red-400 ring-1 ring-red-300 focus:ring-red-400' : '')} {...props} />
+      {error && <p className="text-xs text-red-500 mt-1.5">{error}</p>}
     </div>
   )
 }
 
-function PhoneField({ label, value, onOpenNumpad, isOpen }) {
+function PhoneField({ label, value, onOpenNumpad, isOpen, error }) {
   return (
     <div>
       <label className={LABEL}>{label}</label>
       <input
         type="tel"
         readOnly
-        className={INPUT + (isOpen ? ' ring-2 ring-ring border-ring' : '')}
+        className={INPUT + (isOpen ? ' ring-2 ring-ring border-ring' : error ? ' border-red-400 ring-1 ring-red-300' : '')}
         style={{ cursor: 'pointer' }}
         value={value}
         placeholder="+998 90 123 45 67"
         onPointerDown={e => { e.preventDefault(); document.activeElement?.blur(); onOpenNumpad() }}
         onFocus={() => onOpenNumpad()}
       />
+      {!isOpen && error && <p className="text-xs text-red-500 mt-1.5">{error}</p>}
     </div>
   )
 }
@@ -221,7 +223,11 @@ function FullPhoneNumpad({ value, onChange, onClose }) {
 
   function press(k) {
     const raw = getRawDigits(value)
-    if (k === '⌫') { onChange(formatUzPhone(raw.slice(0, -1))); return }
+    if (k === '⌫') {
+      const next = raw.slice(0, -1)
+      onChange(next ? formatUzPhone(next) : '')
+      return
+    }
     if (raw.length >= 9) return
     const next = raw + k
     onChange(formatUzPhone(next))
@@ -275,7 +281,43 @@ function FullPhoneNumpad({ value, onChange, onClose }) {
   )
 }
 
-function MoneyField({ label, value, onChange, flash }) {
+function formatPassport(raw) {
+  const letters = raw.replace(/[^A-Za-z]/g, '').toUpperCase().slice(0, 2)
+  const digits  = raw.replace(/[^0-9]/g, '').slice(0, 7)
+  if (!letters) return ''
+  if (letters.length < 2) return letters
+  return letters + (digits ? ' ' + digits : '')
+}
+
+function PassportField({ label, value, onChange }) {
+  const [touched, setTouched] = useState(false)
+  const invalid = touched && value && !/^[A-Z]{2} \d{7}$/.test(value)
+
+  function handleChange(e) {
+    onChange(formatPassport(e.target.value))
+  }
+
+  return (
+    <div>
+      <label className={LABEL}>{label}</label>
+      <input
+        className={INPUT + (invalid ? ' border-red-400 ring-1 ring-red-300 focus:ring-red-400' : '')}
+        placeholder="AA 1234567"
+        value={value}
+        onChange={handleChange}
+        onBlur={() => setTouched(true)}
+        maxLength={10}
+        autoComplete="off"
+        spellCheck={false}
+      />
+      {invalid && (
+        <p className="text-xs text-red-500 mt-1.5">2 harf + 7 raqam bo'lishi kerak</p>
+      )}
+    </div>
+  )
+}
+
+function MoneyField({ label, value, onChange }) {
   function handleChange(e) {
     const digits = e.target.value.replace(/\D/g, '')
     const formatted = digits.replace(/\B(?=(\d{3})+(?!\d))/g, ' ')
@@ -288,8 +330,7 @@ function MoneyField({ label, value, onChange, flash }) {
         <input
           type="text"
           inputMode="numeric"
-          className={INPUT + ' pr-16' + (flash ? FLASH_CLASS : '')}
-          style={FLASH_STYLE}
+          className={INPUT + ' pr-16'}
           value={value}
           onChange={handleChange}
           placeholder="10 000 000"
@@ -330,8 +371,151 @@ function MonthsField({ value, onChange }) {
   )
 }
 
-function StatusCard({ apartment, isReserved, onClose }) {
+function ConvertToSaleModal({ apartment, booking, onClose, onBooked }) {
+  const [form, setForm] = useState({ passport: '', passport_place: '', manzil: '' })
+  const [converting, setConverting] = useState(false)
+  const [error, setError] = useState(null)
+
+  useEffect(() => {
+    const handler = (e) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [onClose])
+
+  function fmtDate(str) {
+    if (!str) return null
+    const d = new Date(str)
+    const months = ['yan','fev','mar','apr','may','iyn','iyl','avg','sen','okt','noy','dek']
+    return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`
+  }
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    setConverting(true)
+    setError(null)
+    try {
+      const res = await apiFetch(`/api/bookings/${booking.id}/convert`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          passport: form.passport || null,
+          passport_place: form.passport_place || null,
+          manzil: form.manzil || null,
+        }),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        setError(data.error || 'Xatolik yuz berdi')
+        return
+      }
+      onBooked?.()
+      onClose()
+    } catch {
+      setError('Internet aloqasi uzildi')
+    } finally {
+      setConverting(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60"
+      style={{ backdropFilter: 'blur(4px)' }}
+      onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="relative w-full max-w-lg bg-background rounded-2xl shadow-2xl border border-border flex flex-col overflow-hidden"
+        style={{ maxHeight: '90vh' }}>
+
+        {/* Header */}
+        <div className="flex items-center px-6 border-b border-border shrink-0 h-20 gap-4">
+          <div className="flex items-center gap-3 flex-1">
+            <span className="text-2xl font-bold text-foreground">{apartment.address}</span>
+            {apartment.size > 0 && (
+              <span className="text-lg text-muted-foreground font-medium">{apartment.size} m²</span>
+            )}
+            <span className="text-xs font-bold px-2.5 py-1 rounded-full border bg-emerald-100 text-emerald-700 border-emerald-200">
+              Sotishga o'tkazish
+            </span>
+          </div>
+          <button onClick={onClose}
+            className="w-12 h-12 rounded-full flex items-center justify-center text-muted-foreground hover:bg-accent hover:text-foreground transition-colors shrink-0 text-3xl">
+            ×
+          </button>
+        </div>
+
+        {/* Body */}
+        <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0 overflow-y-auto">
+          <div className="px-6 py-5 flex flex-col gap-5">
+
+            {/* Bron ma'lumotlari — read only xulosa */}
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 flex flex-col gap-2.5">
+              <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide mb-0.5">Bron ma'lumotlari</p>
+              {booking.ism && (
+                <div className="flex justify-between">
+                  <span className="text-xs text-amber-800/70">Xaridor</span>
+                  <span className="text-sm font-bold text-amber-900">{booking.ism}</span>
+                </div>
+              )}
+              <div className="flex justify-between">
+                <span className="text-xs text-amber-800/70">Menejer</span>
+                <span className="text-sm font-semibold text-amber-900">{booking.manager_name ?? '—'}</span>
+              </div>
+              {booking.created_at && (
+                <div className="flex justify-between">
+                  <span className="text-xs text-amber-800/70">Bron sanasi</span>
+                  <span className="text-sm font-semibold text-amber-900">{fmtDate(booking.created_at)}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Qo'shimcha maydonlar */}
+            <div className="flex flex-col gap-4">
+              <p className="text-sm font-semibold text-muted-foreground">
+                Qo'shimcha ma'lumotlar <span className="font-normal">(ixtiyoriy)</span>
+              </p>
+              <div className="grid grid-cols-2 gap-4">
+                <PassportField label="Passport seriya/raqam" value={form.passport}
+                  onChange={(v) => setForm(f => ({ ...f, passport: v }))} />
+                <Field label="Passport berilgan joy" placeholder="Toshkent sh. IIB"
+                  value={form.passport_place}
+                  onChange={e => setForm(f => ({ ...f, passport_place: e.target.value }))} />
+              </div>
+              <Field label="Manzil" placeholder="Toshkent, Chilonzor"
+                value={form.manzil}
+                onChange={e => setForm(f => ({ ...f, manzil: e.target.value }))} />
+            </div>
+          </div>
+
+          {/* Footer */}
+          <div className="px-6 pb-6 pt-3 shrink-0 border-t border-border flex flex-col gap-2">
+            {error && (
+              <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm font-medium">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+                  <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+                </svg>
+                {error}
+              </div>
+            )}
+            <div className="flex gap-3">
+              <button type="button" onClick={onClose}
+                className="flex-1 py-4 rounded-xl border border-border text-sm font-semibold text-muted-foreground hover:bg-muted transition-colors">
+                Bekor qilish
+              </button>
+              <button type="submit" disabled={converting}
+                className="flex-1 py-4 rounded-xl bg-green-600 text-white font-semibold text-base active:scale-[0.98] transition-all hover:bg-green-700 disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+                {converting && <Loader2 size={18} className="animate-spin" />}
+                {converting ? 'Saqlanmoqda...' : 'Sotishga o\'tkazish'}
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+function StatusCard({ apartment, isReserved, onClose, onBooked }) {
   const [booking, setBooking] = useState(null)
+  const [showConvert, setShowConvert] = useState(false)
+  const currentUser = getUser()
 
   useEffect(() => {
     apiFetch(`/api/apartments/booking?id=${apartment.address}`)
@@ -344,11 +528,24 @@ function StatusCard({ apartment, isReserved, onClose }) {
     ? { dot: 'bg-amber-400', badge: 'bg-amber-50 text-amber-700 border-amber-200', label: 'Bron' }
     : { dot: 'bg-red-500',   badge: 'bg-red-50 text-red-700 border-red-200',       label: 'Sotilgan' }
 
+  const isOwner = isReserved && booking && currentUser && booking.user_id === currentUser.sub
+
   function fmtDate(str) {
     if (!str) return null
     const d = new Date(str)
     const months = ['yan','fev','mar','apr','may','iyn','iyl','avg','sen','okt','noy','dek']
     return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`
+  }
+
+  if (showConvert && booking) {
+    return (
+      <ConvertToSaleModal
+        apartment={apartment}
+        booking={booking}
+        onClose={() => setShowConvert(false)}
+        onBooked={onBooked}
+      />
+    )
   }
 
   return (
@@ -401,6 +598,13 @@ function StatusCard({ apartment, isReserved, onClose }) {
               <span className="text-sm font-semibold text-foreground">{apartment.size} m²</span>
             </div>
           )}
+
+          {isOwner && (
+            <button type="button" onClick={() => setShowConvert(true)}
+              className="w-full py-2.5 rounded-xl text-sm font-semibold border border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100 transition-colors mt-1">
+              Sotishga o'tkazish
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -422,6 +626,7 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
   const [managers, setManagers] = useState([])
   const [assignedUserId, setAssignedUserId] = useState(null) // null = o'zi
   const [confirmPending, setConfirmPending] = useState(null) // 'bron' | 'sotish'
+  const [showErrors, setShowErrors] = useState(false)
   const [showCalc, setShowCalc] = useState(false)
   const [calc, setCalc] = useState({ narxM2: '', boshlangich: '', oylar: '12', focus: 'narxM2' })
   const [phoneTarget, setPhoneTarget] = useState(null) // null | 'bron' | 'sotish'
@@ -470,6 +675,22 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
   }, [phoneTarget])
 
   if (!apartment) return null
+
+  function getErrors(form) {
+    const e = {}
+    if (!form.ism.trim()) e.ism = "To'ldirilishi shart"
+    if (!form.familiya.trim()) e.familiya = "To'ldirilishi shart"
+    const phoneDigits = getRawDigits(form.telefon)
+    if (phoneDigits.length < 9) e.telefon = phoneDigits.length === 0 ? 'Telefon raqam kiritilishi shart' : "Telefon raqam to'liq emas"
+    const boshlVal = Number(String(form.boshlangich || '').replace(/\s/g, ''))
+    if (!boshlVal) e.boshlangich = boshlVal === 0 && form.boshlangich ? "Summa noldan katta bo'lishi shart" : "Boshlang'ich to'lov kiritilishi shart"
+    return e
+  }
+
+  const bronErrors  = showErrors ? getErrors(bronForm)   : {}
+  const sotishErrors = showErrors ? getErrors(sotishForm) : {}
+  const activeErrors = tab === 'bron' ? bronErrors : sotishErrors
+  const hasErrors = Object.keys(activeErrors).length > 0
 
   const cap = (s) => s ? s.toUpperCase() : s
 
@@ -658,10 +879,11 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
     function transferToForm() {
       const narxVal = Number(String(calc.narxM2).replace(/\s/g, ''))
       const totalVal = narxVal && apartment.size > 0 ? Math.round(narxVal * apartment.size) : 0
-      if (calc.narxM2)      setBronForm(f => ({ ...f, narx_m2: calc.narxM2 }))
-      if (calc.boshlangich) setBronForm(f => ({ ...f, boshlangich: calc.boshlangich }))
-      if (calc.oylar)       setBronForm(f => ({ ...f, oylar: calc.oylar }))
-      if (totalVal)         setBronForm(f => ({ ...f, umumiy: String(totalVal) }))
+      const setter = tab === 'sotish' ? setSotishForm : setBronForm
+      if (calc.narxM2)      setter(f => ({ ...f, narx_m2: calc.narxM2 }))
+      if (calc.boshlangich) setter(f => ({ ...f, boshlangich: calc.boshlangich }))
+      if (calc.oylar)       setter(f => ({ ...f, oylar: calc.oylar }))
+      if (totalVal)         setter(f => ({ ...f, umumiy: String(totalVal) }))
       setShowCalc(false)
     }
     return (
@@ -732,12 +954,13 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
     <div className="flex flex-1 min-h-0">
       {showCalc ? calcLeftPanel() : (
         <div className="flex flex-col gap-4 px-5 py-4 overflow-y-auto border-r border-border" style={{ flex: '0 0 70%' }}>
-          <Field label="Ism" placeholder="Abdulloh" value={bronForm.ism} onChange={setBronCap('ism')} required autoComplete="given-name" />
-          <Field label="Familiya" placeholder="Karimov" value={bronForm.familiya} onChange={setBronCap('familiya')} required autoComplete="family-name" />
+          <Field label="Ism" placeholder="Abdulloh" value={bronForm.ism} onChange={setBronCap('ism')} autoComplete="given-name" error={bronErrors.ism} />
+          <Field label="Familiya" placeholder="Karimov" value={bronForm.familiya} onChange={setBronCap('familiya')} autoComplete="family-name" error={bronErrors.familiya} />
           <PhoneField label="Telefon raqam" value={bronForm.telefon}
             isOpen={phoneTarget === 'bron'}
             onOpenNumpad={() => setPhoneTarget('bron')}
             onClose={() => setPhoneTarget(null)}
+            error={bronErrors.telefon}
           />
           {(bronForm.boshlangich || bronForm.narx_m2) ? (
             <div className="flex-1 rounded-2xl border-2 border-amber-200 bg-amber-50 px-5 py-4 flex flex-col justify-between">
@@ -768,6 +991,12 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
                 Qayta hisoblash →
               </button>
             </div>
+          ) : bronErrors.boshlangich ? (
+            <button type="button" onClick={() => setShowCalc(true)}
+              className="rounded-2xl border-2 border-red-200 bg-red-50 px-5 py-4 text-left w-full hover:bg-red-100 transition-colors">
+              <p className="text-sm font-semibold text-red-700">Boshlang'ich to'lov kiritilishi shart</p>
+              <p className="text-xs text-red-500 mt-1">Kalkulyatorni ochish →</p>
+            </button>
           ) : null}
         </div>
       )}
@@ -788,35 +1017,69 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
 
   const sotishFields = (
     <div className="flex flex-1 min-h-0">
-      <div className="flex flex-col gap-4 px-5 py-4 overflow-y-auto border-r border-border" style={{ flex: '0 0 70%' }}>
-      <div className="grid grid-cols-2 gap-4">
-        <Field label="Ism" placeholder="Abdulloh" value={sotishForm.ism} onChange={setSotishCap('ism')} required autoComplete="given-name" />
-        <Field label="Familiya" placeholder="Karimov" value={sotishForm.familiya} onChange={setSotishCap('familiya')} required autoComplete="family-name" />
-      </div>
-      <PhoneField label="Telefon raqam" value={sotishForm.telefon}
-        isOpen={phoneTarget === 'sotish'}
-        onOpenNumpad={() => setPhoneTarget('sotish')}
-        onClose={() => setPhoneTarget(null)}
-      />
-      <div className="grid grid-cols-2 gap-4">
-        <MoneyField label="Boshlang'ich to'lov" value={sotishForm.boshlangich} onChange={(v) => setSotishForm((f) => ({ ...f, boshlangich: v }))} />
-        <MonthsField value={sotishForm.oylar} onChange={(v) => setSotishForm((f) => ({ ...f, oylar: v }))} />
-        <MoneyField label="Kvadrat metr narxi" value={sotishForm.narx_m2} onChange={(v) => setSotishForm((f) => ({ ...f, narx_m2: v }))} />
-      </div>
-      <div className="grid grid-cols-2 gap-4">
-        <Field label="Passport seriya/raqam" placeholder="AA 1234567" value={sotishForm.passport} onChange={setSotish('passport')} />
-        <Field label="Passport berilgan joy" placeholder="Toshkent sh. IIB" value={sotishForm.passport_place} onChange={setSotish('passport_place')} />
-      </div>
-      <Field label="Manzil" placeholder="Toshkent, Chilonzor" value={sotishForm.manzil} onChange={setSotish('manzil')} />
-      </div>
-      <div className="flex items-stretch" style={{ flex: '0 0 30%' }}>
-        {phoneTarget === 'sotish' && (
-          <FullPhoneNumpad
-            value={sotishForm.telefon}
-            onChange={(v) => setSotishForm(f => ({ ...f, telefon: v }))}
+      {showCalc ? calcLeftPanel() : (
+        <div className="flex flex-col gap-4 px-5 py-4 overflow-y-auto border-r border-border" style={{ flex: '0 0 70%' }}>
+          <Field label="Ism" placeholder="Abdulloh" value={sotishForm.ism} onChange={setSotishCap('ism')} autoComplete="given-name" error={sotishErrors.ism} />
+          <Field label="Familiya" placeholder="Karimov" value={sotishForm.familiya} onChange={setSotishCap('familiya')} autoComplete="family-name" error={sotishErrors.familiya} />
+          <PhoneField label="Telefon raqam" value={sotishForm.telefon}
+            isOpen={phoneTarget === 'sotish'}
+            onOpenNumpad={() => setPhoneTarget('sotish')}
             onClose={() => setPhoneTarget(null)}
+            error={sotishErrors.telefon}
           />
-        )}
+          {(sotishForm.boshlangich || sotishForm.narx_m2) ? (
+            <div className="rounded-2xl border-2 border-amber-200 bg-amber-50 px-5 py-4 flex flex-col justify-between">
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <p className="text-xs text-amber-700 mb-1">Kafolat summasi</p>
+                  <p className="text-xl font-bold text-foreground">{sotishForm.boshlangich || '—'} <span className="text-sm font-normal text-muted-foreground">USD</span></p>
+                  {(() => {
+                    const down  = Number(String(sotishForm.boshlangich || '').replace(/\s/g, ''))
+                    const narx  = Number(String(sotishForm.narx_m2 || '').replace(/\s/g, ''))
+                    const total = narx > 0 ? Math.round(narx * apartment.size) : 0
+                    const pct   = total > 0 && down > 0 ? Math.round((down / total) * 100) : 0
+                    return pct > 0 ? <p className="text-lg font-bold text-amber-600 mt-1">{pct}% <span className="text-xs font-normal">umumiy to'lovdan</span></p> : null
+                  })()}
+                </div>
+                <div>
+                  <p className="text-xs text-amber-700 mb-1">Muddat</p>
+                  <p className="text-xl font-bold text-foreground">{sotishForm.oylar || '—'} <span className="text-sm font-normal text-muted-foreground">oy</span></p>
+                </div>
+                <div>
+                  <p className="text-xs text-amber-700 mb-1">Narx/m²</p>
+                  <p className="text-xl font-bold text-foreground">{sotishForm.narx_m2 || '—'} <span className="text-sm font-normal text-muted-foreground">USD</span></p>
+                </div>
+              </div>
+              <button type="button" onClick={() => setShowCalc(true)}
+                className="mt-4 self-start text-xs text-amber-700 underline underline-offset-2 hover:text-amber-900">
+                Qayta hisoblash →
+              </button>
+            </div>
+          ) : sotishErrors.boshlangich ? (
+            <button type="button" onClick={() => setShowCalc(true)}
+              className="rounded-2xl border-2 border-red-200 bg-red-50 px-5 py-4 text-left w-full hover:bg-red-100 transition-colors">
+              <p className="text-sm font-semibold text-red-700">Boshlang'ich to'lov kiritilishi shart</p>
+              <p className="text-xs text-red-500 mt-1">Kalkulyatorni ochish →</p>
+            </button>
+          ) : null}
+          <div className="grid grid-cols-2 gap-4">
+            <PassportField label="Passport seriya/raqam" value={sotishForm.passport} onChange={(v) => setSotishForm(f => ({ ...f, passport: v }))} />
+            <Field label="Passport berilgan joy" placeholder="Toshkent sh. IIB" value={sotishForm.passport_place} onChange={setSotish('passport_place')} />
+          </div>
+          <Field label="Manzil" placeholder="Toshkent, Chilonzor" value={sotishForm.manzil} onChange={setSotish('manzil')} />
+        </div>
+      )}
+      <div className="flex items-stretch" style={{ flex: '0 0 30%' }}>
+        {showCalc
+          ? calcKeypad()
+          : phoneTarget === 'sotish'
+          ? <FullPhoneNumpad
+              value={sotishForm.telefon}
+              onChange={(v) => setSotishForm(f => ({ ...f, telefon: v }))}
+              onClose={() => setPhoneTarget(null)}
+            />
+          : null
+        }
       </div>
     </div>
   )
@@ -824,7 +1087,7 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
   // RESERVED yoki SOLD bo'lsa — minimal info card
   if (apartment.status === 'RESERVED' || apartment.status === 'SOLD') {
     const isReserved = apartment.status === 'RESERVED'
-    return <StatusCard apartment={apartment} isReserved={isReserved} onClose={onClose} />
+    return <StatusCard apartment={apartment} isReserved={isReserved} onClose={onClose} onBooked={onBooked} />
   }
 
   if (booked) {
@@ -836,17 +1099,19 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
             <p className="text-xl font-bold text-foreground">{booked.type === 'bron' ? 'Bron muvaffaqiyatli!' : 'Sotish rasmiylashtirildi!'}</p>
             <p className="text-sm text-muted-foreground mt-1">{apartment.address} · {booked.form.ism} {booked.form.familiya}</p>
           </div>
-          <button
-            onClick={handleDownloadPDF}
-            disabled={pdfLoading}
-            className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl bg-primary text-primary-foreground font-semibold text-sm hover:bg-primary/90 transition-colors active:scale-[0.98] disabled:opacity-60"
-          >
-            {pdfLoading
-              ? <Loader2 size={16} className="animate-spin" />
-              : <FileText size={16} />
-            }
-            {pdfLoading ? 'Tayyorlanmoqda...' : 'Shartnoma PDF'}
-          </button>
+          {booked.type === 'bron' && (
+            <button
+              onClick={handleDownloadPDF}
+              disabled={pdfLoading}
+              className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl bg-primary text-primary-foreground font-semibold text-sm hover:bg-primary/90 transition-colors active:scale-[0.98] disabled:opacity-60"
+            >
+              {pdfLoading
+                ? <Loader2 size={16} className="animate-spin" />
+                : <FileText size={16} />
+              }
+              {pdfLoading ? 'Tayyorlanmoqda...' : 'Shartnoma PDF'}
+            </button>
+          )}
           <button
             onClick={onClose}
             className="w-full py-3 rounded-xl border border-border text-sm font-medium text-muted-foreground hover:bg-muted transition-colors"
@@ -892,7 +1157,7 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
                 setCalc({ narxM2: '', boshlangich: '', oylar: '12', focus: 'narxM2' })
                 fetchCalcPrice()
               } else {
-                setBronForm(BRON_EMPTY); setSotishForm(SOTISH_EMPTY); setFlash(new Set())
+                setBronForm(BRON_EMPTY); setSotishForm(SOTISH_EMPTY)
               }
             }}
             className="w-14 h-14 rounded-full flex items-center justify-center text-muted-foreground hover:bg-accent hover:text-foreground transition-colors shrink-0"
@@ -967,11 +1232,21 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
         {/* Kontent */}
         <div className="flex flex-col flex-1 min-h-0">
           {tab === 'bron' ? (
-            <form id="bron-form" onSubmit={(e) => { e.preventDefault(); setConfirmPending('bron') }} className="flex flex-col flex-1 min-h-0">
+            <form id="bron-form" onSubmit={(e) => {
+              e.preventDefault()
+              const errs = getErrors(bronForm)
+              if (Object.keys(errs).length > 0) { setShowErrors(true); return }
+              setConfirmPending('bron')
+            }} className="flex flex-col flex-1 min-h-0">
               {bronFields}
             </form>
           ) : (
-            <form id="sotish-form" onSubmit={(e) => { e.preventDefault(); setConfirmPending('sotish') }} className="flex flex-col flex-1 min-h-0">
+            <form id="sotish-form" onSubmit={(e) => {
+              e.preventDefault()
+              const errs = getErrors(sotishForm)
+              if (Object.keys(errs).length > 0) { setShowErrors(true); return }
+              setConfirmPending('sotish')
+            }} className="flex flex-col flex-1 min-h-0">
               {sotishFields}
             </form>
           )}
@@ -992,13 +1267,10 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
                   <button
                     key={key}
                     type="button"
-                    disabled={key === 'sotish'}
-                    onClick={() => { setTab(key); setSubmitError(null) }}
+                    onClick={() => { setTab(key); setSubmitError(null); setShowErrors(false) }}
                     className={`flex-1 px-4 py-3 rounded-lg text-sm font-semibold transition-colors ${
                       tab === key
                         ? 'bg-background text-foreground shadow-sm'
-                        : key === 'sotish'
-                        ? 'text-muted-foreground/40 cursor-not-allowed'
                         : 'text-muted-foreground hover:text-foreground'
                     }`}
                   >
@@ -1010,8 +1282,8 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
                 <button
                   type="submit"
                   form="bron-form"
-                  disabled={submitting}
-                  className="flex-1 py-4 rounded-xl text-white font-semibold text-base active:scale-[0.98] transition-all bg-amber-500 hover:bg-amber-600 disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  disabled={submitting || (showErrors && hasErrors)}
+                  className="flex-1 py-4 rounded-xl text-white font-semibold text-base active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed bg-amber-500 hover:bg-amber-600"
                 >
                   {submitting && <Loader2 size={18} className="animate-spin" />}
                   {submitting ? 'Saqlanmoqda...' : 'Bron qilish'}
@@ -1020,8 +1292,8 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
                 <button
                   type="submit"
                   form="sotish-form"
-                  disabled={submitting}
-                  className="flex-1 py-4 rounded-xl text-white font-semibold text-base active:scale-[0.98] transition-all bg-green-600 hover:bg-green-700 disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  disabled={submitting || (showErrors && hasErrors)}
+                  className="flex-1 py-4 rounded-xl text-white font-semibold text-base active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed bg-green-600 hover:bg-green-700"
                 >
                   {submitting && <Loader2 size={18} className="animate-spin" />}
                   {submitting ? 'Saqlanmoqda...' : 'Sotish'}

@@ -2,13 +2,9 @@ import { useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { getToken } from '@/shared/lib/auth'
 
-// Fetch-based SSE — supports custom headers (ngrok, auth, etc.)
 async function connectSSE(token, onEvent, signal) {
   try {
-    const res = await fetch(`/api/events?token=${token}`, {
-      headers: { 'ngrok-skip-browser-warning': '1' },
-      signal,
-    })
+    const res = await fetch(`/api/events?token=${token}`, { signal })
     if (!res.ok || !res.body) return
 
     const reader = res.body.getReader()

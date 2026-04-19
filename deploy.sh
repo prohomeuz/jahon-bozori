@@ -1,19 +1,24 @@
 #!/bin/bash
 set -e
 
-echo "==> Pulling latest changes..."
-git fetch origin && git reset --hard origin/main
+echo "📦 Yangi kodni olish..."
+git fetch origin main
+git reset --hard origin/main
 
-echo "==> Installing frontend deps..."
-npm install --omit=dev
+echo "🔧 Frontend dependencies (build uchun devDeps ham kerak)..."
+npm ci
 
-echo "==> Building frontend..."
+echo "🏗️  Frontend build..."
 npm run build
 
-echo "==> Installing backend deps..."
-cd backend && npm install --omit=dev && cd ..
+echo "📦 Backend dependencies (production only)..."
+cd backend && npm ci --omit=dev && cd ..
 
-echo "==> Starting Docker containers..."
-docker compose up -d --build
+echo "🐳 Docker containers restart..."
+docker compose up -d --build --remove-orphans
 
-echo "==> Done! Running at :8080"
+echo "🧹 Eski Docker image'larni tozalash..."
+docker image prune -f
+
+echo "✅ Deploy muvaffaqiyatli!"
+docker compose ps

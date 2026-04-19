@@ -3,9 +3,11 @@
 .github
 .gitignore
 
-# node_modules hostdan ko'chiriladi, ignore qilinmaydi
+# ── node_modules — Docker ichida o'rnatiladi (npm ci) ─────────────────────────
+node_modules
+backend/node_modules
 
-# dist/ hostda build qilinadi va Docker image'ga ko'chiriladi
+# dist/ hostda build qilinadi va frontend Docker image'ga COPY qilinadi — ignore qilinmaydi
 
 # ── Database — volume orqali mount bo'ladi, image ichiga kirmasin ─────────────
 *.sqlite
@@ -14,7 +16,7 @@
 *.sqlite.backup_*
 data/
 
-# ── Environment — sever sirlar image'ga kirmaydi ─────────────────────────────
+# ── Environment — server sirlari image'ga kirmaydi ───────────────────────────
 .env
 .env.*
 backend/.env

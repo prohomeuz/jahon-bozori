@@ -10,14 +10,11 @@ export function getUser() {
   try { return JSON.parse(atob(t.split('.')[1])) } catch { return null }
 }
 
-const EXTRA_HEADERS = { 'ngrok-skip-browser-warning': '1' }
-
 export function apiFetch(url, options = {}) {
   const token = getToken()
   return fetch(url, {
     ...options,
     headers: {
-      ...EXTRA_HEADERS,
       ...options.headers,
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },

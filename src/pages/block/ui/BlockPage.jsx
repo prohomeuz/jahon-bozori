@@ -54,7 +54,7 @@ export default function BlockPage() {
           src={meta.image}
           className="absolute inset-0 w-full h-full object-contain"
           draggable={false}
-          fetchpriority="high"
+          fetchPriority="high"
           onLoad={() => { imgCache.add(meta.image); setImgLoaded(true) }}
           style={{
             filter: imgLoaded ? 'blur(0px)' : 'blur(20px)',
