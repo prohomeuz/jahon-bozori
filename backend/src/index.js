@@ -405,7 +405,7 @@ app.post('/api/bookings', requireAuth, async (c) => {
   try {
     const apt = db.prepare("SELECT status FROM apartments WHERE id=?").get(apartment_id)
     if (!apt) { db.exec('ROLLBACK'); return c.json({ error: "Do'kon topilmadi" }, 404) }
-    if (apt.status !== 'FREE') { db.exec('ROLLBACK'); return c.json({ error: "Do'kon allaqachon band yoki sotilgan" }, 409) }
+    if (apt.status !== 'EMPTY') { db.exec('ROLLBACK'); return c.json({ error: "Do'kon allaqachon band yoki sotilgan" }, 409) }
     q.insertBooking.run({ apartment_id, user_id: effective_user_id, type, ism, familiya, boshlangich, oylar: parseInt(oylar), umumiy: umumiy ?? null, passport: passport ?? null, manzil: manzil ?? null, phone: phone ?? null, passport_place: passport_place ?? null, narx_m2: narx_m2 ?? null })
     const newStatus = type === 'sotish' ? 'SOLD' : 'RESERVED'
     q.updateStatus.run({ status: newStatus, id: apartment_id })
