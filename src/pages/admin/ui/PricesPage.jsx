@@ -89,7 +89,10 @@ function BlockStep({ blockId, onSwitchBlock, grouped }) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     }).then(r => { if (!r.ok) throw new Error() }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['prices-all'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['prices-all'] })
+      qc.invalidateQueries({ queryKey: ['shops'] })
+    },
   })
 
   // Reset when block changes

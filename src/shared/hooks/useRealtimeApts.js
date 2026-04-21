@@ -40,17 +40,20 @@ export function useRealtimeApts() {
 
     function onEvent(event, rawData) {
       if (event === 'apartment') {
-        const { id, status } = JSON.parse(rawData)
+        const { id, status, not_sale_reason } = JSON.parse(rawData)
         const [block, bolimStr] = id.split('-')
         const bolim = parseInt(bolimStr)
         for (const floor of [1, 2]) {
           queryClient.setQueryData(['apartments', block, bolim, floor], (old) => {
             if (!old) return old
-            return old.map((apt) => apt.address === id ? { ...apt, status } : apt)
+            return old.map((apt) =>
+              apt.address === id ? { ...apt, status, not_sale_reason: not_sale_reason ?? null } : apt
+            )
           })
         }
         queryClient.invalidateQueries({ queryKey: ['dashboard'] })
         queryClient.invalidateQueries({ queryKey: ['bolim-stats', block] })
+        queryClient.invalidateQueries({ queryKey: ['shops'] })
       }
 
       if (event === 'booking') {

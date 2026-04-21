@@ -202,7 +202,7 @@ export const B_FLOOR2_RECT_OVERLAYS = {
     { id: "B-5-206", x: 541, y: 29, width: 94, height: 174 },
     { id: "B-5-222", x: 440, y: 214, width: 98, height: 178 },
     { id: "B-5-205", x: 440, y: 29, width: 94, height: 174 },
-    { id: "B-5-236", x: 426, y: 214, width: 3, height: 3 },
+
     { id: "B-5-220", x: 238, y: 214, width: 98, height: 174 },
     { id: "B-5-221", x: 339, y: 217, width: 94, height: 171 },
     { id: "B-5-204", x: 339, y: 29, width: 94, height: 174 },

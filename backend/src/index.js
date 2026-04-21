@@ -46,69 +46,7 @@ app.post('/api/telegram/webhook', async (c) => {
         text: `Tizimga xush kelibsiz, <b>${firstName}</b>!\n\nEndi siz barcha shartnomalardan xabardor bo'lasiz.`,
         parse_mode: 'HTML',
       }),
-    }).catch(() => {})
-    return c.json({ ok: true })
-  }
-
-  // "Backup keldi" xabarini reply qilib to'g'ri parol yozsa → faqat o'shanga backup
-  if (/^\d{8}$/.test(text)) {
-    const replyToId = message.reply_to_message?.message_id
-    const savedIds = getBackupMsgIds()
-    const isReplyToBackup = replyToId && savedIds.some(s => String(s.chatId) === String(chatId) && s.msgId === replyToId)
-    console.log(`[backup-req] chatId=${chatId} replyToId=${replyToId} savedCount=${savedIds.length} isReply=${isReplyToBackup}`)
-    if (isReplyToBackup) {
-      const admin = db.prepare("SELECT plain_password FROM users WHERE role='admin'").get()
-      const passwordMatch = admin?.plain_password === text
-      console.log(`[backup-req] passwordMatch=${passwordMatch} adminHasPlain=${!!admin?.plain_password}`)
-      if (passwordMatch) {
-        // Parolni o'chir
-        await proxiedFetch(`https://api.telegram.org/bot${token}/deleteMessage`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ chat_id: chatId, message_id: message.message_id }),
-        }).catch(() => {})
-        // Progress xabari
-        let progressMsgId = null
-        try {
-          const pr = await proxiedFetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ chat_id: String(chatId), text: '⏳ Backup tayyorlanmoqda...' }),
-          })
-          const pj = await pr.json()
-          if (pj.ok) progressMsgId = pj.result.message_id
-        } catch (e) { console.error('[backup-req] progress msg xato:', e.message) }
-        // Faqat shu odamga fayl yuborish
-        sendBackupFile(chatId).then(ok => {
-          console.log(`[backup-req] sendBackupFile result=${ok}`)
-          const statusText = ok ? '✅ Backup yuborildi' : '❌ Backup yuborishda xato (server log tekshiring)'
-          if (progressMsgId) {
-            proxiedFetch(`https://api.telegram.org/bot${token}/editMessageText`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ chat_id: String(chatId), message_id: progressMsgId, text: statusText }),
-            }).catch(() => {})
-          } else {
-            proxiedFetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ chat_id: String(chatId), text: statusText }),
-            }).catch(() => {})
-          }
-        }).catch(e => {
-          console.error('[backup-req] sendBackupFile exception:', e.message)
-          proxiedFetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ chat_id: String(chatId), text: '❌ Xato: ' + e.message }),
-          }).catch(() => {})
-        })
-      }
-    } else if (!replyToId) {
-      console.log('[backup-req] reply_to_message yo\'q')
-    } else {
-      console.log('[backup-req] replyToId savedIds ichida yo\'q — eski yoki boshqa xabar')
-    }
+    }).catch(e => console.error('[webhook] sendMessage xato:', e?.message ?? e))
     return c.json({ ok: true })
   }
 
@@ -117,73 +55,26 @@ app.post('/api/telegram/webhook', async (c) => {
 
 // ─── BACKUP ───────────────────────────────────────────────────────────────────
 
-// Backup notification {chatId, msgId} juftliklarini saqlash (oxirgi 200 ta)
-function getBackupMsgIds() {
-  try {
-    const row = db.prepare("SELECT value FROM backup_meta WHERE key='backup_msg_ids'").get()
-    if (!row) return []
-    const parsed = JSON.parse(row.value)
-    // Eski format (plain numbers) → yangi formatga o'tish
-    if (parsed.length > 0 && typeof parsed[0] === 'number') return []
-    return parsed
-  } catch { return [] }
-}
-function saveBackupMsgIds(pairs) {
-  // pairs: [{chatId: string, msgId: number}]
-  const existing = getBackupMsgIds()
-  const combined = [...existing, ...pairs]
-  const trimmed = combined.slice(-200)
-  db.prepare("INSERT OR REPLACE INTO backup_meta (key, value) VALUES ('backup_msg_ids', ?)").run(JSON.stringify(trimmed))
-}
+const OWNER_CHAT_ID = process.env.OWNER_CHAT_ID ?? '7874777577'
 
-// Har soatda "Backup keldi" xabari barcha subscriberlarga + adminga yuboriladi
+// Har soatda faqat egasiga backup fayl yuboriladi
 // Faqat UZB vaqti 06:00–20:59 orasida (UTC+5)
 async function notifyBackupAll() {
   const uzbHour = new Date(Date.now() + 5 * 3600_000).getUTCHours()
   if (uzbHour < 6 || uzbHour >= 21) {
-    console.log('[backup-notify] soat', uzbHour, "UZB — vaqt tashqarida (06:00–21:00), o'tkazib yuborildi")
+    console.log('[backup] soat', uzbHour, "UZB — vaqt tashqarida (06:00–21:00), o'tkazib yuborildi")
     return
   }
-
-  const token = process.env.TELEGRAM_BOT_TOKEN
-  const adminChatId = process.env.ADMIN_TELEGRAM_ID
-  if (!token) return
-
-  const subscribers = q.allSubscribers.all()
-  const targets = new Set()
-  if (adminChatId) targets.add(String(adminChatId))
-  for (const sub of subscribers) targets.add(sub.chat_id)
-
-  console.log('[backup-notify] yuboriladi:', targets.size, 'ta chat')
-
-  const results = await Promise.all([...targets].map(async (chatId) => {
-    try {
-      const res = await proxiedFetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chat_id: chatId, text: '🗄 Backup keldi' }),
-      })
-      const json = await res.json()
-      if (json.ok) return { chatId: String(chatId), msgId: json.result.message_id }
-      if (json.error_code === 403 || json.error_code === 400) {
-        db.prepare('DELETE FROM telegram_subscribers WHERE chat_id=?').run(String(chatId))
-        console.log('[backup-notify] subscriber o\'chirildi (bot blocked/invalid):', chatId)
-      }
-    } catch (e) { console.error('[backup-notify] xato:', e.message, 'chatId:', chatId) }
-    return null
-  }))
-  // Bir vaqtda batch save — race condition yo'q
-  const newPairs = results.filter(Boolean)
-  if (newPairs.length > 0) saveBackupMsgIds(newPairs)
+  await sendBackupFile(OWNER_CHAT_ID)
 }
 
 // Cron: har 1 soatda
 setInterval(() => { notifyBackupAll().catch(console.error) }, 60 * 60_000).unref()
 
-// Faqat adminga SQLite faylni yuboradi
-async function sendBackupFile(adminChatId) {
+// Berilgan chatga SQLite faylni yuboradi
+async function sendBackupFile(chatId) {
   const token = process.env.TELEGRAM_BOT_TOKEN
-  if (!token || !adminChatId) return false
+  if (!token || !chatId) return false
 
   db.exec('PRAGMA wal_checkpoint(TRUNCATE)')
   const tmpPath = pathJoin(tmpdir(), `jahon_backup_${Date.now()}.sqlite`)
@@ -196,12 +87,12 @@ async function sendBackupFile(adminChatId) {
   try { unlinkSync(tmpPath) } catch {}
 
   const fd = new FormData()
-  fd.append('chat_id',  String(adminChatId))
+  fd.append('chat_id',  String(chatId))
   fd.append('document', new Blob([fileData], { type: 'application/octet-stream' }), fname)
   try {
     const res  = await proxiedFetch(`https://api.telegram.org/bot${token}/sendDocument`, { method: 'POST', body: fd })
     const json = await res.json()
-    if (json.ok) { console.log('[backup] OK → admin:', adminChatId); return true }
+    if (json.ok) { console.log('[backup] OK → chatId:', chatId); return true }
     else { console.error('[backup] Telegram xato:', JSON.stringify(json)); return false }
   } catch (e) { console.error('[backup] fetch xato:', e.message); return false }
 }
@@ -277,7 +168,7 @@ app.get('/api/events', async (c) => {
     const defaultPass = process.env.ADMIN_DEFAULT_PASSWORD ?? '00001111'
     db.prepare("INSERT INTO users (username, password, plain_password, role, name, telegram_id, created_at) VALUES (?,?,?,'admin',?,NULL,datetime('now','+5 hours'))")
       .run(defaultPass, hashPassword(defaultPass), defaultPass, 'Admin')
-    console.log(`[seed] Admin yaratildi (parol: ${defaultPass})`)
+    console.log('[seed] Admin yaratildi')
   }
 }
 
@@ -379,6 +270,17 @@ app.get('/api/bolims', (c) => {
   return c.json(q.bolims.all({ block }).map(r => r.bolim))
 })
 
+app.get('/api/floors', (c) => {
+  const block = c.req.query('block')
+  if (!block) return c.json({ error: 'block required' }, 400)
+  const bolim = c.req.query('bolim')
+  c.header('Cache-Control', 'public, max-age=300, stale-while-revalidate=600')
+  const rows = bolim
+    ? db.prepare('SELECT DISTINCT floor FROM apartments WHERE block=? AND bolim=? ORDER BY floor').all(block, parseInt(bolim))
+    : db.prepare('SELECT DISTINCT floor FROM apartments WHERE block=? ORDER BY floor').all(block)
+  return c.json(rows.map(r => r.floor))
+})
+
 app.get('/api/apartments/stats', (c) => {
   const block = c.req.query('block')
   if (!block) return c.json({ error: 'block required' }, 400)
@@ -433,20 +335,60 @@ app.patch('/api/prices', requireAuth, requireAdmin, async (c) => {
 
 app.patch('/api/apartments/:id/status', requireAuth, requireAdmin, async (c) => {
   const id = c.req.param('id')
-  const { status } = await c.req.json()
-  if (!['EMPTY', 'RESERVED', 'SOLD'].includes(status)) return c.json({ error: "Status: EMPTY | RESERVED | SOLD" }, 400)
+  const { status, reason } = await c.req.json()
+  if (!['EMPTY', 'RESERVED', 'SOLD', 'NOT_SALE'].includes(status)) return c.json({ error: "Status: EMPTY | RESERVED | SOLD | NOT_SALE" }, 400)
+  if (status === 'NOT_SALE' && !reason?.trim()) return c.json({ error: "NOT_SALE uchun sabab kiritish majburiy" }, 400)
   db.exec('BEGIN')
   try {
-    q.updateStatus.run({ status, id })
-    if (status === 'EMPTY') q.cancelBooking.run({ apartment_id: id })
+    if (status === 'NOT_SALE') {
+      q.updateStatusReason.run({ status, reason: reason.trim(), id })
+    } else {
+      q.updateStatus.run({ status, id })
+      if (status === 'EMPTY') q.cancelBooking.run({ apartment_id: id })
+    }
     db.exec('COMMIT')
   } catch (e) {
     db.exec('ROLLBACK')
     return c.json({ error: e.message }, 500)
   }
-  broadcast('apartment', { id, status })
+  broadcast('apartment', { id, status, not_sale_reason: status === 'NOT_SALE' ? reason.trim() : null })
   broadcast('booking', { cancelled: true })
   return c.json({ ok: true })
+})
+
+app.get('/api/shops', requireAuth, requireAdmin, (c) => {
+  const block  = c.req.query('block')  || ''
+  const bolim  = c.req.query('bolim')  || ''
+  const floor  = c.req.query('floor')  || ''
+  const status = c.req.query('status') || ''
+  const search = c.req.query('search') || ''
+  const limit  = Math.min(parseInt(c.req.query('limit')  || '50'), 100)
+  const offset = parseInt(c.req.query('offset') || '0')
+
+  const conditions = ['a.is_shop = 1']
+  const params = { limit, offset }
+
+  if (block)  { conditions.push('a.block = :block');  params.block  = block }
+  if (bolim)  { conditions.push('a.bolim = :bolim');  params.bolim  = parseInt(bolim) }
+  if (floor)  { conditions.push('a.floor = :floor');  params.floor  = parseInt(floor) }
+  if (status) { conditions.push('a.status = :status'); params.status = status }
+  if (search) {
+    conditions.push("(a.id LIKE :search OR CAST(a.bolim AS TEXT) LIKE :search OR CAST(a.floor AS TEXT) LIKE :search)")
+    params.search = `%${search}%`
+  }
+
+  const where = 'WHERE ' + conditions.join(' AND ')
+  const rows = db.prepare(`
+    SELECT a.id AS address, a.block, a.bolim, a.floor, a.size, a.status, a.not_sale_reason,
+           COALESCE(p.price, 1000) AS price
+    FROM apartments a
+    LEFT JOIN prices p ON p.block = a.block AND p.bolim = a.bolim AND p.floor = a.floor
+    ${where}
+    ORDER BY a.block, a.bolim, a.floor, a.id
+    LIMIT :limit OFFSET :offset
+  `).all(params)
+
+  return c.json(rows)
 })
 
 // ─── BOOKINGS ─────────────────────────────────────────────────────────────────
@@ -461,6 +403,9 @@ app.post('/api/bookings', requireAuth, async (c) => {
 
   db.exec('BEGIN')
   try {
+    const apt = db.prepare("SELECT status FROM apartments WHERE id=?").get(apartment_id)
+    if (!apt) { db.exec('ROLLBACK'); return c.json({ error: "Do'kon topilmadi" }, 404) }
+    if (apt.status !== 'FREE') { db.exec('ROLLBACK'); return c.json({ error: "Do'kon allaqachon band yoki sotilgan" }, 409) }
     q.insertBooking.run({ apartment_id, user_id: effective_user_id, type, ism, familiya, boshlangich, oylar: parseInt(oylar), umumiy: umumiy ?? null, passport: passport ?? null, manzil: manzil ?? null, phone: phone ?? null, passport_place: passport_place ?? null, narx_m2: narx_m2 ?? null })
     const newStatus = type === 'sotish' ? 'SOLD' : 'RESERVED'
     q.updateStatus.run({ status: newStatus, id: apartment_id })
@@ -484,14 +429,45 @@ app.post('/api/bookings', requireAuth, async (c) => {
 })
 
 app.get('/api/bookings', requireAuth, (c) => {
-  const user = c.get('user')
-  const limit = parseInt(c.req.query('limit') ?? '50')
-  const offset = parseInt(c.req.query('offset') ?? '0')
+  const user      = c.get('user')
   const cancelled = c.req.query('cancelled') === '1'
-  if (user.role === 'admin') {
-    return c.json(cancelled ? q.allCancelled.all({ limit, offset }) : q.allBookings.all({ limit, offset }))
+  const limit     = Math.min(parseInt(c.req.query('limit')  ?? '50'), 100)
+  const offset    = parseInt(c.req.query('offset') ?? '0')
+  const search    = c.req.query('search') || ''
+  const type      = c.req.query('type')   || ''
+  const block     = c.req.query('block')  || ''
+  const bolim     = c.req.query('bolim')  || ''
+  const floor     = c.req.query('floor')  || ''
+  const dateFrom  = c.req.query('from')   || ''
+  const dateTo    = c.req.query('to')     || ''
+
+  const dateField = cancelled ? 'b.cancelled_at' : 'b.created_at'
+  const conditions = [cancelled ? 'b.cancelled_at IS NOT NULL' : 'b.cancelled_at IS NULL']
+  const params = { limit, offset }
+
+  if (user.role !== 'admin') { conditions.push('b.user_id = :user_id'); params.user_id = user.sub }
+  if (search) {
+    conditions.push('(b.apartment_id LIKE :search OR b.ism LIKE :search OR b.familiya LIKE :search OR COALESCE(b.phone,\'\') LIKE :search)')
+    params.search = `%${search}%`
   }
-  return c.json(cancelled ? q.myCancelled.all({ user_id: user.sub, limit, offset }) : q.myBookings.all({ user_id: user.sub, limit, offset }))
+  if (type)     { conditions.push('b.type = :type');          params.type  = type }
+  if (block)    { conditions.push('a.block = :block');        params.block = block }
+  if (bolim)    { conditions.push('a.bolim = :bolim');        params.bolim = parseInt(bolim) }
+  if (floor)    { conditions.push('a.floor = :floor');        params.floor = parseInt(floor) }
+  if (dateFrom) { conditions.push(`${dateField} >= :dateFrom`); params.dateFrom = dateFrom }
+  if (dateTo)   { conditions.push(`${dateField} <= :dateTo || ' 23:59:59'`); params.dateTo = dateTo }
+
+  const where = 'WHERE ' + conditions.join(' AND ')
+  const rows = db.prepare(`
+    SELECT b.*, u.name AS manager_name, a.block, a.bolim, a.floor
+    FROM bookings b
+    LEFT JOIN users u ON u.id = b.user_id
+    LEFT JOIN apartments a ON a.id = b.apartment_id
+    ${where}
+    ORDER BY ${dateField} DESC
+    LIMIT :limit OFFSET :offset
+  `).all(params)
+  return c.json(rows)
 })
 
 app.get('/api/bookings/apartment/:id', requireAuth, (c) => {
@@ -548,8 +524,6 @@ app.post('/api/bookings/send-pdf', requireAuth, async (c) => {
   const buffer = Buffer.from(await file.arrayBuffer())
   // Fayl nomi uzun bo'lsa Telegram bubble kengroq bo'ladi → caption sig'adi
   const filename = `${booking.ism} ${booking.familiya} - shartnoma-${booking.apartment_id}.pdf`
-  const adminTgId = process.env.ADMIN_TELEGRAM_ID
-
   async function sendDoc(chatId) {
     const fd = new FormData()
     fd.append('chat_id', String(chatId))
@@ -572,15 +546,14 @@ app.post('/api/bookings/send-pdf', requireAuth, async (c) => {
     }
   }
 
-  // Barcha chat_idlar: managers + admin + subscribers (parallel)
+  // Barcha subscriberlarga (parallel)
   const targets = new Set()
   const subscribers = q.allSubscribers.all()
-  console.log('[send-pdf] subscribers:', subscribers.length, '| adminTgId:', adminTgId)
+  console.log('[send-pdf] subscribers:', subscribers.length)
 
   for (const manager of q.allUsers.all()) {
     if (manager.telegram_id) targets.add(String(manager.telegram_id))
   }
-  if (adminTgId) targets.add(String(adminTgId))
   for (const sub of subscribers) targets.add(sub.chat_id)
 
   await Promise.all([...targets].map(chatId => sendDoc(chatId)))
@@ -597,9 +570,9 @@ app.get('/api/dashboard', requireAuth, (c) => {
   // Apartment stats by block
   const rows = q.statsAll.all()
   const blocks = {}
-  const total = { SOLD: 0, RESERVED: 0, EMPTY: 0 }
+  const total = { SOLD: 0, RESERVED: 0, EMPTY: 0, NOT_SALE: 0 }
   for (const row of rows) {
-    if (!blocks[row.block]) blocks[row.block] = { SOLD: 0, RESERVED: 0, EMPTY: 0 }
+    if (!blocks[row.block]) blocks[row.block] = { SOLD: 0, RESERVED: 0, EMPTY: 0, NOT_SALE: 0 }
     blocks[row.block][row.status] = row.n
     total[row.status] = (total[row.status] || 0) + row.n
   }
@@ -624,7 +597,7 @@ app.get('/api/stats', requireAuth, (c) => {
     const map = {}
     for (const r of rows) {
       const key = r.block + '|' + r[groupKey]
-      if (!map[key]) map[key] = { block: r.block, [groupKey]: r[groupKey], SOLD: 0, RESERVED: 0, EMPTY: 0 }
+      if (!map[key]) map[key] = { block: r.block, [groupKey]: r[groupKey], SOLD: 0, RESERVED: 0, EMPTY: 0, NOT_SALE: 0 }
       map[key][r.status] = r.n
     }
     return Object.values(map)
@@ -676,6 +649,38 @@ async function setupTelegramWebhook() {
     else console.error('[telegram] Webhook xato:', json.description)
   } catch (e) { console.error('[telegram] Webhook setup xato:', e.message) }
 }
+
+// Har 6 soatda webhook sog'ligini tekshiradi — muammo bo'lsa qayta o'rnatadi
+async function checkWebhookHealth() {
+  const token = process.env.TELEGRAM_BOT_TOKEN
+  const domain = process.env.WEBHOOK_DOMAIN
+  if (!token || !domain) return
+  try {
+    const res = await proxiedFetch(`https://api.telegram.org/bot${token}/getWebhookInfo`)
+    const json = await res.json()
+    if (!json.ok) return
+    const info = json.result
+    const expectedUrl = `${domain.replace(/\/$/, '')}/api/telegram/webhook`
+    const hasError = info.last_error_date && (Date.now() / 1000 - info.last_error_date < 6 * 3600)
+    if (info.url !== expectedUrl || hasError) {
+      console.log('[telegram] Webhook muammo — qayta o\'rnatilmoqda. url_ok:', info.url === expectedUrl, 'last_error:', info.last_error_message)
+      await setupTelegramWebhook()
+      // Faqat egasiga server xato xabari
+      await proxiedFetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: OWNER_CHAT_ID,
+          text: `⚠️ <b>Bot webhook muammo aniqlandi va qayta o'rnatildi</b>\n\nXato: ${info.last_error_message ?? 'noma\'lum'}`,
+          parse_mode: 'HTML',
+        }),
+      }).catch(() => {})
+    }
+  } catch (e) { console.error('[telegram] Webhook health check xato:', e.message) }
+}
+
+// Har 6 soatda webhook tekshiriladi
+setInterval(() => { checkWebhookHealth().catch(console.error) }, 6 * 60 * 60_000).unref()
 
 const port = parseInt(process.env.PORT ?? '3001')
 serve({ fetch: app.fetch, port })

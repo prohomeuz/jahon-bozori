@@ -66,6 +66,8 @@ try { db.exec(`ALTER TABLE bookings ADD COLUMN passport_place TEXT`) } catch {}
 try { db.exec(`ALTER TABLE bookings ADD COLUMN umumiy TEXT`) } catch {}
 // Add narx_m2 to bookings if missing (migration)
 try { db.exec(`ALTER TABLE bookings ADD COLUMN narx_m2 TEXT`) } catch {}
+// Add not_sale_reason to apartments if missing (migration)
+try { db.exec(`ALTER TABLE apartments ADD COLUMN not_sale_reason TEXT`) } catch {}
 // Prices table — har bir block/bolim/floor uchun narx (USD/m²)
 try {
   db.exec(`CREATE TABLE IF NOT EXISTS prices (
@@ -83,6 +85,27 @@ try {
 try { db.exec(`CREATE TABLE IF NOT EXISTS telegram_subscribers (chat_id TEXT PRIMARY KEY, first_name TEXT, joined_at TEXT NOT NULL DEFAULT (datetime('now', '+5 hours')))`) } catch {}
 // Backup metadata — oxirgi yuborilgan backup message_id va chat_id
 try { db.exec(`CREATE TABLE IF NOT EXISTS backup_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)`) } catch {}
+// is_shop — overlay config'da rect mavjud bo'lgan do'konlar (single source of truth)
+try { db.exec(`ALTER TABLE apartments ADD COLUMN is_shop INTEGER NOT NULL DEFAULT 1`) } catch {}
+try {
+  db.exec(`UPDATE apartments SET is_shop = 0 WHERE id IN (
+    'A-1-121','A-1-122','A-1-123',
+    'A-1-215','A-1-216',
+    'A-3-122','A-3-123','A-3-124',
+    'A-3-222','A-3-223','A-3-224',
+    'B-1-129','B-1-130','B-1-131',
+    'B-1-233','B-1-234',
+    'B-3-133','B-3-134','B-3-135',
+    'B-3-234','B-3-235',
+    'B-8-127','B-8-128',
+    'C-1-133','C-1-134','C-1-135',
+    'C-1-235','C-1-236',
+    'C-3-138','C-3-139','C-3-140',
+    'C-3-239','C-3-240'
+  )`)
+} catch {}
+// Do'kon bo'lmagan (is_shop=0) apartamentlarni bazadan o'chirish
+try { db.exec(`DELETE FROM apartments WHERE is_shop = 0`) } catch {}
 // Translate Chinese notes → Uzbek
 try { db.exec(`UPDATE apartments SET notes = 'Ko''cha bo''yi'           WHERE notes = '临街铺'`) } catch {}
 try { db.exec(`UPDATE apartments SET notes = 'Ko''cha bo''yi'           WHERE notes = '临街商铺'`) } catch {}
@@ -104,10 +127,11 @@ export const q = {
   allSubscribers:    db.prepare("SELECT chat_id FROM telegram_subscribers"),
 
   // apartments
-  apartments:   db.prepare('SELECT id AS address, size, status, notes FROM apartments WHERE block=:block AND bolim=:bolim AND floor=:floor ORDER BY id'),
-  bolims:       db.prepare('SELECT DISTINCT bolim FROM apartments WHERE block=:block ORDER BY bolim'),
-  updateStatus: db.prepare('UPDATE apartments SET status=:status WHERE id=:id'),
-  count:        db.prepare('SELECT COUNT(*) AS n FROM apartments'),
+  apartments:         db.prepare('SELECT id AS address, size, status, notes, not_sale_reason FROM apartments WHERE block=:block AND bolim=:bolim AND floor=:floor ORDER BY id'),
+  bolims:             db.prepare('SELECT DISTINCT bolim FROM apartments WHERE block=:block ORDER BY bolim'),
+  updateStatus:       db.prepare('UPDATE apartments SET status=:status, not_sale_reason=NULL WHERE id=:id'),
+  updateStatusReason: db.prepare('UPDATE apartments SET status=:status, not_sale_reason=:reason WHERE id=:id'),
+  count:              db.prepare('SELECT COUNT(*) AS n FROM apartments'),
 
   // bookings
   insertBooking:  db.prepare("INSERT INTO bookings (apartment_id,user_id,type,ism,familiya,boshlangich,oylar,umumiy,passport,manzil,phone,passport_place,narx_m2,created_at) VALUES (:apartment_id,:user_id,:type,:ism,:familiya,:boshlangich,:oylar,:umumiy,:passport,:manzil,:phone,:passport_place,:narx_m2,datetime('now', '+5 hours'))"),

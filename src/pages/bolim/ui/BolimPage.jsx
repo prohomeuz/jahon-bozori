@@ -12,6 +12,37 @@ import { C_RECT_OVERLAYS } from '../config/cRectOverlays'
 import { C_FLOOR2_RECT_OVERLAYS } from '../config/cFloor2RectOverlays'
 import { ApartmentModal } from './ApartmentModal'
 import { AdminButton } from '@/shared/ui/AdminButton'
+import { X } from 'lucide-react'
+
+function NotSaleInfoModal({ apt, onClose }) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+      style={{ backdropFilter: 'blur(4px)' }}
+      onClick={e => e.target === e.currentTarget && onClose()}
+    >
+      <div className="bg-background rounded-2xl shadow-2xl border border-border w-full max-w-sm overflow-hidden">
+        <div className="px-6 py-5 flex items-center gap-3 bg-muted border-b border-border">
+          <span className="w-3 h-3 rounded-full bg-muted-foreground/40 shrink-0" />
+          <span className="font-black text-xl text-foreground tracking-tight flex-1">{apt.address}</span>
+          <span className="text-xs font-bold px-2.5 py-1 rounded-full border bg-muted text-muted-foreground border-border">
+            Sotilmaydi
+          </span>
+          <button
+            onClick={onClose}
+            className="w-8 h-8 rounded-full flex items-center justify-center bg-black/8 hover:bg-black/15 transition-colors ml-1"
+          >
+            <X size={15} strokeWidth={2.5} />
+          </button>
+        </div>
+        <div className="px-6 py-5">
+          <p className="text-xs text-muted-foreground mb-1.5 uppercase tracking-wide font-semibold">Sabab</p>
+          <p className="text-sm font-medium text-foreground">{apt.not_sale_reason || '—'}</p>
+        </div>
+      </div>
+    </div>
+  )
+}
 import { useRealtimeApts } from '@/shared/hooks/useRealtimeApts'
 import { apiFetch } from '@/shared/lib/auth'
 import { imgCache } from '@/shared/lib/imgCache'
@@ -85,16 +116,19 @@ function PanZoomPane({ src, alt, overlay, aptByAddress, onSelect, ready }) {
                     status === 'EMPTY'    ? 'rgba(34,197,94,0.5)'    :
                     status === 'RESERVED' ? 'rgba(234,179,8,0.65)'   :
                     status === 'SOLD'     ? 'rgba(239,68,68,0.6)'    :
+                    status === 'NOT_SALE' ? 'rgba(156,163,175,0.55)' :
                     'rgba(120,120,120,0.35)'
                   const hoverColor =
                     status === 'EMPTY'    ? 'rgba(22,163,74,0.75)'   :
                     status === 'RESERVED' ? 'rgba(202,138,4,0.85)'   :
                     status === 'SOLD'     ? 'rgba(220,38,38,0.82)'   :
+                    status === 'NOT_SALE' ? 'rgba(107,114,128,0.75)' :
                     'rgba(70,70,70,0.65)'
                   const strokeColor =
                     status === 'EMPTY'    ? '#15803d' :
                     status === 'RESERVED' ? '#854d0e' :
                     status === 'SOLD'     ? '#b91c1c' :
+                    status === 'NOT_SALE' ? '#6b7280' :
                     '#111'
                   const sharedProps = {
                     fill: isHovered ? hoverColor : baseColor,
@@ -136,7 +170,8 @@ export default function BolimPage() {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const queryClient = useQueryClient()
-  const [modal, setModal] = useState(null)
+  const [modal, setModal]               = useState(null)
+  const [notSaleApt, setNotSaleApt]     = useState(null)
   const [imgLoaded, setImgLoaded] = useState(false)
   const activeFloor = parseInt(searchParams.get('floor') ?? '1') === 2 ? 2 : 1
   const setActiveFloor = (f) => setSearchParams({ floor: f }, { replace: true })
@@ -230,9 +265,10 @@ export default function BolimPage() {
       <div className="fixed top-20 right-5 z-40 flex flex-col bg-background/90 backdrop-blur-sm border border-border rounded-2xl shadow-xl overflow-hidden min-w-[220px]">
         <div className="flex flex-col gap-1 px-5 py-4">
           {[
-            { color: 'bg-green-500',  label: "Bo'sh",    key: 'EMPTY'    },
-            { color: 'bg-yellow-400', label: 'Bron',     key: 'RESERVED' },
-            { color: 'bg-red-500',    label: 'Sotilgan', key: 'SOLD'     },
+            { color: 'bg-green-500',  label: "Bo'sh",      key: 'EMPTY'    },
+            { color: 'bg-yellow-400', label: 'Bron',       key: 'RESERVED' },
+            { color: 'bg-red-500',    label: 'Sotilgan',   key: 'SOLD'     },
+            { color: 'bg-gray-400',   label: 'Sotilmaydi', key: 'NOT_SALE' },
           ].map(({ color, label, key }) => (
             <div key={label} className="flex items-center gap-3 py-0.5">
               <span className={`w-3 h-3 rounded-full ${color} shrink-0`} />
@@ -248,7 +284,7 @@ export default function BolimPage() {
             <div className="mt-2 pt-2 border-t border-border flex items-center justify-between">
               <span className="text-xs text-muted-foreground">Jami</span>
               <span className="text-xs font-bold tabular-nums text-foreground">
-                {(stats.EMPTY ?? 0) + (stats.RESERVED ?? 0) + (stats.SOLD ?? 0)}
+                {(stats.EMPTY ?? 0) + (stats.RESERVED ?? 0) + (stats.SOLD ?? 0) + (stats.NOT_SALE ?? 0)}
               </span>
             </div>
           )}
@@ -345,7 +381,10 @@ export default function BolimPage() {
           alt={`${bolimNum}-bo'lim ${activeFloor}-qavat`}
           overlay={activeFloor === 1 ? overlay1 : overlay2}
           aptByAddress={aptByAddress}
-          onSelect={(apt) => setModal({ apartment: apt, floor: activeFloor })}
+          onSelect={(apt) => {
+            if (apt.status === 'NOT_SALE') { setNotSaleApt(apt); return }
+            setModal({ apartment: apt, floor: activeFloor })
+          }}
           ready={ready}
         />
       </div>
@@ -359,6 +398,10 @@ export default function BolimPage() {
           onClose={() => setModal(null)}
           onBooked={() => queryClient.invalidateQueries({ queryKey: ['apartments', blockId, bolimNum, activeFloor] })}
         />
+      )}
+
+      {notSaleApt && (
+        <NotSaleInfoModal apt={notSaleApt} onClose={() => setNotSaleApt(null)} />
       )}
     </div>
   )
