@@ -1,6 +1,14 @@
 import { lazy, Suspense } from 'react'
 import { BrowserRouter, Route, Routes } from 'react-router'
 import ProtectedRoute from './ProtectedRoute'
+import { getUser } from '@/shared/lib/auth'
+import { Navigate } from 'react-router'
+
+function AdminOnly({ children }) {
+  const user = getUser()
+  if (!user || user.role !== 'admin') return <Navigate to="/admin" replace />
+  return children
+}
 
 const HomePage      = lazy(() => import('@/pages/home/ui/HomePage'))
 const BlockPage     = lazy(() => import('@/pages/block/ui/BlockPage'))
@@ -11,6 +19,7 @@ const DashboardPage = lazy(() => import('@/pages/admin/ui/DashboardPage'))
 const BookingsPage  = lazy(() => import('@/pages/admin/ui/BookingsPage'))
 const ManagersPage  = lazy(() => import('@/pages/admin/ui/ManagersPage'))
 const PricesPage    = lazy(() => import('@/pages/admin/ui/PricesPage'))
+const ShopsPage     = lazy(() => import('@/pages/admin/ui/ShopsPage'))
 
 function Loader() {
   return (
@@ -61,6 +70,7 @@ export default function Router() {
               <Route path="bookings" element={<BookingsPage />} />
               <Route path="managers" element={<ManagersPage />} />
               <Route path="prices" element={<PricesPage />} />
+              <Route path="shops" element={<AdminOnly><ShopsPage /></AdminOnly>} />
             </Route>
           </Route>
         </Routes>

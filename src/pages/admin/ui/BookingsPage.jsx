@@ -1,8 +1,8 @@
-import { useState, useEffect, useRef } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react'
+import { useInfiniteQuery, useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import { getUser, apiFetch } from '@/shared/lib/auth'
 import { useRealtimeApts } from '@/shared/hooks/useRealtimeApts'
-import { Search, Download, X, FileText, Eye } from 'lucide-react'
+import { Search, Download, X, FileText, Eye, SlidersHorizontal } from 'lucide-react'
 import { ContractPDF } from '@/pages/bolim/ui/ContractPDF'
 
 const allBlockImgs = import.meta.glob('@/assets/blocks/**/*.{png,jpg,webp}', { eager: true })
@@ -164,13 +164,6 @@ const TYPE_BADGE = {
 }
 const TYPE_LABEL = { bron: 'Bron', sotish: 'Sotish' }
 
-function fmtDate(str) {
-  if (!str) return '—'
-  const d = new Date(str)
-  const months = ['Yanvar','Fevral','Mart','Aprel','May','Iyun','Iyul','Avgust','Sentabr','Oktabr','Noyabr','Dekabr']
-  return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`
-}
-
 function fmtMoney(val) {
   if (!val) return null
   const num = Number(String(val).replace(/\s/g, ''))
@@ -183,7 +176,7 @@ function SotishDetailModal({ booking, onClose }) {
     ['Xaridor', `${booking.ism || ''} ${booking.familiya || ''}`.trim() || '—'],
     ['Telefon', booking.phone || '—'],
     ['Menejer', booking.manager_name || '—'],
-    ['Sana', fmtDate(booking.created_at)],
+    ['Sana', new Date(booking.created_at).toLocaleString('uz-UZ')],
     fmtMoney(booking.boshlangich) && ["Boshlang'ich to'lov", fmtMoney(booking.boshlangich)],
     booking.oylar && ['Muddat', `${booking.oylar} oy`],
     fmtMoney(booking.narx_m2) && ['Narx/m²', fmtMoney(booking.narx_m2)],
@@ -254,7 +247,6 @@ function BookingRow({ b, isAdmin, cancelled, onReset, scrolled }) {
         } ${b.type === 'sotish' && !cancelled ? 'cursor-pointer' : ''}`}
         onDoubleClick={() => b.type === 'sotish' && !cancelled && setShowDetail(true)}
       >
-        {/* Xonadon — sticky left */}
         <td className={`px-4 py-3 whitespace-nowrap sticky left-0 transition-shadow ${
           cancelled ? 'bg-card opacity-100' : 'bg-card'
         } ${scrolled ? 'shadow-[4px_0_12px_-2px_rgba(0,0,0,0.08)]' : ''}`}>
@@ -264,7 +256,6 @@ function BookingRow({ b, isAdmin, cancelled, onReset, scrolled }) {
           </p>
         </td>
 
-        {/* Mijoz */}
         <td className="px-4 py-3">
           <p className="text-sm font-medium">{b.ism} {b.familiya}</p>
           <div className="flex items-center gap-2 mt-0.5">
@@ -275,14 +266,12 @@ function BookingRow({ b, isAdmin, cancelled, onReset, scrolled }) {
           </div>
         </td>
 
-        {/* Manager — faqat admin */}
         {isAdmin && (
           <td className="px-4 py-3 text-sm text-muted-foreground whitespace-nowrap">
             {b.manager_name || '—'}
           </td>
         )}
 
-        {/* Sana */}
         <td className="px-4 py-3 whitespace-nowrap">
           {cancelled ? (
             <p className="text-xs text-red-500 font-medium">
@@ -295,14 +284,12 @@ function BookingRow({ b, isAdmin, cancelled, onReset, scrolled }) {
           )}
         </td>
 
-        {/* Amallar */}
         <td className="px-4 py-3">
           <div className="flex items-center gap-2">
             {b.type === 'bron' ? (
               <button
                 onClick={handleDownloadPDF}
                 disabled={pdfLoading}
-                title="Shartnoma yuklab olish"
                 className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border border-border text-muted-foreground hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 transition-colors disabled:opacity-40"
               >
                 {pdfLoading ? <FileText size={13} className="animate-pulse" /> : <Download size={13} />}
@@ -311,7 +298,6 @@ function BookingRow({ b, isAdmin, cancelled, onReset, scrolled }) {
             ) : (
               <button
                 onClick={() => setShowDetail(true)}
-                title="Batafsil ko'rish"
                 className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border border-border text-muted-foreground hover:bg-emerald-50 hover:text-emerald-600 hover:border-emerald-200 transition-colors"
               >
                 <Eye size={13} />
@@ -322,7 +308,6 @@ function BookingRow({ b, isAdmin, cancelled, onReset, scrolled }) {
               <button
                 onClick={() => setShowConfirm(true)}
                 disabled={loading}
-                title="Bitimni bekor qilish"
                 className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border border-border text-muted-foreground hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors disabled:opacity-40"
               >
                 <X size={13} />
@@ -340,7 +325,7 @@ function BookingRow({ b, isAdmin, cancelled, onReset, scrolled }) {
             <div className="bg-background border border-border rounded-2xl p-6 w-full max-w-sm shadow-2xl">
               <h3 className="text-lg font-bold mb-2">Bitimni bekor qilish</h3>
               <p className="text-sm text-muted-foreground mb-6">
-                <span className="font-semibold text-foreground">{b.apartment_id}</span> xonadonining bitimi bekor qilinadi. Bu amalni qaytarib bo'lmaydi.
+                <span className="font-semibold text-foreground">{b.apartment_id}</span> xonadonining bitimi bekor qilinadi.
               </p>
               <div className="flex gap-2">
                 <button onClick={() => setShowConfirm(false)}
@@ -366,11 +351,15 @@ function BookingRow({ b, isAdmin, cancelled, onReset, scrolled }) {
   )
 }
 
-function BookingsTable({ cancelled, isAdmin, onReset, search, typeFilter, dateFrom, dateTo }) {
-  const [page, setPage]       = useState(0)
+const LIMIT = 50
+const BLOCKS = ['A', 'B', 'C']
+
+function BookingsTable({ cancelled, isAdmin, onReset, search, typeFilter, dateFrom, dateTo, blockFilter, bolimFilter, floorFilter }) {
   const [scrolled, setScrolled] = useState(false)
-  const scrollRef = useRef(null)
-  const LIMIT = 30
+  const scrollRef        = useRef(null)
+  const hasNextPageRef   = useRef(false)
+  const fetchingRef      = useRef(false)
+  const fetchNextPageRef = useRef(() => {})
 
   useEffect(() => {
     const el = scrollRef.current
@@ -380,121 +369,198 @@ function BookingsTable({ cancelled, isAdmin, onReset, search, typeFilter, dateFr
     return () => el.removeEventListener('scroll', onScroll)
   }, [])
 
-  const { data, isLoading } = useQuery({
-    queryKey: ['bookings', cancelled ? 'cancelled' : 'active', page],
-    queryFn: () =>
-      apiFetch(`/api/bookings?limit=${LIMIT}&offset=${page * LIMIT}${cancelled ? '&cancelled=1' : ''}`).then(r => r.json()),
-    placeholderData: prev => prev,
+  const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading } = useInfiniteQuery({
+    queryKey: ['bookings', cancelled ? 'cancelled' : 'active', search, typeFilter, dateFrom, dateTo, blockFilter, bolimFilter, floorFilter],
+    queryFn: ({ pageParam = 0 }) => {
+      const params = new URLSearchParams({ limit: String(LIMIT), offset: String(pageParam) })
+      if (cancelled)              params.set('cancelled', '1')
+      if (search)                 params.set('search',    search)
+      if (typeFilter !== 'all')   params.set('type',      typeFilter)
+      if (blockFilter)            params.set('block',     blockFilter)
+      if (bolimFilter)            params.set('bolim',     bolimFilter)
+      if (floorFilter)            params.set('floor',     floorFilter)
+      if (dateFrom)               params.set('from',      dateFrom)
+      if (dateTo)                 params.set('to',        dateTo)
+      return apiFetch(`/api/bookings?${params}`).then(r => r.json())
+    },
+    initialPageParam: 0,
+    getNextPageParam: (lastPage, allPages) =>
+      lastPage.length < LIMIT ? undefined : allPages.flat().length,
+    placeholderData: keepPreviousData,
   })
 
-  const allBookings = Array.isArray(data) ? data : []
+  const bookingsRaw = useMemo(() => data?.pages.flat() ?? [], [data])
+  // Filter o'zgarganda eski ma'lumotlar ko'rsatilib turadi — flicker yo'q
+  const bookingsRef = useRef([])
+  if (bookingsRaw.length > 0) bookingsRef.current = bookingsRaw
+  const bookings = bookingsRaw.length > 0 ? bookingsRaw : bookingsRef.current
 
-  const bookings = allBookings.filter(b => {
-    const q = search.toLowerCase()
-    const matchSearch = !q ||
-      b.apartment_id.toLowerCase().includes(q) ||
-      b.ism.toLowerCase().includes(q) ||
-      b.familiya.toLowerCase().includes(q) ||
-      (b.phone || '').includes(q)
-    const matchType = typeFilter === 'all' || b.type === typeFilter
-    const dateField = cancelled ? b.cancelled_at : b.created_at
-    const dateStr = dateField ? dateField.slice(0, 10) : ''
-    const matchFrom = !dateFrom || dateStr >= dateFrom
-    const matchTo   = !dateTo   || dateStr <= dateTo
-    return matchSearch && matchType && matchFrom && matchTo
-  })
+  hasNextPageRef.current   = hasNextPage
+  fetchingRef.current      = isFetchingNextPage
+  fetchNextPageRef.current = fetchNextPage
 
-  useEffect(() => { setPage(0) }, [search, typeFilter, dateFrom, dateTo])
+  const sentinelRef = useCallback(node => {
+    if (!node || !scrollRef.current) return
+    const observer = new IntersectionObserver(
+      entries => {
+        if (entries[0].isIntersecting && hasNextPageRef.current && !fetchingRef.current) {
+          fetchNextPageRef.current()
+        }
+      },
+      { root: scrollRef.current, rootMargin: '200px' }
+    )
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [])
 
   const colSpan = isAdmin ? 5 : 4
 
   return (
-    <div className="flex flex-col gap-3 min-h-0">
-      {/* Table wrapper — scrollable vertically, sticky header inside */}
-      <div className="bg-card border border-border rounded-2xl overflow-hidden">
-        <div
-          ref={scrollRef}
-          className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-260px)] no-scrollbar"
-        >
-          <table className="w-full text-sm min-w-[640px]">
-            <thead className="sticky top-0 z-20">
-              <tr className="border-b border-border bg-muted/80 backdrop-blur-sm">
-                <th className={`px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide sticky left-0 bg-muted/80 backdrop-blur-sm transition-shadow ${scrolled ? 'shadow-[4px_0_12px_-2px_rgba(0,0,0,0.08)]' : ''}`}>Xonadon</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Mijoz</th>
-                {isAdmin && <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Manager</th>}
-                <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">{cancelled ? 'Bekor sanasi' : 'Sana'}</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Amallar</th>
-              </tr>
-            </thead>
-            <tbody>
-              {isLoading && allBookings.length === 0
-                ? Array.from({ length: 8 }).map((_, i) => (
-                    <tr key={i} className="border-t border-border">
-                      {Array.from({ length: colSpan }).map((_, j) => (
-                        <td key={j} className="px-4 py-3">
-                          <div className="h-4 bg-muted/60 rounded animate-pulse" style={{ width: `${60 + (i * j * 7) % 30}%` }} />
-                        </td>
-                      ))}
-                    </tr>
-                  ))
-                : bookings.length === 0
-                ? (
-                    <tr>
-                      <td colSpan={colSpan} className="px-4 py-16 text-center text-muted-foreground text-sm">
-                        {search ? 'Qidiruv bo\'yicha natija topilmadi' : cancelled ? 'Bekor qilingan bitimlar yo\'q' : 'Bitimlar yo\'q'}
+    <div className="bg-card border border-border rounded-2xl overflow-hidden flex flex-col flex-1 min-h-0">
+      <div
+        ref={scrollRef}
+        className="overflow-x-auto overflow-y-auto flex-1 min-h-0 no-scrollbar"
+      >
+        <table className="w-full text-sm min-w-[640px]">
+          <thead className="sticky top-0 z-20">
+            <tr className="border-b border-border bg-muted/80 backdrop-blur-sm">
+              <th className={`px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide sticky left-0 bg-muted/80 backdrop-blur-sm transition-shadow ${scrolled ? 'shadow-[4px_0_12px_-2px_rgba(0,0,0,0.08)]' : ''}`}>Xonadon</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Mijoz</th>
+              {isAdmin && <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Manager</th>}
+              <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">{cancelled ? 'Bekor sanasi' : 'Sana'}</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Amallar</th>
+            </tr>
+          </thead>
+          <tbody>
+            {isLoading && bookingsRaw.length === 0 && bookingsRef.current.length === 0
+              ? Array.from({ length: 8 }).map((_, i) => (
+                  <tr key={i} className="border-t border-border">
+                    {Array.from({ length: colSpan }).map((_, j) => (
+                      <td key={j} className="px-4 py-3">
+                        <div className="h-4 bg-muted/60 rounded animate-pulse" style={{ width: `${60 + (i * j * 7) % 30}%` }} />
                       </td>
-                    </tr>
-                  )
-                : bookings.map(b => (
-                    <BookingRow
-                      key={b.id}
-                      b={b}
-                      isAdmin={isAdmin}
-                      cancelled={cancelled}
-                      onReset={onReset}
-                      scrolled={scrolled}
-                    />
-                  ))
-              }
-            </tbody>
-          </table>
-        </div>
-      </div>
+                    ))}
+                  </tr>
+                ))
+              : bookingsRaw.length === 0 && !isFetchingNextPage && !isLoading
+              ? (
+                  <tr>
+                    <td colSpan={colSpan} className="px-4 py-16 text-center text-muted-foreground text-sm">
+                      {search ? "Qidiruv bo'yicha natija topilmadi" : cancelled ? "Bekor qilingan bitimlar yo'q" : "Bitimlar yo'q"}
+                    </td>
+                  </tr>
+                )
+              : bookings.map(b => (
+                  <BookingRow
+                    key={b.id}
+                    b={b}
+                    isAdmin={isAdmin}
+                    cancelled={cancelled}
+                    onReset={onReset}
+                    scrolled={scrolled}
+                  />
+                ))
+            }
 
-      {/* Pagination */}
-      {(allBookings.length >= LIMIT || page > 0) && (
-        <div className="flex items-center gap-3 self-end">
-          <button
-            onClick={() => setPage(p => Math.max(0, p - 1))}
-            disabled={page === 0}
-            className="px-4 py-2 rounded-xl border border-border text-sm font-medium disabled:opacity-30 hover:bg-muted transition-colors"
-          >
-            ←
-          </button>
-          <span className="text-sm text-muted-foreground">{page + 1}-sahifa</span>
-          <button
-            onClick={() => setPage(p => p + 1)}
-            disabled={allBookings.length < LIMIT}
-            className="px-4 py-2 rounded-xl border border-border text-sm font-medium disabled:opacity-30 hover:bg-muted transition-colors"
-          >
-            →
-          </button>
-        </div>
-      )}
+            {bookings.length > 0 && (
+              <tr ref={sentinelRef}>
+                <td colSpan={colSpan} className="py-3 text-center">
+                  {isFetchingNextPage && (
+                    <div className="flex items-center justify-center gap-1.5">
+                      {[0, 1, 2].map(i => (
+                        <div
+                          key={i}
+                          className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40"
+                          style={{ animation: 'loader-dot 1.2s ease-in-out infinite', animationDelay: `${i * 0.2}s` }}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   )
 }
 
 export default function BookingsPage() {
   useRealtimeApts()
-  const user = getUser()
+  const user    = getUser()
   const isAdmin = user?.role === 'admin'
   const queryClient = useQueryClient()
-  const [tab, setTab]               = useState('active')
-  const [search, setSearch]         = useState('')
-  const [typeFilter, setTypeFilter] = useState('all')
-  const [dateFrom, setDateFrom]     = useState('')
-  const [dateTo, setDateTo]         = useState('')
+
+  const [tab,          setTab]          = useState('active')
+  const [search,       setSearch]       = useState('')
+  const [typeFilter,   setTypeFilter]   = useState('all')
+  const [blockFilter,  setBlockFilter]  = useState('')
+  const [bolimFilter,  setBolimFilter]  = useState('')
+  const [floorFilter,  setFloorFilter]  = useState('')
+  const [dateFrom,     setDateFrom]     = useState('')
+  const [dateTo,       setDateTo]       = useState('')
+  const [filterOpen,   setFilterOpen]   = useState(false)
+
+  const [pendingType,  setPendingType]  = useState('all')
+  const [pendingBlock, setPendingBlock] = useState('')
+  const [pendingBolim, setPendingBolim] = useState('')
+  const [pendingFloor, setPendingFloor] = useState('')
+  const [pendingFrom,  setPendingFrom]  = useState('')
+  const [pendingTo,    setPendingTo]    = useState('')
+
+  function openSheet() {
+    setPendingType(typeFilter); setPendingBlock(blockFilter)
+    setPendingBolim(bolimFilter); setPendingFloor(floorFilter)
+    setPendingFrom(dateFrom); setPendingTo(dateTo)
+    setFilterOpen(true)
+  }
+
+  function applyFilters() {
+    setTypeFilter(pendingType); setBlockFilter(pendingBlock)
+    setBolimFilter(pendingBolim); setFloorFilter(pendingFloor)
+    setDateFrom(pendingFrom); setDateTo(pendingTo)
+    setFilterOpen(false)
+  }
+
+  function clearPending() {
+    setPendingType('all'); setPendingBlock(''); setPendingBolim(''); setPendingFloor(''); setPendingFrom(''); setPendingTo('')
+  }
+
+  const activeFilterCount = [typeFilter !== 'all' ? typeFilter : '', blockFilter, bolimFilter, floorFilter, dateFrom, dateTo].filter(Boolean).length
+  const pendingFilterCount = [pendingType !== 'all' ? pendingType : '', pendingBlock, pendingBolim, pendingFloor, pendingFrom, pendingTo].filter(Boolean).length
+
+  const { data: bolimList = [] } = useQuery({
+    queryKey: ['bolims', pendingBlock],
+    queryFn: () => apiFetch(`/api/bolims?block=${pendingBlock}`).then(r => r.json()),
+    enabled: !!pendingBlock,
+    staleTime: Infinity,
+  })
+
+  const { data: floorList = [] } = useQuery({
+    queryKey: ['floors', pendingBlock, pendingBolim],
+    queryFn: () => {
+      const p = new URLSearchParams({ block: pendingBlock })
+      if (pendingBolim) p.set('bolim', pendingBolim)
+      return apiFetch(`/api/floors?${p}`).then(r => r.json())
+    },
+    enabled: !!pendingBlock,
+    staleTime: Infinity,
+  })
+
+  const bolimListRef = useRef([])
+  if (bolimList.length > 0) bolimListRef.current = bolimList
+  const bolimDisplay = bolimList.length > 0 ? bolimList : bolimListRef.current
+
+  const floorListRef = useRef([])
+  if (floorList.length > 0) floorListRef.current = floorList
+  const floorDisplay = floorList.length > 0 ? floorList : floorListRef.current
+
+  function resetFilters() {
+    setSearch(''); setTypeFilter('all')
+    setBlockFilter(''); setBolimFilter(''); setFloorFilter('')
+    setDateFrom(''); setDateTo('')
+  }
 
   function onReset() {
     queryClient.invalidateQueries({ queryKey: ['bookings'] })
@@ -503,9 +569,9 @@ export default function BookingsPage() {
   }
 
   return (
-    <div className="p-4 md:p-6 flex flex-col gap-4 h-full min-h-0">
+    <div className="p-4 md:p-6 flex flex-col gap-3 h-full min-h-0 overflow-hidden relative">
 
-      {/* ── Sticky toolbar ── */}
+      {/* Sticky toolbar */}
       <div className="sticky top-0 z-20 bg-background/95 backdrop-blur-sm pb-3 -mx-4 px-4 md:-mx-6 md:px-6 flex flex-col gap-3">
         <div className="flex items-center justify-between gap-4 flex-wrap pt-1">
           <h1 className="text-2xl font-bold">Bitimlar</h1>
@@ -514,76 +580,64 @@ export default function BookingsPage() {
               { key: 'active',    label: 'Faol bitimlar' },
               { key: 'cancelled', label: 'Bekor qilingan' },
             ].map(t => (
-              <button
-                key={t.key}
-                onClick={() => { setTab(t.key); setSearch(''); setTypeFilter('all'); setDateFrom(''); setDateTo('') }}
+              <button key={t.key}
+                onClick={() => { setTab(t.key); resetFilters() }}
                 className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors ${
-                  tab === t.key
-                    ? 'bg-background text-foreground shadow-sm'
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
+                  tab === t.key ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                }`}>
                 {t.label}
               </button>
             ))}
           </div>
         </div>
 
-        {/* Search + filter */}
-        <div className="flex items-center gap-3 flex-wrap">
-          <div className="relative flex-1 min-w-[200px] max-w-xs">
+        <div className="flex items-center gap-3">
+          {/* Search */}
+          <div className="relative flex-1 min-w-50 max-w-xs">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <input
               type="text"
               placeholder="Ism, xonadon yoki telefon..."
               value={search}
               onChange={e => setSearch(e.target.value)}
-              className="w-full pl-8 pr-4 py-2 text-sm rounded-xl border border-border bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+              className="w-full pl-8 pr-8 py-2 text-sm rounded-xl border border-border bg-background focus:outline-none focus:ring-2 focus:ring-ring"
             />
-          </div>
-          <div className="flex gap-1 p-1 bg-muted rounded-xl">
-            {[
-              { key: 'all',    label: 'Hammasi' },
-              { key: 'bron',   label: 'Bron' },
-              { key: 'sotish', label: 'Sotish' },
-            ].map(f => (
-              <button
-                key={f.key}
-                onClick={() => setTypeFilter(f.key)}
-                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
-                  typeFilter === f.key
-                    ? 'bg-background text-foreground shadow-sm'
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                {f.label}
-              </button>
-            ))}
-          </div>
-
-          <div className="flex items-center gap-1.5">
-            <input
-              type="date"
-              value={dateFrom}
-              onChange={e => setDateFrom(e.target.value)}
-              className="text-xs px-2.5 py-2 rounded-xl border border-border bg-background focus:outline-none focus:ring-2 focus:ring-ring text-muted-foreground"
-            />
-            <span className="text-muted-foreground text-xs">—</span>
-            <input
-              type="date"
-              value={dateTo}
-              onChange={e => setDateTo(e.target.value)}
-              className="text-xs px-2.5 py-2 rounded-xl border border-border bg-background focus:outline-none focus:ring-2 focus:ring-ring text-muted-foreground"
-            />
-            {(dateFrom || dateTo) && (
-              <button
-                onClick={() => { setDateFrom(''); setDateTo('') }}
-                className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-              >
+            {search && (
+              <button onClick={() => setSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
                 <X size={13} />
               </button>
             )}
           </div>
+
+          {/* Clear filters button */}
+          {activeFilterCount > 0 && (
+            <button
+              onClick={() => { setTypeFilter('all'); setBlockFilter(''); setBolimFilter(''); setFloorFilter(''); setDateFrom(''); setDateTo('') }}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-border text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0"
+            >
+              <X size={13} strokeWidth={2.5} />
+              Tozalash
+            </button>
+          )}
+
+          {/* Filter button */}
+          <button
+            onClick={openSheet}
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl border text-sm font-medium transition-colors shrink-0 ${
+              activeFilterCount > 0
+                ? 'border-foreground bg-foreground text-background'
+                : 'border-border text-muted-foreground hover:text-foreground hover:bg-muted'
+            }`}
+          >
+            <SlidersHorizontal size={14} />
+            Filter
+            {activeFilterCount > 0 && (
+              <span className="w-4 h-4 rounded-full bg-background text-foreground text-xs font-bold flex items-center justify-center">
+                {activeFilterCount}
+              </span>
+            )}
+          </button>
+
         </div>
       </div>
 
@@ -594,9 +648,127 @@ export default function BookingsPage() {
         onReset={onReset}
         search={search}
         typeFilter={typeFilter}
+        blockFilter={blockFilter}
+        bolimFilter={bolimFilter}
+        floorFilter={floorFilter}
         dateFrom={dateFrom}
         dateTo={dateTo}
       />
+
+      {/* Filter bottom sheet */}
+      {filterOpen && (
+        <div className="absolute inset-0 z-30 flex flex-col justify-end" onClick={() => setFilterOpen(false)}>
+          <div className="absolute inset-0 bg-black/40 sheet-backdrop" />
+          <div className="relative bg-background rounded-t-2xl shadow-2xl max-h-[72vh] flex flex-col sheet-panel" onClick={e => e.stopPropagation()}>
+            {/* Handle */}
+            <div className="flex justify-center pt-2.5 pb-1 shrink-0">
+              <div className="w-8 h-1 rounded-full bg-border" />
+            </div>
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 py-2.5 border-b border-border shrink-0">
+              <span className="text-sm font-bold">Filter</span>
+              <button onClick={() => setFilterOpen(false)} className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-muted transition-colors">
+                <X size={13} strokeWidth={2.5} />
+              </button>
+            </div>
+            {/* Scrollable content */}
+            <div className="flex-1 overflow-y-auto px-5 py-3 flex flex-col gap-4">
+
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Tur</p>
+                <div className="flex gap-1.5">
+                  {[{ key: 'all', label: 'Hammasi' }, { key: 'bron', label: 'Bron' }, { key: 'sotish', label: 'Sotilgan' }].map(f => (
+                    <button key={f.key} onClick={() => setPendingType(f.key)}
+                      className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-colors ${
+                        pendingType === f.key ? 'bg-foreground text-background' : 'bg-muted text-muted-foreground'
+                      }`}>
+                      {f.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Blok</p>
+                <div className="flex gap-1.5">
+                  {['', ...BLOCKS].map(b => (
+                    <button key={b || 'all'} onClick={() => { setPendingBlock(b); setPendingBolim(''); setPendingFloor('') }}
+                      className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-colors ${
+                        pendingBlock === b ? 'bg-foreground text-background' : 'bg-muted text-muted-foreground'
+                      }`}>
+                      {b || 'Barcha'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className={`transition-opacity duration-200 ${!pendingBlock ? 'opacity-40 pointer-events-none' : ''}`}>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Bo'lim</p>
+                <div className="flex flex-wrap gap-1.5 min-h-8 items-start content-start">
+                  {bolimDisplay.length > 0 ? (
+                    ['', ...bolimDisplay].map(n => (
+                      <button key={n === '' ? 'all' : n}
+                        onClick={() => { setPendingBolim(n === '' ? '' : String(n)); setPendingFloor('') }}
+                        className={`px-3 py-2 rounded-lg text-xs font-semibold transition-colors ${
+                          (n === '' ? !pendingBolim : pendingBolim === String(n)) ? 'bg-foreground text-background' : 'bg-muted text-muted-foreground'
+                        }`}>
+                        {n === '' ? 'Barcha' : n}
+                      </button>
+                    ))
+                  ) : (
+                    <span className="text-xs text-muted-foreground/50 self-center">Avval blok tanlang</span>
+                  )}
+                </div>
+              </div>
+
+              <div className={`transition-opacity duration-200 ${!pendingBlock ? 'opacity-40 pointer-events-none' : ''}`}>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Qavat</p>
+                <div className="flex flex-wrap gap-1.5 min-h-8 items-start content-start">
+                  {floorDisplay.length > 0 ? (
+                    ['', ...floorDisplay].map(f => (
+                      <button key={f === '' ? 'all' : f}
+                        onClick={() => setPendingFloor(f === '' ? '' : String(f))}
+                        className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-colors ${
+                          (f === '' ? !pendingFloor : pendingFloor === String(f)) ? 'bg-foreground text-background' : 'bg-muted text-muted-foreground'
+                        }`}>
+                        {f === '' ? 'Barcha' : f}
+                      </button>
+                    ))
+                  ) : (
+                    <span className="text-xs text-muted-foreground/50 self-center">Avval blok tanlang</span>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Sana</p>
+                <div className="flex items-center gap-2">
+                  <input type="date" value={pendingFrom} onChange={e => setPendingFrom(e.target.value)}
+                    className="flex-1 text-xs px-3 py-2 rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-ring" />
+                  <span className="text-muted-foreground text-xs">—</span>
+                  <input type="date" value={pendingTo} onChange={e => setPendingTo(e.target.value)}
+                    className="flex-1 text-xs px-3 py-2 rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-ring" />
+                </div>
+              </div>
+            </div>
+            {/* Footer */}
+            <div className="px-5 py-3 border-t border-border flex gap-2 shrink-0">
+              <button
+                onClick={clearPending}
+                className="flex-1 py-2.5 rounded-xl border border-border text-xs font-semibold text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+              >
+                Tozalash
+              </button>
+              <button
+                onClick={applyFilters}
+                className="flex-1 py-2.5 rounded-xl bg-foreground text-background text-xs font-semibold hover:opacity-90 transition-opacity"
+              >
+                Qo'llash
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

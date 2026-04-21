@@ -2,11 +2,11 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { getUser, apiFetch } from '@/shared/lib/auth'
 import { useRealtimeApts } from '@/shared/hooks/useRealtimeApts'
-import { TrendingUp, ShoppingCart, Clock, LayoutGrid, Medal } from 'lucide-react'
+import { TrendingUp, ShoppingCart, Clock, LayoutGrid, Medal, Ban } from 'lucide-react'
 
 /* ── Palette ──────────────────────────────────────────────────────────────── */
-const C = { SOLD: '#ef4444', RESERVED: '#f59e0b', EMPTY: '#22c55e' }
-const LABEL = { SOLD: 'Sotilgan', RESERVED: 'Bron', EMPTY: "Bo'sh" }
+const C = { SOLD: '#ef4444', RESERVED: '#f59e0b', EMPTY: '#22c55e', NOT_SALE: '#6b7280' }
+const LABEL = { SOLD: 'Sotilgan', RESERVED: 'Bron', EMPTY: "Bo'sh", NOT_SALE: 'Sotilmaydi' }
 const BLOCKS = ['A', 'B', 'C']
 
 /* ── Date helpers ─────────────────────────────────────────────────────────── */
@@ -53,6 +53,7 @@ function BlockCard({ blockId, stats }) {
     { value: stats.SOLD     ?? 0, color: C.SOLD },
     { value: stats.RESERVED ?? 0, color: C.RESERVED },
     { value: stats.EMPTY    ?? 0, color: C.EMPTY },
+    { value: stats.NOT_SALE ?? 0, color: C.NOT_SALE },
   ]
   const total = segs.reduce((s, d) => s + d.value, 0)
   const pct = v => total > 0 ? Math.round(v / total * 100) : 0
@@ -82,14 +83,15 @@ function BlockCard({ blockId, stats }) {
 }
 
 /* ── Stacked horizontal bar ───────────────────────────────────────────────── */
-function StackedBar({ label, sold, reserved, empty, maxTotal }) {
-  const total = sold + reserved + empty
+function StackedBar({ label, sold, reserved, empty, notSale = 0, maxTotal }) {
+  const total = sold + reserved + empty + notSale
   const w = v => maxTotal > 0 ? (v / maxTotal * 100) : 0
 
   const segments = [
     { key: 'sold',     value: sold,     color: C.SOLD,     labelText: "Sotilgan" },
     { key: 'reserved', value: reserved, color: C.RESERVED, labelText: "Bron" },
     { key: 'empty',    value: empty,    color: C.EMPTY,    labelText: "Bo'sh" },
+    { key: 'notSale',  value: notSale,  color: C.NOT_SALE, labelText: "Sotilmaydi" },
   ]
   const visible = segments.filter(s => s.value > 0)
   const isMulti = visible.length > 1
@@ -312,8 +314,8 @@ export default function DashboardPage() {
   const detailKey    = detailTab === 'bolim' ? 'bolim' : 'floor'
   const detailRows   = detailSource
     .filter(r => r.block === blockFilter)
-    .map(r => ({ label: String(r[detailKey]), sold: r.SOLD ?? 0, reserved: r.RESERVED ?? 0, empty: r.EMPTY ?? 0 }))
-  const maxTotal = Math.max(...detailRows.map(r => r.sold + r.reserved + r.empty), 1)
+    .map(r => ({ label: String(r[detailKey]), sold: r.SOLD ?? 0, reserved: r.RESERVED ?? 0, empty: r.EMPTY ?? 0, notSale: r.NOT_SALE ?? 0 }))
+  const maxTotal = Math.max(...detailRows.map(r => r.sold + r.reserved + r.empty + r.notSale), 1)
   const maxManagerTotal = Math.max(...managers.map(m => m.total), 1)
 
   return (
@@ -324,10 +326,11 @@ export default function DashboardPage() {
       <div className="grid grid-cols-2 gap-3">
         {isAdmin ? (
           <>
-            <StatCard label="Sotilgan"      value={total.SOLD}     color={C.SOLD}     icon={ShoppingCart} />
-            <StatCard label="Bron"          value={total.RESERVED} color={C.RESERVED} icon={Clock} />
-            <StatCard label="Bo'sh"         value={total.EMPTY}    color={C.EMPTY}    icon={LayoutGrid} />
-            <StatCard label="Jami bitimlar" value={totalBookings}  color="#6366f1"    icon={TrendingUp} />
+            <StatCard label="Sotilgan"      value={total.SOLD}          color={C.SOLD}     icon={ShoppingCart} />
+            <StatCard label="Bron"          value={total.RESERVED}      color={C.RESERVED} icon={Clock} />
+            <StatCard label="Bo'sh"         value={total.EMPTY}         color={C.EMPTY}    icon={LayoutGrid} />
+            <StatCard label="Sotilmaydi"    value={total.NOT_SALE ?? 0} color={C.NOT_SALE} icon={Ban} />
+            <StatCard label="Jami bitimlar" value={totalBookings}       color="#6366f1"    icon={TrendingUp} />
           </>
         ) : (
           <>

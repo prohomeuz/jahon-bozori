@@ -1,5 +1,5 @@
 import { Loader2, RotateCcw, FileText, CheckCircle, Lock, ShoppingBag, Ruler, X, ChevronDown, Calculator } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { apiFetch, getUser } from '@/shared/lib/auth'
 import { ContractPDF } from './ContractPDF'
 
@@ -631,18 +631,45 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
   const [showCalc, setShowCalc] = useState(false)
   const [calc, setCalc] = useState({ narxM2: '', boshlangich: '', oylar: '12', focus: 'narxM2' })
   const [phoneTarget, setPhoneTarget] = useState(null) // null | 'bron' | 'sotish'
+  const longPressTimer = useRef(null)
+  const longPressFired = useRef(false)
+  const calcLoadFromDB = useRef(true)
 
-  // Kalkulyator ochilganda narxni bazadan yuklash
+  function calcLongPressStart(e) {
+    e.preventDefault()
+    longPressFired.current = false
+    if (showCalc) return
+    longPressTimer.current = setTimeout(() => {
+      longPressFired.current = true
+      if (navigator.vibrate) navigator.vibrate(40)
+      calcLoadFromDB.current = false
+      setCalc({ narxM2: '', boshlangich: '', oylar: '12', focus: 'narxM2' })
+      setShowCalc(true)
+    }, 1000)
+  }
+
+  function calcLongPressEnd() {
+    if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null }
+    if (!longPressFired.current) {
+      if (showCalc) { setShowCalc(false); return }
+      calcLoadFromDB.current = true
+      setShowCalc(true)
+    }
+  }
+
+  // Kalkulyator ochilganda narxni bazadan yuklash — faqat bir marta
   useEffect(() => {
-    if (!showCalc || calc.narxM2) return
+    if (!showCalc || !calcLoadFromDB.current) return
+    let cancelled = false
     const [block, bolimStr] = apartment.address.split('-')
     apiFetch(`/api/prices?block=${block}&bolim=${parseInt(bolimStr)}&floor=${floor}`)
       .then(r => r.json())
       .then(({ price }) => {
-        if (price) setCalc(f => ({ ...f, narxM2: String(price) }))
+        if (!cancelled && price) setCalc(f => ({ ...f, narxM2: f.narxM2 === '' ? String(price) : f.narxM2 }))
       })
       .catch(() => {})
-  }, [showCalc, calc.narxM2]) // eslint-disable-line react-hooks/exhaustive-deps
+    return () => { cancelled = true }
+  }, [showCalc]) // eslint-disable-line react-hooks/exhaustive-deps
 
   function fetchCalcPrice() {
     const [block, bolimStr] = apartment.address.split('-')
@@ -705,6 +732,7 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
   const effectiveManagerName = assignedManager?.name ?? currentUser?.name ?? ''
 
   async function submitBooking(type) {
+    if (submitting) return
     setConfirmPending(null)
     setSubmitting(true)
     setSubmitError(null)
@@ -1145,9 +1173,12 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
           <div className="flex-1" />
           <button
             type="button"
-            onClick={() => setShowCalc(v => !v)}
-            className={`w-14 h-14 rounded-full flex items-center justify-center transition-colors shrink-0 ${showCalc ? 'bg-amber-100 text-amber-600' : 'text-muted-foreground hover:bg-accent hover:text-foreground'}`}
-            title="Kalkulator"
+            onPointerDown={calcLongPressStart}
+            onPointerUp={calcLongPressEnd}
+            onPointerCancel={() => { clearTimeout(longPressTimer.current); longPressTimer.current = null }}
+            onContextMenu={e => e.preventDefault()}
+            className={`w-14 h-14 rounded-full flex items-center justify-center transition-colors shrink-0 select-none touch-manipulation ${showCalc ? 'bg-amber-100 text-amber-600' : 'text-muted-foreground hover:bg-accent hover:text-foreground'}`}
+            title="Kalkulator (bosib turing: 0 dan boshlash)"
           >
             <Calculator size={22} />
           </button>

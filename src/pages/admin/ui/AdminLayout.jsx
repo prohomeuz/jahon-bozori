@@ -2,11 +2,12 @@ import { useEffect, useRef, useState } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router'
 import { useQueryClient } from '@tanstack/react-query'
 import { getUser, getToken, removeToken, apiFetch } from '@/shared/lib/auth'
-import { LayoutDashboard, Users, ClipboardList, LogOut, Home, PanelLeftClose, PanelLeftOpen, KeyRound, CheckCircle, Tag } from 'lucide-react'
+import { LayoutDashboard, Users, ClipboardList, LogOut, Home, PanelLeftClose, PanelLeftOpen, KeyRound, CheckCircle, Tag, Store, WifiOff, Wifi } from 'lucide-react'
 
 const NAV = [
   { to: '/admin',          label: 'Dashboard',       icon: LayoutDashboard, end: true },
   { to: '/admin/bookings', label: 'Bitimlar',         icon: ClipboardList },
+  { to: '/admin/shops',    label: "Do'konlar",        icon: Store,          adminOnly: true },
   { to: '/admin/managers', label: 'Salesmanagerlar',  icon: Users,          adminOnly: true },
   { to: '/admin/prices',   label: 'Narxlar',          icon: Tag,            adminOnly: true },
 ]
@@ -200,6 +201,16 @@ export default function AdminLayout() {
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
   const [showChangePw, setShowChangePw] = useState(false)
   const [forcedOut, setForcedOut] = useState(false)
+  const [isOnline, setIsOnline] = useState(() => navigator.onLine)
+  const [showReconnected, setShowReconnected] = useState(false)
+
+  useEffect(() => {
+    function handleOffline() { setIsOnline(false); setShowReconnected(false) }
+    function handleOnline()  { setIsOnline(true);  setShowReconnected(true); setTimeout(() => setShowReconnected(false), 3000) }
+    window.addEventListener('offline', handleOffline)
+    window.addEventListener('online',  handleOnline)
+    return () => { window.removeEventListener('offline', handleOffline); window.removeEventListener('online', handleOnline) }
+  }, [])
 
   useEffect(() => {
     if (!user) navigate('/admin/login', { replace: true })
@@ -370,6 +381,29 @@ export default function AdminLayout() {
         <div className="fixed inset-0 z-[60] flex items-end justify-center pb-10 pointer-events-none">
           <div className="bg-red-600 text-white px-6 py-4 rounded-2xl shadow-2xl text-sm font-medium max-w-sm text-center animate-in slide-in-from-bottom-4 duration-300">
             Sizning ma'lumotlaringiz o'zgartirildi. Tizimdan chiqarilmoqdasiz...
+          </div>
+        </div>
+      )}
+
+      {/* Offline overlay — blocks all interaction */}
+      {!isOnline && (
+        <div className="fixed inset-0 z-70 flex flex-col items-center justify-center gap-4 bg-background/80 backdrop-blur-sm">
+          <div className="flex flex-col items-center gap-3">
+            <div className="w-14 h-14 rounded-2xl bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center">
+              <WifiOff size={26} strokeWidth={1.5} className="text-zinc-500" />
+            </div>
+            <p className="text-base font-semibold text-foreground">Internet aloqasi uzildi</p>
+            <p className="text-sm text-muted-foreground text-center max-w-xs">Ulanish tiklanishi kutilmoqda...</p>
+          </div>
+        </div>
+      )}
+
+      {/* Reconnected toast */}
+      {showReconnected && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-70 pointer-events-none">
+          <div className="flex items-center gap-2.5 px-4 py-3 rounded-2xl shadow-2xl text-sm font-semibold bg-emerald-500 text-white">
+            <Wifi size={15} strokeWidth={2} className="shrink-0" />
+            Internet aloqasi tiklandi
           </div>
         </div>
       )}

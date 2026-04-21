@@ -2,6 +2,7 @@ import { scryptSync, randomBytes, timingSafeEqual } from 'node:crypto'
 import { sign, verify } from 'hono/jwt'
 
 const SECRET = process.env.JWT_SECRET
+if (!SECRET) console.warn('[auth] JWT_SECRET muhit o\'zgaruvchisi topilmadi — ishonchli token yaratish uchun .env ga qo\'shing')
 
 export function hashPassword(password) {
   const salt = randomBytes(16).toString('hex')
