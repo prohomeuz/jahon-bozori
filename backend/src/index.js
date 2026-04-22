@@ -160,6 +160,28 @@ app.get('/api/events', async (c) => {
   )
 })
 
+// ─── PUBLIC SSE (live page) ───────────────────────────────────────────────────
+app.get('/api/live/events', (c) => {
+  return new Response(
+    new ReadableStream({
+      start(controller) {
+        const enc = new TextEncoder()
+        const send = (msg) => {
+          try { controller.enqueue(enc.encode(msg)) }
+          catch { sseClients.delete(send) }
+        }
+        sseClients.add(send)
+        try { controller.enqueue(enc.encode(': connected\n\n')) } catch {}
+        c.req.raw.signal.addEventListener('abort', () => {
+          sseClients.delete(send)
+          try { controller.close() } catch {}
+        })
+      },
+    }),
+    { headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' } }
+  )
+})
+
 // ─── ADMIN SEED ──────────────────────────────────────────────────────────────
 // Faqat admin umuman yo'q bo'lsa yaratiladi (yangi server / bo'sh DB).
 {
@@ -650,7 +672,7 @@ async function setupTelegramWebhook() {
   } catch (e) { console.error('[telegram] Webhook setup xato:', e.message) }
 }
 
-// Har 6 soatda webhook sog'ligini tekshiradi — muammo bo'lsa qayta o'rnatadi
+// Har 30 daqiqada webhook sog'ligini tekshiradi — muammo bo'lsa qayta o'rnatadi
 async function checkWebhookHealth() {
   const token = process.env.TELEGRAM_BOT_TOKEN
   const domain = process.env.WEBHOOK_DOMAIN
@@ -661,17 +683,17 @@ async function checkWebhookHealth() {
     if (!json.ok) return
     const info = json.result
     const expectedUrl = `${domain.replace(/\/$/, '')}/api/telegram/webhook`
-    const hasError = info.last_error_date && (Date.now() / 1000 - info.last_error_date < 6 * 3600)
-    if (info.url !== expectedUrl || hasError) {
-      console.log('[telegram] Webhook muammo — qayta o\'rnatilmoqda. url_ok:', info.url === expectedUrl, 'last_error:', info.last_error_message)
+    // URL noto'g'ri, xato xabari bor, yoki 100+ pending update (ishlamayapti)
+    const needsFix = info.url !== expectedUrl || !!info.last_error_message || info.pending_update_count > 100
+    if (needsFix) {
+      console.log('[telegram] Webhook muammo — qayta o\'rnatilmoqda. url_ok:', info.url === expectedUrl, 'error:', info.last_error_message, 'pending:', info.pending_update_count)
       await setupTelegramWebhook()
-      // Faqat egasiga server xato xabari
       await proxiedFetch(`https://api.telegram.org/bot${token}/sendMessage`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           chat_id: OWNER_CHAT_ID,
-          text: `⚠️ <b>Bot webhook muammo aniqlandi va qayta o'rnatildi</b>\n\nXato: ${info.last_error_message ?? 'noma\'lum'}`,
+          text: `⚠️ <b>Bot webhook muammo aniqlandi va qayta o'rnatildi</b>\n\nURL to'g'ri: ${info.url === expectedUrl ? 'Ha' : 'Yo\'q'}\nXato: ${info.last_error_message ?? 'yo\'q'}\nPending: ${info.pending_update_count}`,
           parse_mode: 'HTML',
         }),
       }).catch(() => {})
@@ -679,8 +701,8 @@ async function checkWebhookHealth() {
   } catch (e) { console.error('[telegram] Webhook health check xato:', e.message) }
 }
 
-// Har 6 soatda webhook tekshiriladi
-setInterval(() => { checkWebhookHealth().catch(console.error) }, 6 * 60 * 60_000).unref()
+// Har 30 daqiqada webhook tekshiriladi
+setInterval(() => { checkWebhookHealth().catch(console.error) }, 30 * 60_000).unref()
 
 const port = parseInt(process.env.PORT ?? '3001')
 serve({ fetch: app.fetch, port })

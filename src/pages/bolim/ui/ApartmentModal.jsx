@@ -766,6 +766,19 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
       onBooked?.()
       setBooked({ form, type, bookingId: booking.id, managerName: effectiveManagerName })
 
+      // Faqat bron uchun SMS yuborish (fire-and-forget)
+      if (type === 'bron' && form.telefon) {
+        fetch('https://backend.prohome.uz/api/v1/sms/send-congratulation', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            phone: '998' + getRawDigits(form.telefon),
+            firstName: form.ism,
+            block: apartment.address,
+          }),
+        }).catch(() => {})
+      }
+
       // Faqat bron uchun Telegramga PDF yuborish (background)
       if (type === 'bron' && booking.id) {
         const managerName = effectiveManagerName
