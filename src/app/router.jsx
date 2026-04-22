@@ -20,6 +20,7 @@ const BookingsPage  = lazy(() => import('@/pages/admin/ui/BookingsPage'))
 const ManagersPage  = lazy(() => import('@/pages/admin/ui/ManagersPage'))
 const PricesPage    = lazy(() => import('@/pages/admin/ui/PricesPage'))
 const ShopsPage     = lazy(() => import('@/pages/admin/ui/ShopsPage'))
+const LivePage      = lazy(() => import('@/pages/live/ui/LivePage'))
 
 function Loader() {
   return (
@@ -54,6 +55,7 @@ export default function Router() {
     <BrowserRouter>
       <Suspense fallback={<Loader />}>
         <Routes>
+          <Route path="/live" element={<LivePage />} />
           <Route path="/admin/login" element={<LoginPage />} />
 
           {/* Himoyalangan asosiy sahifalar */}

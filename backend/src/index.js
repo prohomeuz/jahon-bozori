@@ -160,6 +160,28 @@ app.get('/api/events', async (c) => {
   )
 })
 
+// ─── PUBLIC SSE (live page) ───────────────────────────────────────────────────
+app.get('/api/live/events', (c) => {
+  return new Response(
+    new ReadableStream({
+      start(controller) {
+        const enc = new TextEncoder()
+        const send = (msg) => {
+          try { controller.enqueue(enc.encode(msg)) }
+          catch { sseClients.delete(send) }
+        }
+        sseClients.add(send)
+        try { controller.enqueue(enc.encode(': connected\n\n')) } catch {}
+        c.req.raw.signal.addEventListener('abort', () => {
+          sseClients.delete(send)
+          try { controller.close() } catch {}
+        })
+      },
+    }),
+    { headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' } }
+  )
+})
+
 // ─── ADMIN SEED ──────────────────────────────────────────────────────────────
 // Faqat admin umuman yo'q bo'lsa yaratiladi (yangi server / bo'sh DB).
 {
