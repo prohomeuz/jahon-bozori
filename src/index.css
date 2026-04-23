@@ -9,9 +9,17 @@
   from { transform: translateY(100%); }
   to   { transform: translateY(0); }
 }
+@keyframes sheet-slide-down {
+  from { transform: translateY(0); }
+  to   { transform: translateY(100%); }
+}
 @keyframes sheet-backdrop-in {
   from { opacity: 0; }
   to   { opacity: 1; }
+}
+@keyframes sheet-backdrop-out {
+  from { opacity: 1; }
+  to   { opacity: 0; }
 }
 .sheet-panel    { animation: sheet-slide-up    0.32s cubic-bezier(0.4, 0, 0.2, 1) both; }
 .sheet-backdrop { animation: sheet-backdrop-in 0.22s ease both; }
@@ -210,7 +218,7 @@
 
 @keyframes live-ring {
   from { stroke-dashoffset: 0; }
-  to   { stroke-dashoffset: 113.097; }
+  to   { stroke-dashoffset: 163.363; }
 }
 .live-ring {
   animation: live-ring 15s linear both;
@@ -228,6 +236,24 @@
 }
 .live-slide-in-left {
   animation: live-slide-in-left 0.32s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+@keyframes swipe-hint-fade {
+  0%   { opacity: 0; }
+  12%  { opacity: 1; }
+  75%  { opacity: 1; }
+  100% { opacity: 0; }
+}
+@keyframes swipe-hand-rock {
+  0%, 100% { transform: translateX(0) rotate(0deg); }
+  25%       { transform: translateX(-14px) rotate(-12deg); }
+  75%       { transform: translateX(14px) rotate(12deg); }
+}
+.swipe-hint {
+  animation: swipe-hint-fade 4.5s ease both;
+}
+.swipe-hand {
+  animation: swipe-hand-rock 1.2s ease-in-out 0.4s infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {
