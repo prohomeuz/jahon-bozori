@@ -16,6 +16,17 @@ const cImg1 = import.meta.glob('@/assets/blocks/C/1/*.webp', { eager: true })
 const cImg2 = import.meta.glob('@/assets/blocks/C/2/*.webp', { eager: true })
 
 const IMG_MAPS = { A: [aImg1, aImg2], B: [bImg1, bImg2], C: [cImg1, cImg2] }
+
+// Module-level image cache — sahifa davomida saqlanadi
+const _imgCache = new Set()
+function preloadImg(src) {
+  if (!src || _imgCache.has(src)) return Promise.resolve()
+  return new Promise(resolve => {
+    const img = new Image()
+    img.onload = img.onerror = () => { _imgCache.add(src); resolve() }
+    img.src = src
+  })
+}
 const OVERLAYS = {
   A: [A_RECT_OVERLAYS, A_FLOOR2_RECT_OVERLAYS],
   B: [B_RECT_OVERLAYS, B_FLOOR2_RECT_OVERLAYS],
@@ -121,7 +132,8 @@ const ZoomablePane = memo(function ZoomablePane({ children, zoomingRef }) {
       if (e.touches.length < 2) pinchRef.current = null
       if (e.touches.length === 0) {
         panRef.current = null
-        if (zoomingRef) zoomingRef.current = false
+        // zoomingRef ni bu yerda EMAS, outer onTouchEnd tozalaydi.
+        // Aks holda outer ishlagunga qadar false bo'lib qoladi va swipe o'tib ketadi.
         if (scaleRef.current < 1.05) {
           scaleRef.current = 1; txRef.current = 0; tyRef.current = 0
           applyTransform('transform 0.2s ease')
@@ -338,12 +350,12 @@ export default function LivePage() {
   }
   function onTouchEnd(e) {
     if (showPicker) return
-    // Zoom gesture tugamoqda — swipe logikasin o'tkazib yuboramiz, lekin timerni tiklash kerak
+    // Zoom gesture — swipe o'tkazib yuboramiz; oxirgi barmoq ko'tarilganda state tozalanadi
     if (zoomingRef.current) {
       if (e.touches.length === 0) {
+        zoomingRef.current = false   // shu yerda tozalanadi, ZoomablePane emas
         touchX.current = null
         touchingRef.current = false
-        // Touch davomida pauza qilingan bo'lsa — tiklash (aks holda timer muzlab qoladi)
         if (!paused && touchPausedAt.current !== null) {
           timerStartRef.current += Date.now() - touchPausedAt.current
           touchPausedAt.current = null
@@ -425,6 +437,27 @@ export default function LivePage() {
   const ov1  = cur ? getOverlay(cur.block, 1, cur.bolim) : null
   const ov2  = cur ? getOverlay(cur.block, 2, cur.bolim) : null
 
+  // Joriy slide rasmlari tayyor bo'lguncha spinner
+  const [imgReady, setImgReady] = useState(false)
+  useEffect(() => {
+    const srcs = [src1, src2].filter(Boolean)
+    if (!srcs.length) { setImgReady(true); return }
+    if (srcs.every(s => _imgCache.has(s))) { setImgReady(true); return }
+    setImgReady(false)
+    let live = true
+    Promise.all(srcs.map(preloadImg)).then(() => { if (live) setImgReady(true) })
+    return () => { live = false }
+  }, [src1, src2])
+
+  // Qo'shni slidlarni background preload — optimistic UI
+  useEffect(() => {
+    if (!slides.length) return
+    for (const offset of [1, -1]) {
+      const adj = slides[(safeIdx + offset + slides.length) % slides.length]
+      for (const floor of [1, 2]) preloadImg(getImg(adj.block, floor, adj.bolim))
+    }
+  }, [safeIdx, slides.length])
+
   const apiError = (errA || errB || errC) && !slides.length
   if (apiError) {
     return (
@@ -468,6 +501,16 @@ export default function LivePage() {
 
       {/* ── KONTENT ── labellar statik, faqat rasmlar animatsiyalanadi */}
       <div className="flex flex-col flex-1 min-h-0 relative">
+
+        {/* Rasm yuklanguncha spinner — overlay va dotted bg ko'rinmasin */}
+        {!imgReady && (
+          <div className="absolute inset-0 z-10 bg-white flex items-center justify-center">
+            <svg className="animate-spin w-8 h-8" viewBox="0 0 48 48" fill="none">
+              <circle cx="24" cy="24" r="20" stroke="#e5e7eb" strokeWidth="4"/>
+              <path d="M24 4a20 20 0 0 1 20 20" stroke="#374151" strokeWidth="4" strokeLinecap="round"/>
+            </svg>
+          </div>
+        )}
 
         {/* Swipe hint — faqat birinchi marta */}
         {swipeHint && (
