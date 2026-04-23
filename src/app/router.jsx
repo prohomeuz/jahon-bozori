@@ -75,6 +75,8 @@ export default function Router() {
               <Route path="shops" element={<AdminOnly><ShopsPage /></AdminOnly>} />
             </Route>
           </Route>
+
+          <Route path="*" element={<Navigate to="/live" replace />} />
         </Routes>
       </Suspense>
     </BrowserRouter>
