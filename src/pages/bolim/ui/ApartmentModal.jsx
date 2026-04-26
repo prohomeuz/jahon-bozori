@@ -1,20 +1,24 @@
-import { Loader2, RotateCcw, FileText, CheckCircle, Lock, ShoppingBag, Ruler, X, ChevronDown, Calculator } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { Loader2, RotateCcw, FileText, CheckCircle, X, ChevronDown, Calculator } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { apiFetch, getUser } from '@/shared/lib/auth'
 import { ContractPDF } from './ContractPDF'
+import imgKonditsioner from '@/assets/bonus/konditsioner.webp'
+import imgTV from '@/assets/bonus/tv.webp'
+import imgMuzlatgich from '@/assets/bonus/muzlatgich.webp'
 
 const allBlockImgs = import.meta.glob('@/assets/blocks/**/*.webp', { eager: true })
 
+// O(1) lookup — modul yuklanganda bir marta quriladi
+const _imgIndex = new Map()
+for (const [k, v] of Object.entries(allBlockImgs)) {
+  const parts = k.replace(/\\/g, '/').split('/')
+  const name = parts.pop()?.split('.')[0]
+  const floorDir = parts.pop()
+  const blockDir = parts.pop()
+  _imgIndex.set(`${blockDir}/${floorDir}/${name}`, v?.default ?? null)
+}
 function loadImg(blockId, floor, bolimNum) {
-  const filename = String(bolimNum)
-  const entry = Object.entries(allBlockImgs).find(([k]) => {
-    const parts = k.replace(/\\/g, '/').split('/')
-    const name = parts.pop()?.split('.')[0]
-    const floorDir = parts.pop()
-    const blockDir = parts.pop()
-    return name === filename && floorDir === String(floor) && blockDir === blockId
-  })
-  return entry?.[1]?.default ?? null
+  return _imgIndex.get(`${blockId}/${floor}/${bolimNum}`) ?? null
 }
 
 async function getAptRect(blockId, floor, bolimNum, address) {
@@ -318,60 +322,6 @@ function PassportField({ label, value, onChange }) {
   )
 }
 
-function MoneyField({ label, value, onChange }) {
-  function handleChange(e) {
-    const digits = e.target.value.replace(/\D/g, '')
-    const formatted = digits.replace(/\B(?=(\d{3})+(?!\d))/g, ' ')
-    onChange(formatted)
-  }
-  return (
-    <div>
-      <label className={LABEL}>{label}</label>
-      <div className="relative">
-        <input
-          type="text"
-          inputMode="numeric"
-          className={INPUT + ' pr-16'}
-          value={value}
-          onChange={handleChange}
-          placeholder="10 000 000"
-          required
-        />
-        <span className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground text-sm font-semibold pointer-events-none select-none">
-          USD
-        </span>
-      </div>
-    </div>
-  )
-}
-
-const QUICK_MONTHS = [12, 24, 36, 48]
-
-function MonthsField({ value, onChange }) {
-  const num = parseInt(value) || 12
-  return (
-    <div>
-      <label className={LABEL}>Necha oyga</label>
-      <div className="flex gap-2">
-        {QUICK_MONTHS.map((m) => (
-          <button
-            key={m}
-            type="button"
-            onClick={() => onChange(String(m))}
-            className={`flex-1 py-2 rounded-lg text-sm font-semibold border transition-colors ${
-              num === m
-                ? 'bg-secondary text-secondary-foreground border-secondary'
-                : 'bg-background text-muted-foreground border-border hover:bg-secondary/50'
-            }`}
-          >
-            {m}
-          </button>
-        ))}
-      </div>
-    </div>
-  )
-}
-
 function ConvertToSaleModal({ apartment, booking, onClose, onBooked }) {
   const [form, setForm] = useState({ passport: '', passport_place: '', manzil: '' })
   const [converting, setConverting] = useState(false)
@@ -612,6 +562,46 @@ function StatusCard({ apartment, isReserved, onClose, onBooked }) {
   )
 }
 
+const CHEGIRMA_TABLE = { 30: 100, 40: 150, 50: 200, 60: 250, 70: 300, 100: 400 }
+const BONUS_TABLE = {
+  30:  [{ img: imgKonditsioner, name: 'Konditsioner' }],
+  50:  [{ img: imgKonditsioner, name: 'Konditsioner' }, { img: imgTV, name: 'TV (43)' }],
+  70:  [{ img: imgKonditsioner, name: 'Konditsioner' }, { img: imgMuzlatgich, name: 'Muzlatgich' }],
+  100: [{ img: imgKonditsioner, name: 'Konditsioner' }, { img: imgTV, name: 'TV (43)' }, { img: imgMuzlatgich, name: 'Muzlatgich' }],
+}
+const TIERS = [
+  { pct: 30, disc: 100 }, { pct: 40, disc: 150 }, { pct: 50, disc: 200 },
+  { pct: 60, disc: 250 }, { pct: 70, disc: 300 }, { pct: 100, disc: 400 },
+]
+const MUDDAT_STEPS = [36, 48, 60]
+const CHEGIRMA_BRACKETS = [100, 70, 60, 50, 40, 30]
+const BONUS_BRACKETS    = [100, 70, 50, 30]
+const CALC_KEYS = ['7','8','9','4','5','6','1','2','3','C','0','⌫']
+
+function playDiscountSound() {
+  try {
+    const ctx = new AudioContext()
+    const now = ctx.currentTime
+    function note(freq, t, dur, vol = 0.3) {
+      const osc = ctx.createOscillator()
+      const gain = ctx.createGain()
+      osc.type = 'sine'
+      osc.frequency.value = freq
+      gain.gain.setValueAtTime(0, t)
+      gain.gain.linearRampToValueAtTime(vol, t + 0.03)
+      gain.gain.exponentialRampToValueAtTime(0.001, t + dur)
+      osc.connect(gain); gain.connect(ctx.destination)
+      osc.start(t); osc.stop(t + dur)
+    }
+    note(523.25, now,        0.25, 0.28)
+    note(659.25, now + 0.10, 0.25, 0.28)
+    note(783.99, now + 0.20, 0.25, 0.28)
+    note(1046.5, now + 0.30, 0.50, 0.30)
+    note(1318.5, now + 0.32, 0.50, 0.20)
+    note(1567.98,now + 0.34, 0.50, 0.15)
+  } catch {}
+}
+
 const BRON_EMPTY = { ism: '', familiya: '', telefon: '', boshlangich: '', oylar: '12', umumiy: '', narx_m2: '' }
 const SOTISH_EMPTY = { ism: '', familiya: '', telefon: '', boshlangich: '', oylar: '12', umumiy: '', narx_m2: '', passport: '', passport_place: '', manzil: '' }
 
@@ -629,11 +619,34 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
   const [confirmPending, setConfirmPending] = useState(null) // 'bron' | 'sotish'
   const [showErrors, setShowErrors] = useState(false)
   const [showCalc, setShowCalc] = useState(false)
-  const [calc, setCalc] = useState({ narxM2: '', boshlangich: '', oylar: '12', focus: 'narxM2' })
+  const [bonusPreview, setBonusPreview] = useState(null)
+  const [calc, setCalc] = useState({ narxM2: '', boshlangich: '', oylar: '12', muddatStep: 0, focus: 'boshlangich' })
   const [phoneTarget, setPhoneTarget] = useState(null) // null | 'bron' | 'sotish'
   const longPressTimer = useRef(null)
   const longPressFired = useRef(false)
   const calcLoadFromDB = useRef(true)
+  const muddatLongPressTimer = useRef(null)
+  const muddatLongPressFired = useRef(false)
+  const prevPctBracket = useRef(null)
+
+  const triggerConfetti = useCallback(async () => {
+    const { default: confettiLib } = await import('canvas-confetti')
+    const W = window.innerWidth
+    const H = window.innerHeight
+    const colors = ['#f59e0b','#10b981','#3b82f6','#ec4899','#8b5cf6','#ef4444','#facc15','#ffffff','#00d4ff','#ff6b35']
+    function burst(ox, oy, delay = 0) {
+      setTimeout(() => {
+        const origin = { x: ox / W, y: oy / H }
+        const base = { origin, ticks: 320, colors }
+        confettiLib({ ...base, particleCount: 55, spread: 60,  startVelocity: 58, decay: 0.88, scalar: 1.0 })
+        confettiLib({ ...base, particleCount: 35, spread: 110, startVelocity: 42, decay: 0.91, scalar: 0.8 })
+        confettiLib({ ...base, particleCount: 20, spread: 160, startVelocity: 28, decay: 0.93, scalar: 1.2 })
+      }, delay)
+    }
+    burst(W * 0.5,  H * 0.50)
+    burst(W * 0.25, H * 0.45, 220)
+    burst(W * 0.75, H * 0.45, 380)
+  }, [])
 
   function calcLongPressStart(e) {
     e.preventDefault()
@@ -643,7 +656,7 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
       longPressFired.current = true
       if (navigator.vibrate) navigator.vibrate(40)
       calcLoadFromDB.current = false
-      setCalc({ narxM2: '', boshlangich: '', oylar: '12', focus: 'narxM2' })
+      setCalc({ narxM2: '', boshlangich: '', oylar: '12', muddatStep: 0, focus: 'boshlangich' })
       setShowCalc(true)
     }, 1000)
   }
@@ -656,6 +669,37 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
       setShowCalc(true)
     }
   }
+
+  // Barcha calc derivatsiyalari — bir marta hisoblanadi, qayta ishlatiladi
+  const calcDerived = useMemo(() => {
+    const narxVal  = Number(String(calc.narxM2).replace(/\s/g, ''))
+    const downVal  = Number(String(calc.boshlangich).replace(/\s/g, ''))
+    const months   = parseInt(calc.oylar) || 12
+    const baseTotal = Math.round(narxVal * apartment.size)
+    const pctOfBase = baseTotal > 0 && downVal > 0 ? Math.floor((downVal / baseTotal) * 100) : 0
+    const pctBracket = CHEGIRMA_BRACKETS.find(p => pctOfBase >= p) ?? null
+    const chegirma  = pctBracket ? CHEGIRMA_TABLE[pctBracket] : 0
+    const yakuniy   = narxVal > 0 ? Math.max(0, narxVal - chegirma) : 0
+    const total     = Math.round(yakuniy * apartment.size)
+    const percent   = total > 0 && downVal > 0 ? Math.round((downVal / total) * 100) : 0
+    const qolgan    = Math.max(0, total - downVal)
+    const monthly   = qolgan > 0 && months > 0 ? Math.round(qolgan / months) : 0
+    const bonusBracket = BONUS_BRACKETS.find(p => pctOfBase >= p) ?? null
+    const bonus     = bonusBracket ? BONUS_TABLE[bonusBracket] : null
+    return { narxVal, downVal, months, baseTotal, pctOfBase, pctBracket, chegirma, yakuniy, total, percent, qolgan, monthly, bonus }
+  }, [calc.narxM2, calc.boshlangich, calc.oylar, apartment.size])
+
+  // Chegirma bracket o'zgarganda confetti + sound
+  const { pctBracket: currentBracket } = calcDerived
+  useEffect(() => {
+    if (!showCalc || !currentBracket) return
+    if (currentBracket !== prevPctBracket.current) {
+      playDiscountSound()
+      triggerConfetti()
+      if (navigator.vibrate) navigator.vibrate([80, 40, 120, 40, 200])
+    }
+    prevPctBracket.current = currentBracket
+  }, [showCalc, currentBracket, triggerConfetti])
 
   // Kalkulyator ochilganda narxni bazadan yuklash — faqat bir marta
   useEffect(() => {
@@ -815,26 +859,31 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
     }
   }
 
-  const [calcActiveKey, setCalcActiveKey] = useState(null)
+  const keypadRef = useRef(null)
+
+  function flashKey(key) {
+    const el = keypadRef.current?.querySelector(`[data-key="${key}"]`)
+    if (!el) return
+    el.setAttribute('data-active', '1')
+    setTimeout(() => el.removeAttribute('data-active'), 150)
+  }
 
   useEffect(() => {
     if (!showCalc) return
     function onKey(e) {
       if (e.key >= '0' && e.key <= '9') {
         e.preventDefault()
-        setCalcActiveKey(e.key)
-        setTimeout(() => setCalcActiveKey(null), 150)
+        flashKey(e.key)
         setCalc(f => {
           if (f.focus === 'oylar') return f
           const raw = String(f[f.focus]).replace(/\s/g, '')
           if (raw.length >= 12) return f
-          const next = raw + e.key
-          return { ...f, [f.focus]: Number(next).toLocaleString('ru-RU').replace(/,/g, ' ') }
+          const num = Number(raw + e.key)
+          return { ...f, [f.focus]: num.toLocaleString('ru-RU').replace(/,/g, ' ') }
         })
       } else if (e.key === 'Backspace') {
         e.preventDefault()
-        setCalcActiveKey('⌫')
-        setTimeout(() => setCalcActiveKey(null), 150)
+        flashKey('⌫')
         setCalc(f => {
           if (f.focus === 'oylar') return f
           const raw = String(f[f.focus]).replace(/\s/g, '').slice(0, -1)
@@ -842,9 +891,8 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
         })
       } else if (e.key === 'Delete') {
         e.preventDefault()
-        setCalcActiveKey('C')
-        setTimeout(() => setCalcActiveKey(null), 150)
-        setCalc(f => f.focus === 'oylar' ? f : { ...f, [f.focus]: '' })
+        flashKey('C')
+        setCalc(f => f.focus === 'oylar' ? f : { ...f, [f.focus]: '', focus: 'boshlangich' })
       } else if (e.key === 'Escape') {
         e.preventDefault()
         setShowCalc(false)
@@ -855,52 +903,42 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
   }, [showCalc])
 
   const calcKeypad = (() => {
-    const narxVal = Number(String(calc.narxM2).replace(/\s/g, ''))
-    const downVal = Number(String(calc.boshlangich).replace(/\s/g, ''))
-    const months  = parseInt(calc.oylar) || 12
-    const total   = apartment.size * narxVal
 
     function pressKey(key) {
-      setCalcActiveKey(key)
-      setTimeout(() => setCalcActiveKey(null), 150)
+      flashKey(key)
       setCalc(f => {
         if (f.focus === 'oylar') return f
         const raw = String(f[f.focus]).replace(/\s/g, '')
         let next = raw
         if (key === '⌫') next = raw.slice(0, -1)
-        else if (key === 'C') next = ''
+        else if (key === 'C') return { ...f, [f.focus]: '', focus: 'boshlangich' }
         else if (raw.length < 12) next = raw + key
         const formatted = next ? Number(next).toLocaleString('ru-RU').replace(/,/g, ' ') : ''
         return { ...f, [f.focus]: formatted }
       })
     }
 
-    const KEYS = ['7','8','9','4','5','6','1','2','3','C','0','⌫']
-
     return (
-      <div className="flex flex-col gap-3 px-4 py-5 w-full h-full">
+      <div ref={keypadRef} className="flex flex-col gap-3 px-4 py-5 w-full h-full">
         <button type="button"
           onClick={() => setCalc(f => ({ ...f, focus: 'narxM2' }))}
           className={`w-full rounded-2xl border-2 text-left px-4 py-4 transition-colors shrink-0 ${calc.focus === 'narxM2' ? 'border-amber-400 bg-amber-50' : 'border-border bg-background hover:border-amber-200'}`}
         >
           <p className="text-xs text-muted-foreground mb-1">Narx/m²</p>
-          <p className={`text-2xl font-bold ${calc.narxM2 ? 'text-foreground' : 'text-muted-foreground/30'}`}>
+          <p className={`text-4xl font-bold ${calc.narxM2 ? 'text-foreground' : 'text-muted-foreground/30'}`}>
             {calc.narxM2 ? Number(String(calc.narxM2).replace(/\s/g, '')).toLocaleString('ru-RU') : '0'}
             <span className="text-sm font-normal text-muted-foreground ml-1">USD</span>
           </p>
         </button>
         <div className="grid grid-cols-3 gap-2 w-full flex-1">
-          {KEYS.map(k => (
-            <button key={k} type="button" onPointerDown={(e) => { e.preventDefault(); pressKey(k) }}
-              className={`rounded-xl text-lg font-semibold transition-all active:scale-95 select-none ${
-                calcActiveKey === k
-                  ? k === '⌫' ? 'bg-red-400 text-white border border-red-400 scale-95'
-                    : k === 'C' ? 'bg-muted-foreground/30 text-foreground border border-border scale-95'
-                    : 'bg-amber-400 text-white border border-amber-400 scale-95'
-                  : k === '⌫' ? 'bg-red-50 text-red-500 border border-red-200 hover:bg-red-100'
-                  : k === 'C' ? 'bg-muted text-muted-foreground border border-border hover:bg-muted/70'
-                  : 'bg-background border border-border text-foreground hover:bg-amber-50 hover:border-amber-300'
-              }`}
+          {CALC_KEYS.map(k => (
+            <button key={k} data-key={k} type="button" onPointerDown={(e) => { e.preventDefault(); pressKey(k) }}
+              className={`rounded-xl text-3xl font-bold transition-all active:scale-95 select-none
+                data-active:scale-95
+                ${k === '⌫' ? 'bg-red-50 text-red-500 border border-red-200 hover:bg-red-100 data-active:bg-red-400 data-active:text-white data-active:border-red-400'
+                : k === 'C'  ? 'bg-muted text-muted-foreground border border-border hover:bg-muted/70 data-active:bg-muted-foreground/30 data-active:text-foreground'
+                              : 'bg-background border border-border text-foreground hover:bg-amber-50 hover:border-amber-300 data-active:bg-amber-400 data-active:text-white data-active:border-amber-400'}
+              `}
             >{k}</button>
           ))}
         </div>
@@ -909,64 +947,191 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
   })
 
   const calcLeftPanel = (() => {
-    const narxVal = Number(String(calc.narxM2).replace(/\s/g, ''))
-    const downVal = Number(String(calc.boshlangich).replace(/\s/g, ''))
-    const months  = parseInt(calc.oylar) || 12
-    const total   = apartment.size * narxVal
-    const monthly = total > 0 ? Math.round((total - downVal) / months) : 0
-    const percent = total > 0 && downVal > 0 ? Math.round((downVal / total) * 100) : 0
-    const FIELDS  = [
-      { key: 'boshlangich', label: "Boshlang'ich",  unit: 'USD', val: calc.boshlangich },
-    ]
+    const thirdVal = MUDDAT_STEPS[calc.muddatStep ?? 0]
+    const MUDDAT_OPTIONS = [12, 24, thirdVal]
+
+    function startMuddatLP() {
+      muddatLongPressFired.current = false
+      const step = calc.muddatStep ?? 0
+      if (step >= 2) return
+      muddatLongPressTimer.current = setTimeout(() => {
+        muddatLongPressFired.current = true
+        if (navigator.vibrate) navigator.vibrate(40)
+        const nextStep = step + 1
+        const nextVal = MUDDAT_STEPS[nextStep]
+        setCalc(f => ({ ...f, muddatStep: nextStep, oylar: String(nextVal) }))
+      }, 3000)
+    }
+    function cancelMuddatLP() {
+      if (muddatLongPressTimer.current) { clearTimeout(muddatLongPressTimer.current); muddatLongPressTimer.current = null }
+    }
+
+    const { narxVal, downVal, baseTotal, pctOfBase, pctBracket, chegirma, yakuniy, total, percent, monthly, bonus } = calcDerived
+
     function transferToForm() {
-      const narxVal = Number(String(calc.narxM2).replace(/\s/g, ''))
-      const totalVal = narxVal && apartment.size > 0 ? Math.round(narxVal * apartment.size) : 0
       const setter = tab === 'sotish' ? setSotishForm : setBronForm
-      if (calc.narxM2)      setter(f => ({ ...f, narx_m2: calc.narxM2 }))
+      if (yakuniy)          setter(f => ({ ...f, narx_m2: String(yakuniy) }))
       if (calc.boshlangich) setter(f => ({ ...f, boshlangich: calc.boshlangich }))
       if (calc.oylar)       setter(f => ({ ...f, oylar: calc.oylar }))
-      if (totalVal)         setter(f => ({ ...f, umumiy: String(totalVal) }))
+      if (total)            setter(f => ({ ...f, umumiy: String(total) }))
       setShowCalc(false)
     }
+
     return (
-      <div className="flex flex-col gap-4 px-5 py-5 border-r border-border overflow-y-auto" style={{ flex: '0 0 70%' }}>
-        {/* Yuqori qator: Umumiy narx (static) + Boshlang'ich (tappable) */}
+      <div className="flex flex-col border-r border-border" style={{ flex: '0 0 70%' }}>
+      <div className="flex flex-col gap-4 px-5 py-5 flex-1 overflow-y-auto min-h-0">
+        {/* Umumiy narx + Boshlang'ich */}
         <div className="flex gap-3">
-          <div className="flex-1 rounded-2xl border-2 border-border bg-muted/40 px-4 py-3">
+          <div className={`flex-1 rounded-2xl border-2 px-4 py-3 ${chegirma > 0 ? 'border-emerald-200 bg-emerald-50/60' : 'border-border bg-muted/40'}`}>
             <p className="text-xs text-muted-foreground mb-1">Umumiy narx <span className="text-muted-foreground/50">({apartment.size} m²)</span></p>
-            <p className={`text-xl font-bold ${total > 0 ? 'text-foreground' : 'text-muted-foreground/30'}`}>
-              {total > 0 ? total.toLocaleString('ru-RU') : '—'}
-              {total > 0 && <span className="text-sm font-normal text-muted-foreground ml-1">USD</span>}
-            </p>
-          </div>
-          {FIELDS.map(({ key, label, unit, val }) => (
-            <button key={key} type="button"
-              onClick={() => setCalc(f => ({ ...f, focus: key }))}
-              className={`flex-1 rounded-2xl border-2 text-left px-4 py-3 transition-colors ${calc.focus === key ? 'border-amber-400 bg-amber-50' : 'border-border bg-background hover:border-amber-200'}`}
-            >
-              <p className="text-xs text-muted-foreground mb-1">{label}</p>
-              <p className={`text-xl font-bold ${val ? 'text-foreground' : 'text-muted-foreground/30'}`}>
-                {val ? Number(String(val).replace(/\s/g, '')).toLocaleString('ru-RU') : '0'}
-                <span className="text-sm font-normal text-muted-foreground ml-1">{unit}</span>
+            {chegirma > 0 && baseTotal > 0 ? (
+              <>
+                <div className="flex items-center gap-1.5 mb-0.5">
+                  <span className="text-sm text-muted-foreground/50 line-through">{baseTotal.toLocaleString('ru-RU')}</span>
+                  <span className="text-muted-foreground/40 text-xs">→</span>
+                  <span className="text-xl font-bold text-foreground">{total.toLocaleString('ru-RU')} <span className="text-sm font-normal text-muted-foreground">USD</span></span>
+                </div>
+                <span className="inline-flex items-center gap-1 bg-emerald-500 text-white text-xs font-semibold px-2 py-0.5 rounded-full">
+                  −{(baseTotal - total).toLocaleString('ru-RU')} $ tejaldi
+                </span>
+              </>
+            ) : (
+              <p className={`text-xl font-bold ${total > 0 ? 'text-foreground' : 'text-muted-foreground/30'}`}>
+                {total > 0 ? total.toLocaleString('ru-RU') : '—'}
+                {total > 0 && <span className="text-sm font-normal text-muted-foreground ml-1">USD</span>}
               </p>
-            </button>
-          ))}
+            )}
+          </div>
+          <button type="button"
+            onClick={() => setCalc(f => ({ ...f, focus: 'boshlangich' }))}
+            className={`flex-1 rounded-2xl border-2 text-left px-4 py-3 transition-colors ${calc.focus === 'boshlangich' ? 'border-amber-400 bg-amber-50' : 'border-border bg-background hover:border-amber-200'}`}
+          >
+            <p className="text-xs text-muted-foreground mb-1">Boshlang'ich</p>
+            <p className={`text-xl font-bold ${calc.boshlangich ? 'text-foreground' : 'text-muted-foreground/30'}`}>
+              {calc.boshlangich ? Number(String(calc.boshlangich).replace(/\s/g, '')).toLocaleString('ru-RU') : '0'}
+              <span className="text-sm font-normal text-muted-foreground ml-1">USD</span>
+            </p>
+          </button>
         </div>
 
-        {/* Oylar */}
+        {/* Chegirma darajalari */}
+        <div className="rounded-2xl border border-border bg-background overflow-hidden shrink-0">
+            <div className="px-3 py-1.5 border-b border-border bg-muted/40">
+              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Chegirma darajalari</p>
+            </div>
+            <div className="divide-y divide-border/60">
+              {TIERS.map(({ pct, disc }) => {
+                const isActive = pctBracket === pct
+                const isReached = pctOfBase >= pct
+                const threshold = baseTotal > 0 ? Math.round(baseTotal * pct / 100) : null
+                const tierBonus = BONUS_TABLE[pct] ?? null
+                return (
+                  <div key={pct} className={`flex items-center justify-between px-3 py-2 transition-all duration-300 ${isActive ? 'bg-amber-400/15' : ''}`}>
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className={`w-2 h-2 rounded-full shrink-0 transition-all duration-300 ${isActive ? 'bg-amber-500 shadow-[0_0_6px_2px_rgba(245,158,11,0.5)]' : isReached ? 'bg-emerald-400' : 'bg-border'}`} />
+                      <span className={`text-sm font-bold shrink-0 transition-colors ${isActive ? 'text-amber-700' : isReached ? 'text-emerald-700' : 'text-muted-foreground'}`}>
+                        {pct}%
+                      </span>
+                      {threshold && (
+                        <span className="text-xs text-muted-foreground/70 shrink-0">≥ {threshold.toLocaleString('ru-RU')} $</span>
+                      )}
+                      {tierBonus && (
+                        <div className="flex items-center gap-1.5 ml-1">
+                          {tierBonus.map((item, i) => (
+                            <div key={item.name} className="flex items-center gap-1">
+                              {i > 0 && <span className={`text-xs font-bold ${isActive ? 'text-amber-500' : isReached ? 'text-emerald-500' : 'text-muted-foreground'}`}>+</span>}
+                              <div className={`w-6 h-6 rounded overflow-hidden border shrink-0 ${isActive ? 'border-amber-300' : isReached ? 'border-emerald-300' : 'border-border'}`}>
+                                <img src={item.img} alt={item.name} className="w-full h-full object-cover" />
+                              </div>
+                              <span className={`text-xs font-semibold ${isActive ? 'text-amber-700' : isReached ? 'text-emerald-700' : 'text-foreground/70'}`}>{item.name}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <span className={`text-sm font-bold shrink-0 transition-colors ${isActive ? 'text-amber-600' : isReached ? 'text-emerald-600' : 'text-muted-foreground/50'}`}>
+                      −{disc} $/m²
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+
+        {/* Chegirma banner */}
+        {narxVal > 0 && chegirma > 0 && (
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
+            <p className="text-[10px] font-bold text-amber-600 uppercase tracking-widest mb-3">Chegirma faollashdi</p>
+            <div className="flex items-start justify-between gap-4">
+              {/* Chap: narx o'zgarishi */}
+              <div>
+                <p className="text-xs text-zinc-400 mb-1">Narx/m²</p>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-sm text-zinc-400 line-through">{narxVal.toLocaleString('ru-RU')} $</span>
+                  <span className="text-xs text-emerald-600 font-semibold">−{chegirma} $</span>
+                </div>
+                <p className="text-2xl font-bold text-zinc-800 leading-tight mt-0.5">
+                  {yakuniy.toLocaleString('ru-RU')} <span className="text-sm font-normal text-zinc-500">$/m²</span>
+                </p>
+              </div>
+              {/* Ajratuvchi */}
+              <div className="w-px bg-amber-200 self-stretch" />
+              {/* O'ng: foyda hisobi */}
+              <div className="text-right">
+                <p className="text-xs text-zinc-400 mb-1">Siz tejaysiz</p>
+                <p className="text-xs text-zinc-500 mb-0.5">
+                  {chegirma} $ × {apartment.size} m² =
+                </p>
+                <p className="text-2xl font-bold text-emerald-600 leading-tight">
+                  {(chegirma * apartment.size).toLocaleString('ru-RU')} <span className="text-sm font-normal">$</span>
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+        {narxVal > 0 && chegirma === 0 && downVal > 0 && (() => {
+          const need = Math.max(0, Math.round(baseTotal * 0.3) - downVal)
+          const progress = Math.min(100, Math.round((pctOfBase / 30) * 100))
+          return (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[10px] font-bold text-amber-600 uppercase tracking-widest">Chegirmaga qoldi</span>
+                <span className="text-[10px] font-semibold text-amber-500">{progress}%</span>
+              </div>
+              <div className="w-full h-1.5 bg-amber-200 rounded-full mb-2">
+                <div className="h-full bg-amber-400 rounded-full transition-all duration-300" style={{ width: `${progress}%` }} />
+              </div>
+              <p className="text-sm font-bold text-amber-700">
+                {need.toLocaleString('ru-RU')} $ <span className="font-normal text-amber-600">qo'shsangiz −100 $/m²</span>
+              </p>
+            </div>
+          )
+        })()}
+
+        {/* Muddat */}
         <div>
-          <p className={LABEL}>Oylar</p>
+          <p className={LABEL}>Muddat</p>
           <div className="flex gap-2">
-            {QUICK_MONTHS.map(m => (
-              <button key={m} type="button"
-                onClick={() => setCalc(f => ({ ...f, oylar: String(m) }))}
-                className={`flex-1 py-3 rounded-xl text-sm font-semibold border transition-colors ${parseInt(calc.oylar) === m ? 'bg-amber-500 text-white border-amber-500' : 'bg-background text-muted-foreground border-border hover:bg-amber-50'}`}
-              >{m}</button>
-            ))}
+            {MUDDAT_OPTIONS.map((m, i) => {
+              const isThird = i === 2
+              const canAdvance = isThird && (calc.muddatStep ?? 0) < 2
+              return (
+                <button key={m} type="button"
+                  onPointerDown={isThird ? (e) => { e.preventDefault(); startMuddatLP() } : undefined}
+                  onPointerUp={isThird ? (e) => { e.preventDefault(); cancelMuddatLP(); if (!muddatLongPressFired.current) setCalc(f => ({ ...f, oylar: String(m) })) } : undefined}
+                  onPointerLeave={isThird ? cancelMuddatLP : undefined}
+                  onClick={!isThird ? () => setCalc(f => ({ ...f, oylar: String(m) })) : undefined}
+                  className={`relative flex-1 py-3 rounded-xl text-sm font-semibold border transition-colors select-none touch-manipulation ${parseInt(calc.oylar) === m ? 'bg-amber-500 text-white border-amber-500' : 'bg-background text-muted-foreground border-border hover:bg-amber-50'}`}
+                >
+                  {m}
+                  {canAdvance && <span className="absolute bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-amber-400 opacity-60" />}
+                </button>
+              )
+            })}
           </div>
         </div>
 
-        {/* Oylik to'lov — flex-1 katta display */}
+        {/* Oylik to'lov */}
         <div className="flex-1 rounded-2xl border-2 border-amber-400 bg-amber-50 px-5 py-4 flex flex-col justify-center">
           <p className="text-xs text-amber-700 font-medium mb-2">Oylik to'lov</p>
           <p className={`text-4xl font-bold leading-tight ${monthly > 0 ? 'text-amber-700' : 'text-amber-300'}`}>
@@ -979,15 +1144,34 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
               <p className="text-2xl font-bold text-amber-700">{percent}% <span className="text-sm font-normal">umumiy to'lovdan</span></p>
             </div>
           )}
+          {bonus && (
+            <div className="mt-2 pt-2 border-t border-amber-300">
+              <p className="text-xs text-amber-700 mb-1.5">Bonus texnika</p>
+              <div className="flex gap-3">
+                {bonus.map(item => (
+                  <button key={item.name} type="button" onClick={() => setBonusPreview(item)}
+                    className="flex flex-col items-center gap-1 group">
+                    <div className="w-12 h-12 rounded-xl bg-white shadow-sm overflow-hidden border border-amber-200 group-active:scale-95 transition-transform">
+                      <img src={item.img} alt={item.name} className="w-full h-full object-cover" />
+                    </div>
+                    <span className="text-[10px] font-medium text-amber-800 text-center leading-tight">{item.name}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* Formaga o'tkazish */}
-        <button type="button" onClick={transferToForm}
-          disabled={!calc.boshlangich}
-          className="w-full py-3.5 rounded-xl font-semibold text-sm transition-all shrink-0 active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed bg-amber-500 hover:bg-amber-600 disabled:hover:bg-amber-500 text-white"
-        >
-          Formaga o'tkazish →
-        </button>
+      </div>
+        {/* Formaga o'tkazish — fixed bottom */}
+        <div className="px-5 py-4 border-t border-border shrink-0">
+          <button type="button" onClick={transferToForm}
+            disabled={!calc.boshlangich}
+            className="w-full py-3.5 rounded-xl font-semibold text-sm transition-all active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed bg-amber-500 hover:bg-amber-600 disabled:hover:bg-amber-500 text-white"
+          >
+            Formaga o'tkazish →
+          </button>
+        </div>
       </div>
     )
   })
@@ -1171,6 +1355,22 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
       style={{ backdropFilter: 'blur(4px)' }}
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
+      {bonusPreview && (
+        <div className="fixed inset-0 z-70 flex items-center justify-center p-6 bg-black/75"
+          onClick={() => setBonusPreview(null)}>
+          <div className="relative bg-white rounded-3xl overflow-hidden shadow-2xl max-w-sm w-full" onClick={e => e.stopPropagation()}>
+            <img src={bonusPreview.img} alt={bonusPreview.name} className="w-full aspect-square object-cover" />
+            <div className="px-5 py-4 flex items-center justify-between">
+              <p className="text-lg font-bold text-foreground">{bonusPreview.name}</p>
+              <span className="text-xs font-semibold text-amber-600 bg-amber-100 px-3 py-1 rounded-full">Bonus</span>
+            </div>
+            <button type="button" onClick={() => setBonusPreview(null)}
+              className="absolute top-3 right-3 w-8 h-8 rounded-full bg-black/40 text-white flex items-center justify-center">
+              <X size={16} />
+            </button>
+          </div>
+        </div>
+      )}
       <div className="relative w-full h-full bg-background rounded-2xl shadow-2xl border border-border flex flex-col overflow-hidden">
         {/* Header */}
         <div className="flex items-center px-5 border-b border-border shrink-0 h-24">
@@ -1199,7 +1399,7 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
           <button
             onClick={() => {
               if (showCalc) {
-                setCalc({ narxM2: '', boshlangich: '', oylar: '12', focus: 'narxM2' })
+                setCalc({ narxM2: '', boshlangich: '', oylar: '12', muddatStep: 0, focus: 'boshlangich' })
                 fetchCalcPrice()
               } else {
                 setBronForm(BRON_EMPTY); setSotishForm(SOTISH_EMPTY)
