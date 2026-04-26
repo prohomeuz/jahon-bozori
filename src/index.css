@@ -250,10 +250,17 @@
   75%       { transform: translateX(14px) rotate(12deg); }
 }
 .swipe-hint {
-  animation: swipe-hint-fade 4.5s ease both;
+  animation: swipe-hint-fade 2.5s ease both;
 }
 .swipe-hand {
   animation: swipe-hand-rock 1.2s ease-in-out 0.4s infinite;
+}
+
+@media (min-width: 1200px) {
+  .live-floors    { flex-direction: row; }
+  .live-floor-col { border-right: 1px solid #f3f4f6; }
+  .live-floor-col:last-child { border-right: none; }
+  .live-floor-col .shrink-0 { padding-top: 1rem; }
 }
 
 @media (prefers-reduced-motion: reduce) {

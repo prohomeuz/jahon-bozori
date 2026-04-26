@@ -47,11 +47,79 @@ const S_STROKE = { EMPTY: '#15803d', RESERVED: '#854d0e', SOLD: '#b91c1c', NOT_S
 const BLOCKS   = ['A', 'B', 'C']
 const DURATION = 15_000
 const LEGEND = [
-  { c: '#22c55e', l: "Bo'sh",      k: 'EMPTY'    },
-  { c: '#eab308', l: 'Bron',       k: 'RESERVED' },
-  { c: '#ef4444', l: 'Sotilgan',   k: 'SOLD'     },
-  { c: '#9ca3af', l: 'Sotilmaydi', k: 'NOT_SALE' },
+  { c: '#22c55e', k: 'EMPTY'    },
+  { c: '#eab308', k: 'RESERVED' },
+  { c: '#ef4444', k: 'SOLD'     },
+  { c: '#9ca3af', k: 'NOT_SALE' },
 ]
+const STATUS_LABEL_KEY = { EMPTY: 'empty', RESERVED: 'reserved', SOLD: 'sold', NOT_SALE: 'notSale' }
+
+const LANGS = {
+  uz: {
+    intro:      "JAHON BOZORI do'konlari sotuv va bron holatini real vaqtda kuzating.",
+    dismiss:    'Tushunarli',
+    blok:       'BLOK',
+    bolim:      "BO'LIM",
+    floor1:     '1-QAVAT',
+    floor2:     '2-QAVAT',
+    empty:      "Bo'sh",
+    reserved:   'Bron',
+    sold:       'Sotilgan',
+    notSale:    'Sotilmaydi',
+    swipeTitle: "Chapga yoki o'ngga suring",
+    swipeSub:   "Bo'limlar o'rtasida o'tish uchun",
+    errorTitle: "Ma'lumot yuklanmadi",
+    errorSub:   'Internet aloqasini tekshiring',
+    retry:      'Qayta urinish',
+    loading:    'Yuklanmoqda...',
+    block:      'Blok',
+    section:    "Bo'lim",
+    label:      "O'z",
+  },
+  ru: {
+    intro:      'Следите за статусами магазинов JAHON BOZORI — продажи и бронирования в реальном времени.',
+    dismiss:    'Понятно',
+    blok:       'БЛОК',
+    bolim:      'СЕКЦИЯ',
+    floor1:     '1-Й ЭТАЖ',
+    floor2:     '2-Й ЭТАЖ',
+    empty:      'Свободно',
+    reserved:   'Бронь',
+    sold:       'Продано',
+    notSale:    'Не прод.',
+    swipeTitle: 'Проведите влево или вправо',
+    swipeSub:   'Для перехода между секциями',
+    errorTitle: 'Данные не загружены',
+    errorSub:   'Проверьте интернет-соединение',
+    retry:      'Повторить',
+    loading:    'Загрузка...',
+    block:      'Блок',
+    section:    'Секция',
+    label:      'Рус',
+  },
+  zh: {
+    intro:      '即時追蹤 JAHON BOZORI 各商鋪的銷售與預訂狀態。',
+    dismiss:    '明白了',
+    blok:       '樓棟',
+    bolim:      '區域',
+    floor1:     '一樓',
+    floor2:     '二樓',
+    empty:      '空閒',
+    reserved:   '預訂',
+    sold:       '已售',
+    notSale:    '不出售',
+    swipeTitle: '向左或向右滑動',
+    swipeSub:   '切換不同區域',
+    errorTitle: '數據加載失敗',
+    errorSub:   '請檢查網路連接',
+    retry:      '重試',
+    loading:    '加載中...',
+    block:      '樓棟',
+    section:    '區域',
+    label:      '中文',
+  },
+}
+const LANG_KEYS = ['uz', 'ru', 'zh']
 
 const ZoomablePane = memo(function ZoomablePane({ children, zoomingRef }) {
   const containerRef = useRef(null)
@@ -269,16 +337,43 @@ export default function LivePage() {
   const [dir,           setDir]         = useState('right')
   const [paused,        setPaused]      = useState(() => sessionStorage.getItem('live_paused') === '1')
   const [showPicker,    setShowPicker]  = useState(false)
+  const [showLangModal, setShowLangModal]  = useState(false)
+  const [langModalClosing, setLangModalClosing] = useState(false)
+
+  function openLangModal()  { setLangModalClosing(false); setShowLangModal(true) }
+  function closeLangModal() { setLangModalClosing(true); setTimeout(() => setShowLangModal(false), 280) }
   const [pickerClosing, setPickerClosing] = useState(false)
   const [pickerBlock,   setPickerBlock] = useState('A')
-  const [swipeHint,     setSwipeHint]   = useState(() => !sessionStorage.getItem('live_hinted'))
+  const [lang,        setLang]        = useState(() => localStorage.getItem('live_lang') ?? 'uz')
+  const [langLoading, setLangLoading] = useState(false)
+  const t = LANGS[lang]
+  function switchLang(l) {
+    if (l === lang) return
+    setLangLoading(true)
+    setTimeout(() => {
+      localStorage.setItem('live_lang', l)
+      setLang(l)
+      setTimeout(() => setLangLoading(false), 380)
+    }, 16)
+  }
+
+  const [showIntro,     setShowIntro]   = useState(() => !sessionStorage.getItem('live_intro'))
+  const [swipeHint,     setSwipeHint]   = useState(() =>
+    !sessionStorage.getItem('live_hinted') && !!sessionStorage.getItem('live_intro')
+  )
+
+  function dismissIntro() {
+    sessionStorage.setItem('live_intro', '1')
+    setShowIntro(false)
+    if (!sessionStorage.getItem('live_hinted')) setSwipeHint(true)
+  }
 
   useEffect(() => {
     if (!swipeHint) return
     const t = setTimeout(() => {
       setSwipeHint(false)
       sessionStorage.setItem('live_hinted', '1')
-    }, 4500)
+    }, 2500)
     return () => clearTimeout(t)
   }, [swipeHint])
 
@@ -465,13 +560,13 @@ export default function LivePage() {
         <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
           <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
         </svg>
-        <span className="text-gray-800 text-base font-bold text-center">Ma'lumot yuklanmadi</span>
-        <span className="text-gray-400 text-sm text-center">Internet aloqasini tekshiring</span>
+        <span className="text-gray-800 text-base font-bold text-center">{t.errorTitle}</span>
+        <span className="text-gray-400 text-sm text-center">{t.errorSub}</span>
         <button
           onClick={() => { refetchA(); refetchB(); refetchC() }}
           className="mt-2 px-6 py-3 bg-gray-900 text-white text-sm font-bold rounded-xl active:bg-gray-700 transition-colors"
         >
-          Qayta urinish
+          {t.retry}
         </button>
       </div>
     )
@@ -480,7 +575,7 @@ export default function LivePage() {
   if (!slides.length) {
     return (
       <div className="fixed inset-0 bg-white flex items-center justify-center">
-        <span className="text-gray-400 text-sm font-medium">Yuklanmoqda...</span>
+        <span className="text-gray-400 text-sm font-medium">{t.loading}</span>
       </div>
     )
   }
@@ -492,15 +587,43 @@ export default function LivePage() {
       onTouchEnd={onTouchEnd}
       onTouchCancel={onTouchCancel}
     >
-      {/* ── TOP BANNER — faqat info ── */}
-      <div className="shrink-0 flex items-center justify-center gap-2 px-4 py-4 bg-gray-100">
-        <span className="font-black text-[20px] tracking-widest text-gray-800 leading-none uppercase">{cur?.block} BLOK</span>
-        <span className="text-gray-300 text-[20px] font-light leading-none select-none">·</span>
-        <span className="font-black text-[20px] tracking-widest text-gray-800 leading-none uppercase tabular-nums">{cur?.bolim}-BO'LIM</span>
+      {/* Til o'zgarishi — to'liq ekran overlay, har doim DOM da */}
+      <div
+        className="fixed inset-0 z-200 bg-white flex items-center justify-center"
+        style={{
+          opacity:       langLoading ? 1 : 0,
+          pointerEvents: langLoading ? 'all' : 'none',
+          transition:    langLoading ? 'none' : 'opacity 0.28s ease',
+        }}
+      >
+        <svg className="animate-spin w-8 h-8" viewBox="0 0 48 48" fill="none">
+          <circle cx="24" cy="24" r="20" stroke="#e5e7eb" strokeWidth="4"/>
+          <path d="M24 4a20 20 0 0 1 20 20" stroke="#374151" strokeWidth="4" strokeLinecap="round"/>
+        </svg>
       </div>
 
-      {/* ── KONTENT ── labellar statik, faqat rasmlar animatsiyalanadi */}
-      <div className="flex flex-col flex-1 min-h-0 relative">
+      {/* ── TOP BANNER ── */}
+      <div className="shrink-0 bg-gray-100">
+      <div className="relative flex items-center gap-2 px-4 mx-auto w-full max-w-[500px]" style={{ height: '44px' }}>
+        <span className="font-black text-[15px] tracking-widest text-gray-800 leading-none uppercase">{cur?.block} {t.blok}</span>
+        <span className="text-gray-300 text-[15px] font-light leading-none select-none">·</span>
+        <span className="font-black text-[15px] tracking-widest text-gray-800 leading-none uppercase tabular-nums">{cur?.bolim}-{t.bolim}</span>
+        {/* Til tugmasi — har doim DOM da, intro paytida ko'rinmas */}
+        <button
+          onClick={openLangModal}
+          className="absolute right-3 flex items-center gap-1 px-2.5 py-1.5 bg-white rounded-lg shadow-sm active:bg-gray-100 transition-colors"
+          style={{ opacity: showIntro ? 0 : 1, transition: 'opacity 0.4s ease', pointerEvents: showIntro ? 'none' : 'auto' }}
+        >
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+          </svg>
+          <span className="text-[11px] font-bold text-gray-600">{t.label}</span>
+        </button>
+      </div>
+      </div>
+
+      {/* ── KONTENT ── */}
+      <div className="live-floors flex flex-col flex-1 min-h-0 relative">
 
         {/* Rasm yuklanguncha spinner — overlay va dotted bg ko'rinmasin */}
         {!imgReady && (
@@ -509,6 +632,58 @@ export default function LivePage() {
               <circle cx="24" cy="24" r="20" stroke="#e5e7eb" strokeWidth="4"/>
               <path d="M24 4a20 20 0 0 1 20 20" stroke="#374151" strokeWidth="4" strokeLinecap="round"/>
             </svg>
+          </div>
+        )}
+
+        {/* Intro — faqat birinchi sessiyada */}
+        {showIntro && (
+          <div
+            className="absolute inset-0 z-50 flex flex-col items-center justify-center"
+            style={{ background: 'rgba(0,0,0,0.72)' }}
+            onClick={dismissIntro}
+          >
+            <div
+              className="bg-white px-6 py-7 w-full max-w-[500px] min-[500px]:rounded-2xl flex flex-col items-center gap-5"
+              onClick={e => e.stopPropagation()}
+            >
+              {/* Til tanlash — segmented control */}
+              <div className="flex self-stretch bg-gray-100 rounded-xl p-1 gap-0.5">
+                {LANG_KEYS.map(l => (
+                  <button
+                    key={l}
+                    onClick={() => switchLang(l)}
+                    className={`flex-1 py-2 rounded-lg text-xs font-bold tracking-wide transition-all ${
+                      lang === l
+                        ? 'bg-white text-gray-800 shadow-sm'
+                        : 'text-gray-400 active:text-gray-600'
+                    }`}
+                  >
+                    {LANGS[l].label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="w-10 h-10 rounded-full bg-gray-900 flex items-center justify-center shrink-0">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+                </svg>
+              </div>
+
+              <p className="text-gray-700 text-base font-medium text-center leading-relaxed">
+                {t.intro.split('JAHON BOZORI').map((part, i, arr) => (
+                  i < arr.length - 1
+                    ? <span key={i}>{part}<span className="font-black text-gray-900">JAHON BOZORI</span></span>
+                    : <span key={i}>{part}</span>
+                ))}
+              </p>
+
+              <button
+                onClick={dismissIntro}
+                className="w-full py-4 bg-gray-900 text-white font-black rounded-xl text-sm tracking-wide active:bg-gray-700 transition-colors"
+              >
+                {t.dismiss}
+              </button>
+            </div>
           </div>
         )}
 
@@ -527,52 +702,49 @@ export default function LivePage() {
             </div>
             {/* Matn */}
             <div className="flex flex-col items-center gap-1">
-              <span className="text-white font-black text-lg tracking-wide">Chapga yoki o'ngga suring</span>
-              <span className="text-white/70 text-sm font-medium">Bo'limlar o'rtasida o'tish uchun</span>
+              <span className="text-white font-black text-lg tracking-wide">{t.swipeTitle}</span>
+              <span className="text-white/70 text-sm font-medium">{t.swipeSub}</span>
             </div>
           </div>
         )}
 
-        {/* 1-qavat label — statik */}
-        <div className="shrink-0 flex items-center gap-2 px-4 pt-4 pb-1">
-          <span className="text-xs font-black text-gray-600 uppercase tracking-[0.22em]">1-QAVAT</span>
-          <div className="flex-1 h-px bg-gray-100" />
-        </div>
-
-        {/* Floor 1 — animatsiyalanadi */}
-        <div key={`${safeIdx}-f1`} className={`flex-1 min-h-0 px-3 ${dir === 'left' ? 'live-slide-in-left' : 'live-slide-in-right'}`}>
-          <ZoomablePane zoomingRef={zoomingRef}>
-            <OverlayPane src={src1} overlay={ov1} aptMap={map1} />
-          </ZoomablePane>
+        {/* Floor 1 wrapper */}
+        <div className="live-floor-col flex flex-col flex-1 min-h-0">
+          <div className="shrink-0 flex items-center gap-2 px-4 pt-4 pb-1">
+            <span className="text-xs font-black text-gray-600 uppercase tracking-[0.22em]">{t.floor1}</span>
+            <div className="flex-1 h-px bg-gray-100" />
+          </div>
+          <div key={`${safeIdx}-f1`} className={`flex-1 min-h-0 px-3 ${dir === 'left' ? 'live-slide-in-left' : 'live-slide-in-right'}`}>
+            <ZoomablePane zoomingRef={zoomingRef}>
+              <OverlayPane src={src1} overlay={ov1} aptMap={map1} />
+            </ZoomablePane>
+          </div>
         </div>
 
         {src2 && (
-          <>
-            {/* 2-qavat label — statik */}
+          <div className="live-floor-col flex flex-col flex-1 min-h-0">
             <div className="shrink-0 flex items-center gap-2 px-4 pt-2 pb-1">
-              <span className="text-xs font-black text-gray-600 uppercase tracking-[0.22em]">2-QAVAT</span>
+              <span className="text-xs font-black text-gray-600 uppercase tracking-[0.22em]">{t.floor2}</span>
               <div className="flex-1 h-px bg-gray-100" />
             </div>
-
-            {/* Floor 2 — animatsiyalanadi */}
             <div key={`${safeIdx}-f2`} className={`flex-1 min-h-0 px-3 ${dir === 'left' ? 'live-slide-in-left' : 'live-slide-in-right'}`}>
               <ZoomablePane zoomingRef={zoomingRef}>
                 <OverlayPane src={src2} overlay={ov2} aptMap={map2} />
               </ZoomablePane>
             </div>
-          </>
+          </div>
         )}
       </div>
 
       {/* ── BOTTOM BAR ── */}
-      <div className="shrink-0 bg-white">
-        {/* Legend — border-t bilan birlashgan, full-width, no radius */}
-        <div className="grid grid-cols-2 border-t border-gray-200">
-          {LEGEND.map(({ c, l, k }, i) => (
-            <div key={k} className={`flex items-center justify-center gap-2 py-3 ${i % 2 === 0 ? 'border-r border-gray-200' : ''} ${i < 2 ? 'border-b border-gray-200' : ''}`} style={{ opacity: (counts[k] ?? 0) > 0 ? 1 : 0.25 }}>
+      <div className="shrink-0 bg-white border-t border-gray-200">
+        <div className="mx-auto w-full max-w-[500px]">
+        <div className="grid grid-cols-2 border-b border-gray-200">
+          {LEGEND.map(({ c, k }, i) => (
+            <div key={k} className={`flex items-center justify-center gap-2 py-3 ${i % 2 === 0 ? 'border-r border-gray-200' : ''} ${i < 2 ? 'border-b border-gray-200' : ''}`} style={{}}>
               <span className="w-3.5 h-3.5 rounded-full shrink-0" style={{ background: c }} />
               <span className="text-sm font-black text-gray-900 leading-none tabular-nums">{counts[k] ?? 0}</span>
-              <span className="text-sm text-gray-500 font-medium leading-none">{l}</span>
+              <span className="text-sm text-gray-500 font-medium leading-none">{t[STATUS_LABEL_KEY[k]]}</span>
             </div>
           ))}
         </div>
@@ -628,6 +800,7 @@ export default function LivePage() {
             </svg>
           </button>
         </div>
+        </div>
       </div>
 
       {/* ── PICKER SHEET ── */}
@@ -649,7 +822,7 @@ export default function LivePage() {
 
             {/* Blok tanlash */}
             <div className="border-b border-gray-100">
-              <p className="text-[11px] font-black text-gray-500 tracking-[0.18em] uppercase px-5 pt-3 pb-2">Blok</p>
+              <p className="text-[11px] font-black text-gray-500 tracking-[0.18em] uppercase px-5 pt-3 pb-2">{t.block}</p>
               <div className="flex">
                 {BLOCKS.map((block, i) => (
                   <button
@@ -671,7 +844,7 @@ export default function LivePage() {
 
             {/* Bo'lim tanlash */}
             <div className="pb-6">
-              <p className="text-[11px] font-black text-gray-500 tracking-[0.18em] uppercase px-5 pt-3 pb-2">Bo'lim</p>
+              <p className="text-[11px] font-black text-gray-500 tracking-[0.18em] uppercase px-5 pt-3 pb-2">{t.section}</p>
               {(() => {
                 const bolimlar = pickerBlock === 'A' ? bA : pickerBlock === 'B' ? bB : bC
                 const rows = []
@@ -697,6 +870,45 @@ export default function LivePage() {
                   </div>
                 ))
               })()}
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* ── TIL TANLASH MODAL ── */}
+      {showLangModal && (
+        <>
+          <div
+            className="absolute inset-0 z-20 bg-black/30"
+            style={{ animation: langModalClosing ? 'sheet-backdrop-out 0.28s ease both' : undefined }}
+            onClick={closeLangModal}
+          />
+          <div
+            className="absolute bottom-0 left-0 right-0 z-30 bg-white rounded-t-2xl shadow-2xl"
+            style={{ animation: langModalClosing ? 'sheet-slide-down 0.28s cubic-bezier(0.4,0,0.2,1) both' : 'sheet-slide-up 0.32s cubic-bezier(0.4,0,0.2,1) both' }}
+          >
+            <div className="flex justify-center pt-3 pb-2">
+              <div className="w-10 h-1 rounded-full bg-gray-200" />
+            </div>
+            <div className="px-5 pt-2 pb-8 flex flex-col gap-2">
+              {LANG_KEYS.map(l => (
+                <button
+                  key={l}
+                  onClick={() => { closeLangModal(); switchLang(l) }}
+                  className={`flex items-center justify-between px-4 py-4 rounded-xl transition-colors ${
+                    lang === l ? 'bg-gray-900' : 'bg-gray-100 active:bg-gray-200'
+                  }`}
+                >
+                  <span className={`text-base font-black tracking-wide ${lang === l ? 'text-white' : 'text-gray-800'}`}>
+                    {LANGS[l].label}
+                  </span>
+                  {lang === l && (
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="20 6 9 17 4 12"/>
+                    </svg>
+                  )}
+                </button>
+              ))}
             </div>
           </div>
         </>
