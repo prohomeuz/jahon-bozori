@@ -1,8 +1,23 @@
 import { scryptSync, randomBytes, timingSafeEqual } from 'node:crypto'
 import { sign, verify } from 'hono/jwt'
 
-const SECRET = process.env.JWT_SECRET
-if (!SECRET) console.warn('[auth] JWT_SECRET muhit o\'zgaruvchisi topilmadi — ishonchli token yaratish uchun .env ga qo\'shing')
+const SECRET         = process.env.JWT_SECRET
+const REFRESH_SECRET = process.env.JWT_REFRESH_SECRET
+
+if (!SECRET)         console.warn('[auth] JWT_SECRET muhit o\'zgaruvchisi topilmadi')
+if (!REFRESH_SECRET) console.warn('[auth] JWT_REFRESH_SECRET muhit o\'zgaruvchisi topilmadi')
+
+const WORK_START = 8   // 08:00 Tashkent
+const WORK_END   = 20  // 20:00 Tashkent
+
+export function tashkentHour() {
+  return new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Tashkent' })).getHours()
+}
+
+export function isWorkingHours() {
+  const h = tashkentHour()
+  return h >= WORK_START && h < WORK_END
+}
 
 export function hashPassword(password) {
   const salt = randomBytes(16).toString('hex')
@@ -13,13 +28,42 @@ export function hashPassword(password) {
 export function verifyPassword(password, stored) {
   const [salt, hash] = stored.split(':')
   const expected = Buffer.from(hash, 'hex')
-  const actual = scryptSync(password, salt, 64)
+  const actual   = scryptSync(password, salt, 64)
   return timingSafeEqual(expected, actual)
 }
 
-export async function createToken(user) {
-  const exp = Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 30 // 30 kun
-  return sign({ sub: user.id, role: user.role, name: user.name, exp }, SECRET, 'HS256')
+export async function createTokenPair(user) {
+  const now = Math.floor(Date.now() / 1000)
+
+  // accessToken: 10 daqiqa
+  const accessToken = await sign(
+    { sub: user.id, role: user.role, name: user.name, exp: now + 60 * 10 },
+    SECRET, 'HS256'
+  )
+
+  // refreshToken: admin — 30 kun; salesmanager — faqat bugungi 20:00 gacha
+  let refreshExp
+  if (user.role === 'admin') {
+    refreshExp = now + 60 * 60 * 24 * 30
+  } else {
+    // Bugungi 20:00 Tashkent vaqti (UTC+5 = 15:00 UTC)
+    const d = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Tashkent' }))
+    d.setHours(WORK_END, 0, 0, 0)
+    refreshExp = Math.floor(d.getTime() / 1000)
+    // Agar hozir allaqachon 20:00 dan o'tgan bo'lsa — darhol eskirgan (0 sekund)
+    if (refreshExp <= now) refreshExp = now
+  }
+
+  const refreshToken = await sign(
+    { sub: user.id, role: user.role, name: user.name, exp: refreshExp },
+    REFRESH_SECRET, 'HS256'
+  )
+
+  return { accessToken, refreshToken }
+}
+
+export async function verifyRefresh(token) {
+  return verify(token, REFRESH_SECRET, 'HS256')
 }
 
 export async function requireAuth(c, next) {
@@ -27,10 +71,16 @@ export async function requireAuth(c, next) {
   if (!auth?.startsWith('Bearer ')) return c.json({ error: 'Unauthorized' }, 401)
   try {
     const payload = await verify(auth.slice(7), SECRET, 'HS256')
+
+    // salesmanager uchun ish vaqti tekshiruvi
+    if (payload.role === 'salesmanager' && !isWorkingHours()) {
+      return c.json({ error: 'OUTSIDE_HOURS', message: "Tizim faqat 08:00–20:00 orasida ishlaydi" }, 403)
+    }
+
     c.set('user', payload)
     await next()
   } catch {
-    return c.json({ error: 'Invalid token' }, 401)
+    return c.json({ error: 'Unauthorized' }, 401)
   }
 }
 

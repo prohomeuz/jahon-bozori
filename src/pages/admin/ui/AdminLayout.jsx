@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router'
 import { useQueryClient } from '@tanstack/react-query'
 import { getUser, getToken, removeToken, apiFetch } from '@/shared/lib/auth'
+import { startInactivityWatcher } from '@/shared/lib/inactivity'
 import { LayoutDashboard, Users, ClipboardList, LogOut, Home, PanelLeftClose, PanelLeftOpen, KeyRound, CheckCircle, Tag, Store, WifiOff, Wifi, ShieldOff } from 'lucide-react'
 
 const NAV = [
@@ -184,10 +185,35 @@ function ChangePasswordModal({ onClose }) {
   )
 }
 
+function tashkentHour() {
+  return new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Tashkent' })).getHours()
+}
+function isOutside() { const h = tashkentHour(); return h < 8 || h >= 20 }
+
+function useWorkingHours(isAdmin) {
+  const [outsideHours, setOutsideHours] = useState(() => !isAdmin && isOutside())
+
+  useEffect(() => {
+    if (isAdmin) return
+    // Hozir ish vaqtida bo'lsak — aniq 20:00 gacha bir martalik timer
+    // Tashqarida bo'lsak — darhol ko'rsatilgan, qo'shimcha timer kerak emas
+    if (isOutside()) return
+    const now    = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Tashkent' }))
+    const target = new Date(now)
+    target.setHours(20, 0, 0, 0)
+    const ms = Math.max(0, target - now)
+    const id = setTimeout(() => setOutsideHours(true), ms)
+    return () => clearTimeout(id)
+  }, [isAdmin])
+
+  return outsideHours
+}
+
 export default function AdminLayout() {
   const navigate = useNavigate()
   const user = getUser()
   const isAdmin = user?.role === 'admin'
+  const outsideHours = useWorkingHours(isAdmin)
   const [collapsed, setCollapsed] = useState(
     () => document.cookie.split(';').some(c => c.trim() === 'sidebar=collapsed')
   )
@@ -218,6 +244,11 @@ export default function AdminLayout() {
   }, [])
 
   useEffect(() => {
+    if (!user) return
+    return startInactivityWatcher()
+  }, [])
+
+  useEffect(() => {
     if (isAdmin) return
     const token = getToken()
     if (!token) return
@@ -227,8 +258,9 @@ export default function AdminLayout() {
 
     async function connect() {
       try {
-        const res = await fetch(`/api/events?token=${token}`, {
+        const res = await fetch('/api/events', {
           signal: controller.signal,
+          headers: { Authorization: `Bearer ${token}` },
         })
         if (!res.ok || !res.body) return
         const reader = res.body.getReader()
@@ -252,6 +284,11 @@ export default function AdminLayout() {
                 setTimeout(() => { removeToken(); navigate('/admin/login', { replace: true }) }, 3000)
                 return
               }
+            }
+            if (event === 'working_hours_ended') {
+              removeToken()
+              window.location.href = '/admin/login?reason=outside_hours'
+              return
             }
           }
         }
@@ -354,6 +391,27 @@ export default function AdminLayout() {
       {/* Content */}
       <main className="flex-1 overflow-y-auto min-w-0 relative">
         <Outlet />
+        {/* Ish vaqtidan tashqarida — salesmanager uchun overlay */}
+        {outsideHours && (
+          <div className="absolute inset-0 z-50 flex flex-col items-center justify-center gap-4 bg-background/80 backdrop-blur-sm">
+            <div className="flex flex-col items-center gap-4 bg-background border border-border rounded-3xl shadow-2xl px-10 py-10 max-w-sm w-full text-center">
+              <div className="w-16 h-16 rounded-full bg-amber-100 flex items-center justify-center">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+                </svg>
+              </div>
+              <div>
+                <p className="text-base font-bold text-foreground">Ish vaqti tugadi</p>
+                <p className="text-sm text-muted-foreground mt-1">Tizim faqat <span className="font-semibold text-foreground">08:00 – 20:00</span> orasida ishlaydi</p>
+              </div>
+              <p className="text-xs text-muted-foreground">Ertaga 08:00 dan davom etishingiz mumkin</p>
+              <button onClick={() => { removeToken(); navigate('/admin/login', { replace: true }) }}
+                className="mt-1 w-full py-2.5 rounded-xl bg-muted hover:bg-muted/70 text-sm font-medium transition-all">
+                Chiqish
+              </button>
+            </div>
+          </div>
+        )}
       </main>
 
       {showLogoutConfirm && (

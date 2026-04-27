@@ -89,8 +89,13 @@ try { db.exec(`CREATE TABLE IF NOT EXISTS telegram_subscribers (chat_id TEXT PRI
 // Backup metadata — oxirgi yuborilgan backup message_id va chat_id
 try { db.exec(`CREATE TABLE IF NOT EXISTS backup_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)`) } catch {}
 // Sales locks — block/bolim/floor darajasida sotuv to'xtatish
-try { db.exec(`DROP TABLE IF EXISTS sales_locks`) } catch {}
 try { db.exec(`CREATE TABLE IF NOT EXISTS sales_locks (block TEXT NOT NULL, bolim INTEGER NOT NULL, floor INTEGER NOT NULL, reason TEXT NOT NULL, locked_at TEXT NOT NULL, locked_by TEXT NOT NULL, PRIMARY KEY (block, bolim, floor))`) } catch {}
+
+// Performance indexes
+try { db.exec(`CREATE INDEX IF NOT EXISTS idx_apts_block_bolim_floor ON apartments(block, bolim, floor)`) } catch {}
+try { db.exec(`CREATE INDEX IF NOT EXISTS idx_bookings_apartment_id  ON bookings(apartment_id)`) } catch {}
+try { db.exec(`CREATE INDEX IF NOT EXISTS idx_bookings_user_id       ON bookings(user_id)`) } catch {}
+try { db.exec(`CREATE INDEX IF NOT EXISTS idx_bookings_cancelled_at  ON bookings(cancelled_at)`) } catch {}
 // is_shop — overlay config'da rect mavjud bo'lgan do'konlar (single source of truth)
 try { db.exec(`ALTER TABLE apartments ADD COLUMN is_shop INTEGER NOT NULL DEFAULT 1`) } catch {}
 try {
