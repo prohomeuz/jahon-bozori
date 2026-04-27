@@ -355,6 +355,29 @@ app.patch('/api/prices', requireAuth, requireAdmin, async (c) => {
   return c.json({ ok: true })
 })
 
+// ─── SALES LOCKS ─────────────────────────────────────────────────────────────
+
+app.get('/api/sales-locks', requireAuth, (c) => {
+  return c.json(q.allLocks.all())
+})
+
+app.post('/api/sales-locks', requireAuth, requireAdmin, async (c) => {
+  const { block, bolim, floor, reason } = await c.req.json()
+  if (!block || bolim == null || floor == null) return c.json({ error: 'block, bolim, floor required' }, 400)
+  if (!reason?.trim()) return c.json({ error: 'Sabab kiritish majburiy' }, 400)
+  const user = c.get('user')
+  const locked_at = new Date().toLocaleString('uz-UZ', { timeZone: 'Asia/Tashkent' })
+  q.upsertLock.run({ block: String(block).toUpperCase(), bolim: parseInt(bolim), floor: parseInt(floor), reason: reason.trim(), locked_at, locked_by: user?.name ?? 'Admin' })
+  return c.json({ ok: true })
+})
+
+app.delete('/api/sales-locks', requireAuth, requireAdmin, async (c) => {
+  const { block, bolim, floor } = await c.req.json()
+  if (!block || bolim == null || floor == null) return c.json({ error: 'block, bolim, floor required' }, 400)
+  q.deleteLock.run({ block: String(block).toUpperCase(), bolim: parseInt(bolim), floor: parseInt(floor) })
+  return c.json({ ok: true })
+})
+
 app.patch('/api/apartments/:id/status', requireAuth, requireAdmin, async (c) => {
   const id = c.req.param('id')
   const { status, reason } = await c.req.json()
@@ -417,7 +440,7 @@ app.get('/api/shops', requireAuth, requireAdmin, (c) => {
 
 app.post('/api/bookings', requireAuth, async (c) => {
   const user = c.get('user')
-  const { apartment_id, type, ism, familiya, boshlangich, oylar, umumiy, passport, manzil, phone, passport_place, narx_m2, assigned_user_id } = await c.req.json()
+  const { apartment_id, type, ism, familiya, boshlangich, oylar, umumiy, passport, manzil, phone, passport_place, narx_m2, chegirma_m2, asl_narx_m2, assigned_user_id } = await c.req.json()
   if (!apartment_id || !type || !ism || !familiya || !boshlangich || !oylar)
     return c.json({ error: "Majburiy maydonlar to'ldirilmagan" }, 400)
 
@@ -425,10 +448,12 @@ app.post('/api/bookings', requireAuth, async (c) => {
 
   db.exec('BEGIN')
   try {
-    const apt = db.prepare("SELECT status FROM apartments WHERE id=?").get(apartment_id)
+    const apt = db.prepare("SELECT block, bolim, floor, status FROM apartments WHERE id=?").get(apartment_id)
     if (!apt) { db.exec('ROLLBACK'); return c.json({ error: "Do'kon topilmadi" }, 404) }
     if (apt.status !== 'EMPTY') { db.exec('ROLLBACK'); return c.json({ error: "Do'kon allaqachon band yoki sotilgan" }, 409) }
-    q.insertBooking.run({ apartment_id, user_id: effective_user_id, type, ism, familiya, boshlangich, oylar: parseInt(oylar), umumiy: umumiy ?? null, passport: passport ?? null, manzil: manzil ?? null, phone: phone ?? null, passport_place: passport_place ?? null, narx_m2: narx_m2 ?? null })
+    const lock = db.prepare("SELECT reason FROM sales_locks WHERE block=? AND bolim=? AND floor=?").get(apt.block, apt.bolim, apt.floor)
+    if (lock) { db.exec('ROLLBACK'); return c.json({ error: `Sotuv to'xtatilgan: ${lock.reason}` }, 403) }
+    q.insertBooking.run({ apartment_id, user_id: effective_user_id, type, ism, familiya, boshlangich, oylar: parseInt(oylar), umumiy: umumiy ?? null, passport: passport ?? null, manzil: manzil ?? null, phone: phone ?? null, passport_place: passport_place ?? null, narx_m2: narx_m2 ?? null, chegirma_m2: chegirma_m2 ?? null, asl_narx_m2: asl_narx_m2 ?? null })
     const newStatus = type === 'sotish' ? 'SOLD' : 'RESERVED'
     q.updateStatus.run({ status: newStatus, id: apartment_id })
     const booking = q.lastBooking.get()
@@ -499,10 +524,12 @@ app.get('/api/bookings/apartment/:id', requireAuth, (c) => {
 app.patch('/api/bookings/:id/convert', requireAuth, async (c) => {
   const { sub: userId } = c.get('user')
   const id = parseInt(c.req.param('id'))
-  const booking = db.prepare('SELECT * FROM bookings WHERE id=? AND cancelled_at IS NULL').get(id)
+  const booking = db.prepare('SELECT b.*, a.block, a.bolim, a.floor FROM bookings b JOIN apartments a ON a.id=b.apartment_id WHERE b.id=? AND b.cancelled_at IS NULL').get(id)
   if (!booking) return c.json({ error: 'Topilmadi' }, 404)
   if (booking.type !== 'bron') return c.json({ error: "Faqat bron qilingan do'konni sotishga o'tkazish mumkin" }, 400)
   if (booking.user_id !== userId) return c.json({ error: "Ruxsat yo'q" }, 403)
+  const convertLock = db.prepare("SELECT reason FROM sales_locks WHERE block=? AND bolim=? AND floor=?").get(booking.block, booking.bolim, booking.floor)
+  if (convertLock) return c.json({ error: `Sotuv to'xtatilgan: ${convertLock.reason}` }, 403)
 
   const body = await c.req.json().catch(() => ({}))
   const { passport, passport_place, manzil } = body

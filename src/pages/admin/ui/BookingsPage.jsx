@@ -4,8 +4,16 @@ import { getUser, apiFetch } from '@/shared/lib/auth'
 import { useRealtimeApts } from '@/shared/hooks/useRealtimeApts'
 import { Search, Download, X, FileText, Eye, SlidersHorizontal } from 'lucide-react'
 import { ContractPDF } from '@/pages/bolim/ui/ContractPDF'
-
 const allBlockImgs = import.meta.glob('@/assets/blocks/**/*.{png,jpg,webp}', { eager: true })
+
+const PDF_BONUS_MAP = {
+  30:  ['Konditsioner'],
+  40:  ['Konditsioner'],
+  50:  ['Konditsioner', 'TV (43)'],
+  60:  ['Konditsioner', 'TV (43)'],
+  70:  ['Konditsioner', 'Muzlatgich'],
+  100: ['Konditsioner', 'TV (43)', 'Muzlatgich'],
+}
 
 function loadImg(blockId, floor, bolimNum) {
   const filename = String(bolimNum)
@@ -74,12 +82,19 @@ async function drawHighlight(imgSrc, rect, viewBox) {
     ctx.strokeStyle = '#dc2626'; ctx.lineWidth = lw; ctx.strokeRect(rect.x * sx, rect.y * sy, rect.width * sx, rect.height * sy)
     bboxVb = { x: rect.x, y: rect.y, width: rect.width, height: rect.height }
   }
-  const padY = bboxVb.height * sy * 1.2
-  const cy = Math.max(0, bboxVb.y * sy - padY)
-  const ch = Math.min(img.naturalHeight - cy, bboxVb.height * sy + padY * 2)
+  const bboxPx = bboxVb.x * sx
+  const bboxPy = bboxVb.y * sy
+  const bboxPw = bboxVb.width  * sx
+  const bboxPh = bboxVb.height * sy
+  const padX = bboxPw * 5
+  const padY = bboxPh * 1.5
+  const cx = Math.max(0, bboxPx - padX)
+  const cy = Math.max(0, bboxPy - padY)
+  const cw = Math.min(img.naturalWidth  - cx, bboxPw + padX * 2)
+  const ch = Math.min(img.naturalHeight - cy, bboxPh + padY * 2)
   const cropped = document.createElement('canvas')
-  cropped.width = img.naturalWidth; cropped.height = ch
-  cropped.getContext('2d').drawImage(canvas, 0, cy, img.naturalWidth, ch, 0, 0, img.naturalWidth, ch)
+  cropped.width = cw; cropped.height = ch
+  cropped.getContext('2d').drawImage(canvas, cx, cy, cw, ch, 0, 0, cw, ch)
   return cropped.toDataURL('image/png')
 }
 
@@ -107,19 +122,18 @@ async function downloadBookingPDF(b) {
     } catch { floorImgSrc = null }
   }
 
-  let logoSrc = null
-  try {
-    const res = await fetch('/logo.png')
-    if (res.ok) {
-      const blob2 = await res.blob()
-      logoSrc = await new Promise(resolve => {
-        const fr = new FileReader()
-        fr.onload = () => resolve(fr.result)
-        fr.onerror = () => resolve(null)
-        fr.readAsDataURL(blob2)
-      })
-    }
-  } catch {}
+  async function toDataUrl(url) {
+    try {
+      const img = new Image()
+      img.crossOrigin = 'anonymous'
+      await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = url })
+      const c = document.createElement('canvas')
+      c.width = img.naturalWidth || img.width
+      c.height = img.naturalHeight || img.height
+      c.getContext('2d').drawImage(img, 0, 0)
+      return c.toDataURL('image/png')
+    } catch { return null }
+  }
 
   const form = {
     ism: b.ism,
@@ -129,10 +143,29 @@ async function downloadBookingPDF(b) {
     oylar: String(b.oylar),
     umumiy: b.umumiy || '',
     narx_m2: b.narx_m2 || '',
+    chegirma_m2: b.chegirma_m2 || '',
+    asl_narx_m2: b.asl_narx_m2 || '',
     passport: b.passport || '',
     passport_place: b.passport_place || '',
     manzil: b.manzil || '',
   }
+
+  // Bonus items — faqat nom kerak (rasm yo'q)
+  let bonusItems = []
+  const chegirmaM2 = Number(String(b.chegirma_m2 || '').replace(/\s/g, '')) || 0
+  const aslNarxM2  = Number(String(b.asl_narx_m2 || '').replace(/\s/g, '')) || 0
+  if (chegirmaM2 > 0 && aslNarxM2 > 0 && apartment.size > 0) {
+    const baseTotal  = Math.round(aslNarxM2 * apartment.size)
+    const downVal    = Number(String(b.boshlangich || '').replace(/\s/g, '')) || 0
+    const umumiyNum  = Number(String(b.umumiy || '').replace(/\s/g, '')) || 0
+    const pctOfBase  = baseTotal > 0 && downVal > 0
+      ? (umumiyNum > 0 && downVal >= umumiyNum ? 100 : Math.floor((downVal / baseTotal) * 100))
+      : 0
+    const bracket    = [100, 70, 60, 50, 40, 30].find(p => pctOfBase >= p) ?? null
+    bonusItems       = bracket ? (PDF_BONUS_MAP[bracket] ?? []).map(name => ({ name })) : []
+  }
+
+  const logoSrc = await toDataUrl('/logo.png')
 
   const date = new Date(b.created_at).toLocaleDateString('uz-UZ', { year: 'numeric', month: 'long', day: 'numeric' })
   const blob = await pdf(
@@ -148,6 +181,7 @@ async function downloadBookingPDF(b) {
       qrDataUrl={qrDataUrl}
       managerName={b.manager_name || ''}
       logoSrc={logoSrc}
+      bonusItems={bonusItems}
     />
   ).toBlob()
   const url = URL.createObjectURL(blob)

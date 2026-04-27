@@ -66,6 +66,9 @@ try { db.exec(`ALTER TABLE bookings ADD COLUMN passport_place TEXT`) } catch {}
 try { db.exec(`ALTER TABLE bookings ADD COLUMN umumiy TEXT`) } catch {}
 // Add narx_m2 to bookings if missing (migration)
 try { db.exec(`ALTER TABLE bookings ADD COLUMN narx_m2 TEXT`) } catch {}
+// Add chegirma_m2 and asl_narx_m2 to bookings if missing (migration)
+try { db.exec(`ALTER TABLE bookings ADD COLUMN chegirma_m2 TEXT`) } catch {}
+try { db.exec(`ALTER TABLE bookings ADD COLUMN asl_narx_m2 TEXT`) } catch {}
 // Add not_sale_reason to apartments if missing (migration)
 try { db.exec(`ALTER TABLE apartments ADD COLUMN not_sale_reason TEXT`) } catch {}
 // Prices table — har bir block/bolim/floor uchun narx (USD/m²)
@@ -85,6 +88,9 @@ try {
 try { db.exec(`CREATE TABLE IF NOT EXISTS telegram_subscribers (chat_id TEXT PRIMARY KEY, first_name TEXT, joined_at TEXT NOT NULL DEFAULT (datetime('now', '+5 hours')))`) } catch {}
 // Backup metadata — oxirgi yuborilgan backup message_id va chat_id
 try { db.exec(`CREATE TABLE IF NOT EXISTS backup_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)`) } catch {}
+// Sales locks — block/bolim/floor darajasida sotuv to'xtatish
+try { db.exec(`DROP TABLE IF EXISTS sales_locks`) } catch {}
+try { db.exec(`CREATE TABLE IF NOT EXISTS sales_locks (block TEXT NOT NULL, bolim INTEGER NOT NULL, floor INTEGER NOT NULL, reason TEXT NOT NULL, locked_at TEXT NOT NULL, locked_by TEXT NOT NULL, PRIMARY KEY (block, bolim, floor))`) } catch {}
 // is_shop — overlay config'da rect mavjud bo'lgan do'konlar (single source of truth)
 try { db.exec(`ALTER TABLE apartments ADD COLUMN is_shop INTEGER NOT NULL DEFAULT 1`) } catch {}
 try {
@@ -134,7 +140,7 @@ export const q = {
   count:              db.prepare('SELECT COUNT(*) AS n FROM apartments'),
 
   // bookings
-  insertBooking:  db.prepare("INSERT INTO bookings (apartment_id,user_id,type,ism,familiya,boshlangich,oylar,umumiy,passport,manzil,phone,passport_place,narx_m2,created_at) VALUES (:apartment_id,:user_id,:type,:ism,:familiya,:boshlangich,:oylar,:umumiy,:passport,:manzil,:phone,:passport_place,:narx_m2,datetime('now', '+5 hours'))"),
+  insertBooking:  db.prepare("INSERT INTO bookings (apartment_id,user_id,type,ism,familiya,boshlangich,oylar,umumiy,passport,manzil,phone,passport_place,narx_m2,chegirma_m2,asl_narx_m2,created_at) VALUES (:apartment_id,:user_id,:type,:ism,:familiya,:boshlangich,:oylar,:umumiy,:passport,:manzil,:phone,:passport_place,:narx_m2,:chegirma_m2,:asl_narx_m2,datetime('now', '+5 hours'))"),
   lastBooking:    db.prepare('SELECT b.*, u.name AS manager_name FROM bookings b LEFT JOIN users u ON b.user_id=u.id WHERE b.id=last_insert_rowid()'),
   bookingById:    db.prepare('SELECT b.*, u.telegram_id AS manager_tg_id, u.name AS manager_name FROM bookings b LEFT JOIN users u ON b.user_id=u.id WHERE b.id=:id'),
   allBookings:    db.prepare('SELECT b.*, u.name AS manager_name FROM bookings b LEFT JOIN users u ON b.user_id=u.id WHERE b.cancelled_at IS NULL ORDER BY b.created_at DESC LIMIT :limit OFFSET :offset'),
@@ -170,6 +176,11 @@ export const q = {
     GROUP BY b.user_id
     ORDER BY total DESC
   `),
+  // sales locks
+  allLocks:    db.prepare("SELECT block, bolim, floor, reason, locked_at, locked_by FROM sales_locks"),
+  upsertLock:  db.prepare("INSERT OR REPLACE INTO sales_locks (block, bolim, floor, reason, locked_at, locked_by) VALUES (:block, :bolim, :floor, :reason, :locked_at, :locked_by)"),
+  deleteLock:  db.prepare("DELETE FROM sales_locks WHERE block=:block AND bolim=:bolim AND floor=:floor"),
+
   // prices
   getPrice:        db.prepare("SELECT price FROM prices WHERE block=:block AND bolim=:bolim AND floor=:floor"),
   upsertPrice:     db.prepare("INSERT OR REPLACE INTO prices (block, bolim, floor, price) VALUES (:block, :bolim, :floor, :price)"),

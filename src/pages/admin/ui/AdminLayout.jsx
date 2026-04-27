@@ -2,14 +2,15 @@ import { useEffect, useRef, useState } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router'
 import { useQueryClient } from '@tanstack/react-query'
 import { getUser, getToken, removeToken, apiFetch } from '@/shared/lib/auth'
-import { LayoutDashboard, Users, ClipboardList, LogOut, Home, PanelLeftClose, PanelLeftOpen, KeyRound, CheckCircle, Tag, Store, WifiOff, Wifi } from 'lucide-react'
+import { LayoutDashboard, Users, ClipboardList, LogOut, Home, PanelLeftClose, PanelLeftOpen, KeyRound, CheckCircle, Tag, Store, WifiOff, Wifi, ShieldOff } from 'lucide-react'
 
 const NAV = [
-  { to: '/admin',          label: 'Dashboard',       icon: LayoutDashboard, end: true },
-  { to: '/admin/bookings', label: 'Bitimlar',         icon: ClipboardList },
-  { to: '/admin/shops',    label: "Do'konlar",        icon: Store,          adminOnly: true },
-  { to: '/admin/managers', label: 'Salesmanagerlar',  icon: Users,          adminOnly: true },
-  { to: '/admin/prices',   label: 'Narxlar',          icon: Tag,            adminOnly: true },
+  { to: '/admin',             label: 'Dashboard',          icon: LayoutDashboard, end: true },
+  { to: '/admin/bookings',    label: 'Bitimlar',            icon: ClipboardList },
+  { to: '/admin/shops',       label: "Do'konlar",           icon: Store,           adminOnly: true },
+  { to: '/admin/managers',    label: 'Salesmanagerlar',     icon: Users,           adminOnly: true },
+  { to: '/admin/prices',      label: 'Narxlar',             icon: Tag,             adminOnly: true },
+  { to: '/admin/sales-lock',  label: "Sotuvni to'xtatish",  icon: ShieldOff,       adminOnly: true },
 ]
 
 const PAD = ['1','2','3','4','5','6','7','8','9','','0','⌫']

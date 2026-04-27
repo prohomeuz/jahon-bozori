@@ -96,33 +96,48 @@ async function drawHighlight(imgSrc, rect, viewBox) {
     bboxVb = { x: rect.x, y: rect.y, width: rect.width, height: rect.height }
   }
 
-  // --- Crop vertically (Y axis) only — keep full width, cut height to apartment row ---
+  // --- Crop both axes — apartment always centered, burchak do'kon ham ko'rinadi ---
+  const bboxPx = bboxVb.x * sx
   const bboxPy = bboxVb.y * sy
+  const bboxPw = bboxVb.width  * sx
   const bboxPh = bboxVb.height * sy
-  const padY = bboxPh * 1.2  // 1.2× apartment height as vertical padding
+  const padX = bboxPw * 5    // 5× kenglik — PDF box 4:1 aspect ratio uchun
+  const padY = bboxPh * 1.5  // 1.5× balandlik
+  const cx = Math.max(0, bboxPx - padX)
   const cy = Math.max(0, bboxPy - padY)
+  const cw = Math.min(img.naturalWidth  - cx, bboxPw + padX * 2)
   const ch = Math.min(img.naturalHeight - cy, bboxPh + padY * 2)
 
   const cropped = document.createElement('canvas')
-  cropped.width  = img.naturalWidth  // full width
+  cropped.width  = cw
   cropped.height = ch
-  cropped.getContext('2d').drawImage(canvas, 0, cy, img.naturalWidth, ch, 0, 0, img.naturalWidth, ch)
+  cropped.getContext('2d').drawImage(canvas, cx, cy, cw, ch, 0, 0, cw, ch)
 
   return cropped.toDataURL('image/png')
 }
 
+// react-pdf doesn't support WebP — convert to PNG via canvas
 async function imgToDataUrl(url) {
   try {
-    const res = await fetch(url)
-    if (!res.ok) return null
-    const blob = await res.blob()
-    return new Promise(resolve => {
-      const fr = new FileReader()
-      fr.onload = () => resolve(fr.result)
-      fr.onerror = () => resolve(null)
-      fr.readAsDataURL(blob)
-    })
+    const img = new Image()
+    img.crossOrigin = 'anonymous'
+    await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = url })
+    const canvas = document.createElement('canvas')
+    canvas.width = img.naturalWidth || img.width
+    canvas.height = img.naturalHeight || img.height
+    canvas.getContext('2d').drawImage(img, 0, 0)
+    return canvas.toDataURL('image/png')
   } catch { return null }
+}
+
+// Bonus bracket → items (PDF uchun)
+const PDF_BONUS_TABLE = {
+  30:  ['Konditsioner'],
+  40:  ['Konditsioner'],
+  50:  ['Konditsioner', 'TV (43)'],
+  60:  ['Konditsioner', 'TV (43)'],
+  70:  ['Konditsioner', 'Muzlatgich'],
+  100: ['Konditsioner', 'TV (43)', 'Muzlatgich'],
 }
 
 async function downloadContractPDF({ apartment, floor, blockId, bolimNum, form, type, managerName }) {
@@ -130,12 +145,27 @@ async function downloadContractPDF({ apartment, floor, blockId, bolimNum, form, 
   const qrImg = await import('@/assets/qrcode.png')
   const qrDataUrl = qrImg.default
 
+  // Bonus items — chegirma bracketini form dan hisoblaymiz (faqat nom kerak, rasm yo'q)
+  const chegirmaM2 = Number(String(form.chegirma_m2 || '').replace(/\s/g, '')) || 0
+  const aslNarxM2  = Number(String(form.asl_narx_m2 || '').replace(/\s/g, '')) || 0
+  let bonusDataItems = []
+  if (chegirmaM2 > 0 && aslNarxM2 > 0) {
+    const baseTotal  = Math.round(aslNarxM2 * apartment.size)
+    const downVal    = Number(String(form.boshlangich || '').replace(/\s/g, '')) || 0
+    const umumiyNum  = Number(String(form.umumiy || '').replace(/\s/g, '')) || 0
+    // boshlangich chegirmali totalni to'liq qoplasa — 100% tier (cap sababli pctOfBase past chiqmasin)
+    const pctOfBase  = baseTotal > 0 && downVal > 0
+      ? (umumiyNum > 0 && downVal >= umumiyNum ? 100 : Math.floor((downVal / baseTotal) * 100))
+      : 0
+    const bracket    = [100, 70, 60, 50, 40, 30].find(p => pctOfBase >= p) ?? null
+    bonusDataItems   = bracket ? (PDF_BONUS_TABLE[bracket] ?? []).map(name => ({ name })) : []
+  }
+
   const [logoSrc, rawFloorImg] = await Promise.all([
     imgToDataUrl('/logo.png'),
     Promise.resolve(loadImg(blockId, floor, bolimNum)),
   ])
 
-  // Highlight apartment on floor plan; always convert to data URL for PDF renderer
   let floorImgSrc = null
   if (rawFloorImg) {
     try {
@@ -158,6 +188,7 @@ async function downloadContractPDF({ apartment, floor, blockId, bolimNum, form, 
       managerName={managerName}
       qrDataUrl={qrDataUrl}
       logoSrc={logoSrc}
+      bonusItems={bonusDataItems}
     />
   ).toBlob()
   return blob
@@ -255,11 +286,15 @@ function FullPhoneNumpad({ value, onChange, onClose }) {
   }, [value]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <div className="flex flex-col h-full w-full p-3 gap-2">
+    <div className="flex flex-col h-full w-full px-3 pt-2 pb-3 gap-5">
       <div className="flex items-center justify-between shrink-0">
         <span className="text-xs font-medium text-muted-foreground">Telefon raqam</span>
         <button type="button" onClick={onClose}
-          className="text-xs text-muted-foreground hover:text-foreground transition-colors px-1">✕</button>
+          className="w-9 h-9 flex items-center justify-center rounded-full bg-muted hover:bg-muted-foreground/20 active:scale-90 transition-all text-muted-foreground hover:text-foreground">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+            <line x1="2" y1="2" x2="14" y2="14"/><line x1="14" y1="2" x2="2" y2="14"/>
+          </svg>
+        </button>
       </div>
       <div className="flex-1 grid grid-cols-3 gap-2" style={{ gridTemplateRows: 'repeat(4, 1fr)' }}>
         {PHONE_KEYS.map((k, i) =>
@@ -267,8 +302,8 @@ function FullPhoneNumpad({ value, onChange, onClose }) {
           k === '⌫' ? (
             <button key={i} type="button"
               onPointerDown={e => { e.preventDefault(); flash('⌫'); press('⌫') }}
-              className={`rounded-2xl text-muted-foreground flex items-center justify-center active:scale-95 transition-all select-none touch-manipulation ${activeKey === '⌫' ? 'bg-primary/20 scale-95' : 'bg-muted/60'}`}>
-              <svg width="20" height="15" viewBox="0 0 24 18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              className={`rounded-xl flex items-center justify-center active:scale-95 transition-all select-none touch-manipulation ${activeKey === '⌫' ? 'bg-red-400 text-white scale-95' : 'bg-red-50 text-red-500 border border-red-200 hover:bg-red-100'}`}>
+              <svg width="24" height="18" viewBox="0 0 24 18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M9 3H20a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H9L3 9z"/>
                 <line x1="13" y1="7" x2="17" y2="11"/><line x1="17" y1="7" x2="13" y2="11"/>
               </svg>
@@ -276,7 +311,7 @@ function FullPhoneNumpad({ value, onChange, onClose }) {
           ) : (
             <button key={i} type="button"
               onPointerDown={e => { e.preventDefault(); flash(k); press(k) }}
-              className={`rounded-2xl text-foreground text-xl font-semibold flex items-center justify-center active:scale-95 transition-all select-none touch-manipulation ${activeKey === k ? 'bg-primary text-primary-foreground scale-95' : 'bg-muted/60 hover:bg-muted'}`}>
+              className={`rounded-xl text-3xl font-bold flex items-center justify-center active:scale-95 transition-all select-none touch-manipulation ${activeKey === k ? 'bg-amber-400 text-white scale-95 border-amber-400' : 'bg-background border border-border text-foreground hover:bg-amber-50 hover:border-amber-300'}`}>
               {k}
             </button>
           )
@@ -565,7 +600,9 @@ function StatusCard({ apartment, isReserved, onClose, onBooked }) {
 const CHEGIRMA_TABLE = { 30: 100, 40: 150, 50: 200, 60: 250, 70: 300, 100: 400 }
 const BONUS_TABLE = {
   30:  [{ img: imgKonditsioner, name: 'Konditsioner' }],
+  40:  [{ img: imgKonditsioner, name: 'Konditsioner' }],
   50:  [{ img: imgKonditsioner, name: 'Konditsioner' }, { img: imgTV, name: 'TV (43)' }],
+  60:  [{ img: imgKonditsioner, name: 'Konditsioner' }, { img: imgTV, name: 'TV (43)' }],
   70:  [{ img: imgKonditsioner, name: 'Konditsioner' }, { img: imgMuzlatgich, name: 'Muzlatgich' }],
   100: [{ img: imgKonditsioner, name: 'Konditsioner' }, { img: imgTV, name: 'TV (43)' }, { img: imgMuzlatgich, name: 'Muzlatgich' }],
 }
@@ -575,7 +612,7 @@ const TIERS = [
 ]
 const MUDDAT_STEPS = [36, 48, 60]
 const CHEGIRMA_BRACKETS = [100, 70, 60, 50, 40, 30]
-const BONUS_BRACKETS    = [100, 70, 50, 30]
+const BONUS_BRACKETS    = [100, 70, 60, 50, 40, 30]
 const CALC_KEYS = ['7','8','9','4','5','6','1','2','3','C','0','⌫']
 
 function playDiscountSound() {
@@ -602,7 +639,7 @@ function playDiscountSound() {
   } catch {}
 }
 
-const BRON_EMPTY = { ism: '', familiya: '', telefon: '', boshlangich: '', oylar: '12', umumiy: '', narx_m2: '' }
+const BRON_EMPTY = { ism: '', familiya: '', telefon: '', boshlangich: '', oylar: '12', umumiy: '', narx_m2: '', chegirma_m2: '', asl_narx_m2: '' }
 const SOTISH_EMPTY = { ism: '', familiya: '', telefon: '', boshlangich: '', oylar: '12', umumiy: '', narx_m2: '', passport: '', passport_place: '', manzil: '' }
 
 export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, onBooked }) {
@@ -622,6 +659,7 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
   const [bonusPreview, setBonusPreview] = useState(null)
   const [calc, setCalc] = useState({ narxM2: '', boshlangich: '', oylar: '12', muddatStep: 0, focus: 'boshlangich' })
   const [phoneTarget, setPhoneTarget] = useState(null) // null | 'bron' | 'sotish'
+  const [sendSms, setSendSms] = useState(false)
   const longPressTimer = useRef(null)
   const longPressFired = useRef(false)
   const calcLoadFromDB = useRef(true)
@@ -681,9 +719,12 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
     const chegirma  = pctBracket ? CHEGIRMA_TABLE[pctBracket] : 0
     const yakuniy   = narxVal > 0 ? Math.max(0, narxVal - chegirma) : 0
     const total     = Math.round(yakuniy * apartment.size)
-    const percent   = total > 0 && downVal > 0 ? Math.round((downVal / total) * 100) : 0
+    const percent   = Math.min(100, pctOfBase)
     const qolgan    = Math.max(0, total - downVal)
-    const monthly   = qolgan > 0 && months > 0 ? Math.round(qolgan / months) : 0
+    // 100% to'lagunicha oylik to'lov ko'rinadi; downVal chegirmali_totaldan oshib ketsa
+    // (85–99% zona), qolgan baseTotal bo'yicha hisoblanadi
+    const qolganDisplay = qolgan > 0 ? qolgan : (pctOfBase < 100 ? Math.max(0, baseTotal - downVal) : 0)
+    const monthly   = qolganDisplay > 0 && months > 0 ? Math.round(qolganDisplay / months) : 0
     const bonusBracket = BONUS_BRACKETS.find(p => pctOfBase >= p) ?? null
     const bonus     = bonusBracket ? BONUS_TABLE[bonusBracket] : null
     return { narxVal, downVal, months, baseTotal, pctOfBase, pctBracket, chegirma, yakuniy, total, percent, qolgan, monthly, bonus }
@@ -794,6 +835,8 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
           oylar: parseInt(form.oylar),
           umumiy: form.umumiy || null,
           narx_m2: form.narx_m2 || null,
+          chegirma_m2: form.chegirma_m2 || null,
+          asl_narx_m2: form.asl_narx_m2 || null,
           phone: form.telefon || null,
           passport: form.passport || null,
           passport_place: form.passport_place || null,
@@ -810,8 +853,8 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
       onBooked?.()
       setBooked({ form, type, bookingId: booking.id, managerName: effectiveManagerName })
 
-      // Faqat bron uchun SMS yuborish (fire-and-forget)
-      if (type === 'bron' && form.telefon) {
+      // Faqat bron uchun SMS yuborish (fire-and-forget) — faqat checkbox yoqilganda
+      if (type === 'bron' && form.telefon && sendSms) {
         fetch('https://backend.prohome.uz/api/v1/sms/send-congratulation', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -970,10 +1013,15 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
 
     function transferToForm() {
       const setter = tab === 'sotish' ? setSotishForm : setBronForm
-      if (yakuniy)          setter(f => ({ ...f, narx_m2: String(yakuniy) }))
-      if (calc.boshlangich) setter(f => ({ ...f, boshlangich: calc.boshlangich }))
-      if (calc.oylar)       setter(f => ({ ...f, oylar: calc.oylar }))
-      if (total)            setter(f => ({ ...f, umumiy: String(total) }))
+      setter(f => ({
+        ...f,
+        narx_m2:      yakuniy ? String(yakuniy) : f.narx_m2,
+        boshlangich:  total > 0 && downVal > total ? String(total) : (calc.boshlangich || f.boshlangich),
+        oylar:        calc.oylar || f.oylar,
+        umumiy:       total ? String(total) : f.umumiy,
+        chegirma_m2:  chegirma > 0 ? String(chegirma) : '',
+        asl_narx_m2:  chegirma > 0 ? String(narxVal) : '',
+      }))
       setShowCalc(false)
     }
 
@@ -1024,7 +1072,7 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
                 const isActive = pctBracket === pct
                 const isReached = pctOfBase >= pct
                 const threshold = baseTotal > 0 ? Math.round(baseTotal * pct / 100) : null
-                const tierBonus = BONUS_TABLE[pct] ?? null
+
                 return (
                   <div key={pct} className={`flex items-center justify-between px-3 py-2 transition-all duration-300 ${isActive ? 'bg-amber-400/15' : ''}`}>
                     <div className="flex items-center gap-2 min-w-0">
@@ -1035,19 +1083,6 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
                       {threshold && (
                         <span className="text-xs text-muted-foreground/70 shrink-0">≥ {threshold.toLocaleString('ru-RU')} $</span>
                       )}
-                      {tierBonus && (
-                        <div className="flex items-center gap-1.5 ml-1">
-                          {tierBonus.map((item, i) => (
-                            <div key={item.name} className="flex items-center gap-1">
-                              {i > 0 && <span className={`text-xs font-bold ${isActive ? 'text-amber-500' : isReached ? 'text-emerald-500' : 'text-muted-foreground'}`}>+</span>}
-                              <div className={`w-6 h-6 rounded overflow-hidden border shrink-0 ${isActive ? 'border-amber-300' : isReached ? 'border-emerald-300' : 'border-border'}`}>
-                                <img src={item.img} alt={item.name} className="w-full h-full object-cover" />
-                              </div>
-                              <span className={`text-xs font-semibold ${isActive ? 'text-amber-700' : isReached ? 'text-emerald-700' : 'text-foreground/70'}`}>{item.name}</span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
                     </div>
                     <span className={`text-sm font-bold shrink-0 transition-colors ${isActive ? 'text-amber-600' : isReached ? 'text-emerald-600' : 'text-muted-foreground/50'}`}>
                       −{disc} $/m²
@@ -1056,6 +1091,145 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
                 )
               })}
             </div>
+
+            {/* Keyingi bonus milestone motivatsiyasi */}
+            {narxVal > 0 && (() => {
+              const BONUS_MS = [
+                { pct: 30,  disc: 100, items: [{ img: imgKonditsioner, name: 'Konditsioner' }] },
+                { pct: 50,  disc: 200, items: [{ img: imgKonditsioner, name: 'Konditsioner' }, { img: imgTV, name: 'TV (43)' }] },
+                { pct: 70,  disc: 300, items: [{ img: imgKonditsioner, name: 'Konditsioner' }, { img: imgMuzlatgich, name: 'Muzlatgich' }] },
+                { pct: 100, disc: 400, items: [{ img: imgKonditsioner, name: 'Konditsioner' }, { img: imgTV, name: 'TV (43)' }, { img: imgMuzlatgich, name: 'Muzlatgich' }] },
+              ]
+              const nextMs   = BONUS_MS.find(m => pctOfBase < m.pct)
+              if (!nextMs) return null
+              const prevMs   = BONUS_MS.slice().reverse().find(m => pctOfBase >= m.pct)
+              const nextAmt  = baseTotal > 0 ? Math.round(baseTotal * nextMs.pct / 100) : 0
+              const prevAmt  = prevMs && baseTotal > 0 ? Math.round(baseTotal * prevMs.pct / 100) : 0
+              const needed   = Math.max(0, nextAmt - downVal)
+              const rangeLen = nextAmt - prevAmt
+              const progress = rangeLen > 0 ? Math.min(100, Math.round(((downVal - prevAmt) / rangeLen) * 100)) : 0
+              return (
+                <div className="border-t border-border/60 px-3 py-3">
+                  <div className="rounded-2xl bg-amber-50 border border-amber-200 px-5 py-4">
+
+                    {/* Sarlavha: qancha qoldi */}
+                    <div className="flex items-end justify-between mb-4">
+                      <div>
+                        <p className="text-xs text-amber-500 font-medium mb-1">Keyingi darajaga</p>
+                        <p className="text-3xl font-bold text-amber-700 leading-none">
+                          {needed.toLocaleString('ru-RU')}
+                          <span className="text-lg font-semibold ml-1">$</span>
+                          <span className="text-sm font-normal text-amber-500 ml-1">qo'shsangiz</span>
+                        </p>
+                      </div>
+                      {/* Chegirma foyda */}
+                      <div className="text-right">
+                        <p className="text-[10px] text-amber-500 mb-1">{nextMs.pct}% chegirma</p>
+                        <p className="text-2xl font-bold text-emerald-600 leading-none">−{nextMs.disc} <span className="text-sm font-normal">$/m²</span></p>
+                        <p className="text-xs text-emerald-500 mt-0.5">= {(nextMs.disc * apartment.size).toLocaleString('ru-RU')} $ tejash</p>
+                      </div>
+                    </div>
+
+                    {/* Bonus texnikalar — faqat YANGI (qo'shimcha) itemlar */}
+                    {(() => {
+                      const displayItems = nextMs.items
+                      return (
+                        <div className="flex items-center gap-2 mb-4">
+                          <span className="text-xs text-amber-600 font-semibold shrink-0">Bonus:</span>
+                          <div className="flex items-center gap-1.5">
+                            {displayItems.map((item, i) => (
+                              <div key={item.name} className="flex items-center gap-1">
+                                {i > 0 && <span className="text-amber-400 font-bold text-xs">+</span>}
+                                <div className="w-9 h-9 rounded-xl overflow-hidden border-2 border-amber-400">
+                                  <img src={item.img} alt={item.name} className="w-full h-full object-cover" />
+                                </div>
+                                <span className="text-xs font-semibold text-amber-800">{item.name}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )
+                    })()}
+
+                    {/* Progress bar */}
+                    <div className="w-full h-3 bg-amber-200 rounded-full overflow-hidden">
+                      <div className="h-full bg-amber-400 rounded-full transition-all duration-500" style={{ width: `${progress}%` }} />
+                    </div>
+                    <div className="flex justify-between mt-1.5">
+                      <span className="text-xs text-amber-600 font-semibold">{downVal.toLocaleString('ru-RU')} $</span>
+                      <span className="text-xs text-amber-400">{nextAmt.toLocaleString('ru-RU')} $</span>
+                    </div>
+
+                  </div>
+                </div>
+              )
+            })()}
+
+            {/* Bonus stepper */}
+            {(() => {
+              const MILESTONES = [
+                { pct: 30,  items: [{ img: imgKonditsioner, name: 'Konditsioner' }] },
+                { pct: 50,  items: [{ img: imgKonditsioner, name: 'Konditsioner' }, { img: imgTV, name: 'TV (43)' }] },
+                { pct: 70,  items: [{ img: imgKonditsioner, name: 'Konditsioner' }, { img: imgMuzlatgich, name: 'Muzlatgich' }] },
+                { pct: 100, items: [{ img: imgKonditsioner, name: 'Konditsioner' }, { img: imgTV, name: 'TV (43)' }, { img: imgMuzlatgich, name: 'Muzlatgich' }] },
+              ]
+              const reachedCount = MILESTONES.filter(m => pctOfBase >= m.pct).length
+              // Track fill: 0 steps = 0%, 1 = 0%, 2 = 33%, 3 = 66%, 4 = 100%
+              const trackFill = reachedCount <= 1 ? (reachedCount === 0 ? 0 : 0) : ((reachedCount - 1) / (MILESTONES.length - 1)) * 100
+              return (
+                <div className="border-t border-border/60 px-4 pt-4 pb-3">
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-4">Bonus texnikalar</p>
+                  <div className="relative flex justify-between items-start">
+                    {/* Track bg — circle center to circle center */}
+                    <div className="absolute top-5 left-5 right-5 h-0.5 bg-border rounded-full" />
+                    {/* Track fill */}
+                    <div
+                      className="absolute top-5 left-5 h-0.5 bg-linear-to-r from-emerald-400 to-amber-400 rounded-full transition-all duration-700 ease-out"
+                      style={{ width: `calc((100% - 40px) * ${trackFill} / 100)` }}
+                    />
+                    {MILESTONES.map(({ pct, items }, idx) => {
+                      const reached = pctOfBase >= pct
+                      const active  = reachedCount - 1 === idx
+                      return (
+                        <div key={pct} className="relative flex flex-col items-center gap-2" style={{ width: '25%' }}>
+                          {/* Step circle */}
+                          <div className={`relative w-12 h-12 rounded-full flex items-center justify-center font-bold text-sm border-2 transition-all duration-400 ${
+                            active  ? 'bg-amber-400 border-amber-500 text-white shadow-lg shadow-amber-200/60 scale-110'
+                            : reached ? 'bg-emerald-400 border-emerald-500 text-white'
+                            : 'bg-muted border-border text-muted-foreground/60'
+                          }`}>
+                            {pct}%
+                            {active && <span className="absolute inset-0 rounded-full animate-ping bg-amber-400 opacity-20" />}
+                          </div>
+                          {/* Item images */}
+                          <div className="flex flex-wrap justify-center gap-1">
+                            {items.map(item => (
+                              <div key={item.name} className={`w-10 h-10 rounded-xl overflow-hidden border-2 transition-all duration-400 ${
+                                active  ? 'border-amber-300 shadow-md shadow-amber-100'
+                                : reached ? 'border-emerald-300 shadow-sm'
+                                : 'border-border opacity-55'
+                              }`}>
+                                <img src={item.img} alt={item.name} className="w-full h-full object-cover" loading="lazy" />
+                              </div>
+                            ))}
+                          </div>
+                          {/* Item names */}
+                          <div className="flex flex-col items-center gap-0.5">
+                            {items.map(item => (
+                              <span key={item.name} className={`text-[10px] font-semibold leading-tight text-center transition-colors ${
+                                active  ? 'text-amber-600'
+                                : reached ? 'text-emerald-600'
+                                : 'text-muted-foreground/60'
+                              }`}>{item.name}</span>
+                            ))}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )
+            })()}
           </div>
 
         {/* Chegirma banner */}
@@ -1089,27 +1263,8 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
             </div>
           </div>
         )}
-        {narxVal > 0 && chegirma === 0 && downVal > 0 && (() => {
-          const need = Math.max(0, Math.round(baseTotal * 0.3) - downVal)
-          const progress = Math.min(100, Math.round((pctOfBase / 30) * 100))
-          return (
-            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[10px] font-bold text-amber-600 uppercase tracking-widest">Chegirmaga qoldi</span>
-                <span className="text-[10px] font-semibold text-amber-500">{progress}%</span>
-              </div>
-              <div className="w-full h-1.5 bg-amber-200 rounded-full mb-2">
-                <div className="h-full bg-amber-400 rounded-full transition-all duration-300" style={{ width: `${progress}%` }} />
-              </div>
-              <p className="text-sm font-bold text-amber-700">
-                {need.toLocaleString('ru-RU')} $ <span className="font-normal text-amber-600">qo'shsangiz −100 $/m²</span>
-              </p>
-            </div>
-          )
-        })()}
-
-        {/* Muddat */}
-        <div>
+        {/* Muddat — 100% to'lagunicha ko'rinadi */}
+        {pctOfBase < 100 && <div>
           <p className={LABEL}>Muddat</p>
           <div className="flex gap-2">
             {MUDDAT_OPTIONS.map((m, i) => {
@@ -1129,7 +1284,7 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
               )
             })}
           </div>
-        </div>
+        </div>}
 
         {/* Oylik to'lov */}
         <div className="flex-1 rounded-2xl border-2 border-amber-400 bg-amber-50 px-5 py-4 flex flex-col justify-center">
@@ -1188,6 +1343,22 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
             onClose={() => setPhoneTarget(null)}
             error={bronErrors.telefon}
           />
+          <button
+            type="button"
+            onClick={() => setSendSms(v => !v)}
+            className="flex items-center gap-3 w-full text-left group"
+          >
+            <span className={`w-5 h-5 rounded flex items-center justify-center border-2 shrink-0 transition-colors ${sendSms ? 'bg-amber-500 border-amber-500' : 'border-border bg-background'}`}>
+              {sendSms && (
+                <svg viewBox="0 0 12 10" className="w-3 h-3" fill="none">
+                  <path d="M1 5l3.5 3.5L11 1" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              )}
+            </span>
+            <span className="text-sm text-muted-foreground group-hover:text-foreground transition-colors">
+              SMS xabar yuborish (tabriklash)
+            </span>
+          </button>
           {(bronForm.boshlangich || bronForm.narx_m2) ? (
             <div className="flex-1 rounded-2xl border-2 border-amber-200 bg-amber-50 px-5 py-4 flex flex-col justify-between">
               <div className="grid grid-cols-3 gap-4">
@@ -1195,10 +1366,11 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
                   <p className="text-xs text-amber-700 mb-1">Kafolat summasi</p>
                   <p className="text-xl font-bold text-foreground">{bronForm.boshlangich || '—'} <span className="text-sm font-normal text-muted-foreground">USD</span></p>
                   {(() => {
-                    const down  = Number(String(bronForm.boshlangich || '').replace(/\s/g, ''))
-                    const narx  = Number(String(bronForm.narx_m2 || '').replace(/\s/g, ''))
-                    const total = narx > 0 ? Math.round(narx * apartment.size) : 0
-                    const pct   = total > 0 && down > 0 ? Math.round((down / total) * 100) : 0
+                    const down     = Number(String(bronForm.boshlangich || '').replace(/\s/g, ''))
+                    const narx     = Number(String(bronForm.narx_m2 || '').replace(/\s/g, ''))
+                    const aslNarx  = Number(String(bronForm.asl_narx_m2 || '').replace(/\s/g, ''))
+                    const baseT    = aslNarx > 0 ? Math.round(aslNarx * apartment.size) : (narx > 0 ? Math.round(narx * apartment.size) : 0)
+                    const pct      = baseT > 0 && down > 0 ? Math.min(100, Math.floor((down / baseT) * 100)) : 0
                     return pct > 0 ? <p className="text-lg font-bold text-amber-600 mt-1">{pct}% <span className="text-xs font-normal">umumiy to'lovdan</span></p> : null
                   })()}
                 </div>
@@ -1260,10 +1432,11 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
                   <p className="text-xs text-amber-700 mb-1">Kafolat summasi</p>
                   <p className="text-xl font-bold text-foreground">{sotishForm.boshlangich || '—'} <span className="text-sm font-normal text-muted-foreground">USD</span></p>
                   {(() => {
-                    const down  = Number(String(sotishForm.boshlangich || '').replace(/\s/g, ''))
-                    const narx  = Number(String(sotishForm.narx_m2 || '').replace(/\s/g, ''))
-                    const total = narx > 0 ? Math.round(narx * apartment.size) : 0
-                    const pct   = total > 0 && down > 0 ? Math.round((down / total) * 100) : 0
+                    const down     = Number(String(sotishForm.boshlangich || '').replace(/\s/g, ''))
+                    const narx     = Number(String(sotishForm.narx_m2 || '').replace(/\s/g, ''))
+                    const aslNarx  = Number(String(sotishForm.asl_narx_m2 || '').replace(/\s/g, ''))
+                    const baseT    = aslNarx > 0 ? Math.round(aslNarx * apartment.size) : (narx > 0 ? Math.round(narx * apartment.size) : 0)
+                    const pct      = baseT > 0 && down > 0 ? Math.min(100, Math.floor((down / baseT) * 100)) : 0
                     return pct > 0 ? <p className="text-lg font-bold text-amber-600 mt-1">{pct}% <span className="text-xs font-normal">umumiy to'lovdan</span></p> : null
                   })()}
                 </div>

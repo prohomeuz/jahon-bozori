@@ -1,6 +1,6 @@
 import { useRef, useState, useEffect } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router'
-import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query'
+import { useQuery, useQueryClient, keepPreviousData, useMutation } from '@tanstack/react-query'
 import { usePan } from '@/pages/home/lib/usePan'
 import { useGlobalZoom } from '@/shared/hooks/useGlobalZoom'
 import { useGestureGuard } from '@/shared/hooks/useGestureGuard'
@@ -12,7 +12,8 @@ import { C_RECT_OVERLAYS } from '../config/cRectOverlays'
 import { C_FLOOR2_RECT_OVERLAYS } from '../config/cFloor2RectOverlays'
 import { ApartmentModal } from './ApartmentModal'
 import { AdminButton } from '@/shared/ui/AdminButton'
-import { X } from 'lucide-react'
+import { X, Lock } from 'lucide-react'
+import { getUser } from '@/shared/lib/auth'
 
 function NotSaleInfoModal({ apt, onClose }) {
   return (
@@ -221,6 +222,27 @@ export default function BolimPage() {
     staleTime: 60_000,
   })
 
+  const { data: locks = [] } = useQuery({
+    queryKey: ['sales-locks'],
+    queryFn: () => apiFetch('/api/sales-locks').then(r => r.json()),
+    staleTime: 30_000,
+  })
+  const blockLock = locks.find(l =>
+    l.block === blockId?.toUpperCase() &&
+    l.bolim === bolimNum &&
+    l.floor === activeFloor
+  ) ?? null
+  const isAdmin = getUser()?.role === 'admin'
+
+  const { mutate: doUnlock, isPending: unlocking } = useMutation({
+    mutationFn: () => apiFetch('/api/sales-locks', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ block: blockId?.toUpperCase(), bolim: bolimNum, floor: activeFloor }),
+    }).then(r => r.json()),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['sales-locks'] }),
+  })
+
   const ready = imgLoaded && !aptsLoading
 
   function goBolim(n) {
@@ -382,11 +404,36 @@ export default function BolimPage() {
           overlay={activeFloor === 1 ? overlay1 : overlay2}
           aptByAddress={aptByAddress}
           onSelect={(apt) => {
+            if (blockLock) return
             if (apt.status === 'NOT_SALE') { setNotSaleApt(apt); return }
             setModal({ apartment: apt, floor: activeFloor })
           }}
           ready={ready}
         />
+        {/* Sotuv qulfi banneri — faqat kontent ustida, navigatsiyani bloklamaydi */}
+        {blockLock && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center"
+            style={{ background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(3px)' }}>
+            <div className="flex flex-col items-center gap-3 bg-background rounded-3xl shadow-2xl px-8 py-7 max-w-xs w-full mx-4 text-center">
+              <div className="w-14 h-14 rounded-full bg-red-100 flex items-center justify-center">
+                <Lock size={26} className="text-red-500" />
+              </div>
+              <div>
+                <p className="text-sm font-bold text-foreground">{bolimNum}-bo'lim · {activeFloor}-qavat</p>
+                <p className="text-sm font-semibold text-red-600 mt-0.5">Sotuv to'xtatilgan</p>
+              </div>
+              <p className="text-xs text-muted-foreground">"{blockLock.reason}"</p>
+              <p className="text-xs text-muted-foreground/70">{blockLock.locked_at} · {blockLock.locked_by}</p>
+              {isAdmin && (
+                <button onClick={() => doUnlock()} disabled={unlocking}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-semibold transition-all active:scale-95 disabled:opacity-60">
+                  <Lock size={12} />
+                  {unlocking ? 'Ochilmoqda…' : 'Qulfdan ochish'}
+                </button>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {modal && (
@@ -403,6 +450,7 @@ export default function BolimPage() {
       {notSaleApt && (
         <NotSaleInfoModal apt={notSaleApt} onClose={() => setNotSaleApt(null)} />
       )}
+
     </div>
   )
 }
