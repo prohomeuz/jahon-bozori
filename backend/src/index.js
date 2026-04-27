@@ -3,7 +3,7 @@ import { serve } from '@hono/node-server'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { db, q, dbPath } from './db.js'
-import { hashPassword, verifyPassword, createToken, requireAuth, requireAdmin } from './auth.js'
+import { hashPassword, verifyPassword, createTokenPair, verifyRefresh, requireAuth, requireAdmin, isWorkingHours } from './auth.js'
 import nodeFetch from 'node-fetch'
 import { SocksProxyAgent } from 'socks-proxy-agent'
 import { copyFileSync, unlinkSync, readFileSync } from 'node:fs'
@@ -21,7 +21,10 @@ const proxiedFetch = (url, opts = {}, timeoutMs = 15_000) => {
 }
 
 const app = new Hono()
-app.use('/api/*', cors())
+app.use('/api/*', cors({
+  origin: process.env.CORS_ORIGIN ?? process.env.WEBHOOK_DOMAIN ?? '*',
+  credentials: false,
+}))
 
 // ─── TELEGRAM WEBHOOK ────────────────────────────────────────────────────────
 app.post('/api/telegram/webhook', async (c) => {
@@ -99,6 +102,7 @@ async function sendBackupFile(chatId) {
 
 // ─── SSE BROADCAST ───────────────────────────────────────────────────────────
 const sseClients = new Set()
+const SSE_MAX_CLIENTS = 200
 
 function broadcast(event, data) {
   const msg = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`
@@ -106,6 +110,20 @@ function broadcast(event, data) {
     try { send(msg) } catch { sseClients.delete(send) }
   }
 }
+
+// ─── WORKING HOURS ENFORCER — aniq 20:00 da bir marta trigger ────────────────
+function scheduleWorkEnd() {
+  const now     = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Tashkent' }))
+  const target  = new Date(now)
+  target.setHours(20, 0, 0, 0)
+  let ms = target - now
+  if (ms <= 0) ms += 24 * 60 * 60 * 1000   // o'tib ketgan bo'lsa — ertasiga
+  setTimeout(() => {
+    broadcast('working_hours_ended', { message: "Ish vaqti tugadi. Tizimdan chiqarilmoqdasiz." })
+    scheduleWorkEnd()                         // keyingi kun uchun qayta rejalashtir
+  }, ms).unref()
+}
+scheduleWorkEnd()
 
 // ─── RATE LIMITER ─────────────────────────────────────────────────────────────
 const _rateMap = new Map()
@@ -126,7 +144,10 @@ function rateLimit(key, max = 10, windowMs = 60_000) {
 }
 
 app.get('/api/events', async (c) => {
-  const token = c.req.query('token')
+  if (sseClients.size >= SSE_MAX_CLIENTS) return c.json({ error: 'Too many connections' }, 503)
+  // Authorization header (fetch-based SSE) yoki query param (legacy fallback)
+  const authHeader = c.req.header('Authorization')
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : c.req.query('token')
   if (!token) return c.json({ error: 'Unauthorized' }, 401)
   try {
     const { verify } = await import('hono/jwt')
@@ -162,6 +183,7 @@ app.get('/api/events', async (c) => {
 
 // ─── PUBLIC SSE (live page) ───────────────────────────────────────────────────
 app.get('/api/live/events', (c) => {
+  if (sseClients.size >= SSE_MAX_CLIENTS) return c.json({ error: 'Too many connections' }, 503)
   return new Response(
     new ReadableStream({
       start(controller) {
@@ -208,8 +230,35 @@ app.post('/api/auth/login', async (c) => {
     return c.json({ error: "Parol 8 ta raqamdan iborat bo'lishi kerak" }, 400)
   const user = q.userByPlainPassword.get({ plain_password: password })
   if (!user) return c.json({ error: "Parol noto'g'ri" }, 401)
-  const token = await createToken(user)
-  return c.json({ token, user: { id: user.id, role: user.role, name: user.name } })
+
+  // salesmanager faqat ish vaqtida tizimga kira oladi
+  if (user.role === 'salesmanager' && !isWorkingHours()) {
+    return c.json({ error: 'OUTSIDE_HOURS', message: "Tizim faqat 08:00–20:00 orasida ishlaydi" }, 403)
+  }
+
+  const { accessToken, refreshToken } = await createTokenPair(user)
+  return c.json({ token: accessToken, refreshToken, user: { id: user.id, role: user.role, name: user.name } })
+})
+
+app.post('/api/auth/refresh', async (c) => {
+  const ip = c.req.header('x-forwarded-for')?.split(',')[0].trim() ?? c.req.header('x-real-ip') ?? 'unknown'
+  if (!rateLimit(`refresh:${ip}`, 30, 60_000))
+    return c.json({ error: "Juda ko'p urinish. 1 daqiqa kuting." }, 429)
+  const { refreshToken } = await c.req.json().catch(() => ({}))
+  if (!refreshToken) return c.json({ error: 'Unauthorized' }, 401)
+  try {
+    const payload = await verifyRefresh(refreshToken)
+    // salesmanager uchun ish vaqti tekshiruvi
+    if (payload.role === 'salesmanager' && !isWorkingHours()) {
+      return c.json({ error: 'OUTSIDE_HOURS', message: "Tizim faqat 08:00–20:00 orasida ishlaydi" }, 403)
+    }
+    const user = q.userById.get({ id: payload.sub })
+    if (!user) return c.json({ error: 'Unauthorized' }, 401)
+    const { accessToken, refreshToken: newRefresh } = await createTokenPair(user)
+    return c.json({ token: accessToken, refreshToken: newRefresh })
+  } catch {
+    return c.json({ error: 'Unauthorized' }, 401)
+  }
 })
 
 app.get('/api/auth/me', requireAuth, (c) => {
@@ -226,9 +275,15 @@ app.patch('/api/auth/change-password', requireAuth, async (c) => {
   if (newPassword.length !== 8 || !/^\d+$/.test(newPassword)) return c.json({ error: 'Yangi parol 8 ta raqamdan iborat bo\'lishi kerak' }, 400)
   const user = db.prepare('SELECT * FROM users WHERE id=?').get(id)
   if (!user || user.plain_password !== currentPassword) return c.json({ error: 'Joriy parol noto\'g\'ri' }, 400)
-  db.prepare('UPDATE users SET password=?, plain_password=?, username=? WHERE id=?')
-    .run(hashPassword(newPassword), newPassword, newPassword, id)
-  return c.json({ ok: true })
+  if (newPassword === currentPassword) return c.json({ error: 'Yangi parol joriy paroldan farq qilishi kerak' }, 400)
+  try {
+    db.prepare('UPDATE users SET password=?, plain_password=?, username=? WHERE id=?')
+      .run(hashPassword(newPassword), newPassword, newPassword, id)
+    return c.json({ ok: true })
+  } catch (e) {
+    if (e.message.includes('UNIQUE')) return c.json({ error: 'Bu parol boshqa foydalanuvchida mavjud' }, 409)
+    return c.json({ error: e.message }, 500)
+  }
 })
 
 // ─── USERS (admin only) ───────────────────────────────────────────────────────
@@ -355,6 +410,29 @@ app.patch('/api/prices', requireAuth, requireAdmin, async (c) => {
   return c.json({ ok: true })
 })
 
+// ─── SALES LOCKS ─────────────────────────────────────────────────────────────
+
+app.get('/api/sales-locks', requireAuth, (c) => {
+  return c.json(q.allLocks.all())
+})
+
+app.post('/api/sales-locks', requireAuth, requireAdmin, async (c) => {
+  const { block, bolim, floor, reason } = await c.req.json()
+  if (!block || bolim == null || floor == null) return c.json({ error: 'block, bolim, floor required' }, 400)
+  if (!reason?.trim()) return c.json({ error: 'Sabab kiritish majburiy' }, 400)
+  const user = c.get('user')
+  const locked_at = new Date().toLocaleString('uz-UZ', { timeZone: 'Asia/Tashkent' })
+  q.upsertLock.run({ block: String(block).toUpperCase(), bolim: parseInt(bolim), floor: parseInt(floor), reason: reason.trim(), locked_at, locked_by: user?.name ?? 'Admin' })
+  return c.json({ ok: true })
+})
+
+app.delete('/api/sales-locks', requireAuth, requireAdmin, async (c) => {
+  const { block, bolim, floor } = await c.req.json()
+  if (!block || bolim == null || floor == null) return c.json({ error: 'block, bolim, floor required' }, 400)
+  q.deleteLock.run({ block: String(block).toUpperCase(), bolim: parseInt(bolim), floor: parseInt(floor) })
+  return c.json({ ok: true })
+})
+
 app.patch('/api/apartments/:id/status', requireAuth, requireAdmin, async (c) => {
   const id = c.req.param('id')
   const { status, reason } = await c.req.json()
@@ -417,7 +495,7 @@ app.get('/api/shops', requireAuth, requireAdmin, (c) => {
 
 app.post('/api/bookings', requireAuth, async (c) => {
   const user = c.get('user')
-  const { apartment_id, type, ism, familiya, boshlangich, oylar, umumiy, passport, manzil, phone, passport_place, narx_m2, assigned_user_id } = await c.req.json()
+  const { apartment_id, type, ism, familiya, boshlangich, oylar, umumiy, passport, manzil, phone, passport_place, narx_m2, chegirma_m2, asl_narx_m2, assigned_user_id } = await c.req.json()
   if (!apartment_id || !type || !ism || !familiya || !boshlangich || !oylar)
     return c.json({ error: "Majburiy maydonlar to'ldirilmagan" }, 400)
 
@@ -425,10 +503,12 @@ app.post('/api/bookings', requireAuth, async (c) => {
 
   db.exec('BEGIN')
   try {
-    const apt = db.prepare("SELECT status FROM apartments WHERE id=?").get(apartment_id)
+    const apt = db.prepare("SELECT block, bolim, floor, status FROM apartments WHERE id=?").get(apartment_id)
     if (!apt) { db.exec('ROLLBACK'); return c.json({ error: "Do'kon topilmadi" }, 404) }
     if (apt.status !== 'EMPTY') { db.exec('ROLLBACK'); return c.json({ error: "Do'kon allaqachon band yoki sotilgan" }, 409) }
-    q.insertBooking.run({ apartment_id, user_id: effective_user_id, type, ism, familiya, boshlangich, oylar: parseInt(oylar), umumiy: umumiy ?? null, passport: passport ?? null, manzil: manzil ?? null, phone: phone ?? null, passport_place: passport_place ?? null, narx_m2: narx_m2 ?? null })
+    const lock = db.prepare("SELECT reason FROM sales_locks WHERE block=? AND bolim=? AND floor=?").get(apt.block, apt.bolim, apt.floor)
+    if (lock) { db.exec('ROLLBACK'); return c.json({ error: `Sotuv to'xtatilgan: ${lock.reason}` }, 403) }
+    q.insertBooking.run({ apartment_id, user_id: effective_user_id, type, ism, familiya, boshlangich, oylar: parseInt(oylar), umumiy: umumiy ?? null, passport: passport ?? null, manzil: manzil ?? null, phone: phone ?? null, passport_place: passport_place ?? null, narx_m2: narx_m2 ?? null, chegirma_m2: chegirma_m2 ?? null, asl_narx_m2: asl_narx_m2 ?? null })
     const newStatus = type === 'sotish' ? 'SOLD' : 'RESERVED'
     q.updateStatus.run({ status: newStatus, id: apartment_id })
     const booking = q.lastBooking.get()
@@ -499,10 +579,12 @@ app.get('/api/bookings/apartment/:id', requireAuth, (c) => {
 app.patch('/api/bookings/:id/convert', requireAuth, async (c) => {
   const { sub: userId } = c.get('user')
   const id = parseInt(c.req.param('id'))
-  const booking = db.prepare('SELECT * FROM bookings WHERE id=? AND cancelled_at IS NULL').get(id)
+  const booking = db.prepare('SELECT b.*, a.block, a.bolim, a.floor FROM bookings b JOIN apartments a ON a.id=b.apartment_id WHERE b.id=? AND b.cancelled_at IS NULL').get(id)
   if (!booking) return c.json({ error: 'Topilmadi' }, 404)
   if (booking.type !== 'bron') return c.json({ error: "Faqat bron qilingan do'konni sotishga o'tkazish mumkin" }, 400)
   if (booking.user_id !== userId) return c.json({ error: "Ruxsat yo'q" }, 403)
+  const convertLock = db.prepare("SELECT reason FROM sales_locks WHERE block=? AND bolim=? AND floor=?").get(booking.block, booking.bolim, booking.floor)
+  if (convertLock) return c.json({ error: `Sotuv to'xtatilgan: ${convertLock.reason}` }, 403)
 
   const body = await c.req.json().catch(() => ({}))
   const { passport, passport_place, manzil } = body

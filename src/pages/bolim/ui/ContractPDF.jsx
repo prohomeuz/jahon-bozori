@@ -1,6 +1,6 @@
 import {
   Document, Page, View, Text, StyleSheet,
-  Image, Svg, Path, Rect,
+  Image, Svg, Path,
 } from '@react-pdf/renderer'
 
 /* ── Palette ──────────────────────────────────────────── */
@@ -14,33 +14,19 @@ const P = {
   amberBg: '#fffbeb',
   amberBd: '#fcd34d',
   amberFg: '#92400e',
+  green:   '#15803d',
+  greenBg: '#f0fdf4',
+  greenBd: '#86efac',
   red:     '#dc2626',
   white:   '#ffffff',
 }
 
 /* ── Lucide-style SVG icons ───────────────────────────── */
 const IP = {
-  globe:       ['M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20', 'M2 12h20', 'M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z'],
-  dollarSign:  'M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6',
-  maximize:    'M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7',
-  clock:       ['M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20', 'M12 6v6l4 2'],
-  ruler:       ['M3 3l18 18', 'M13.5 3h7.5v7.5', 'M3 10.5V3h7.5'],
-  building:    ['M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18',
-                'M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2',
-                'M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2',
-                'M10 6h4M10 10h4M10 14h4M10 18h4'],
-  creditCard:  ['M2 9h20v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9',
-                'M2 9V7a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v2',
-                'M6 14h.01M10 14h4'],
-  trendingUp:  ['M22 7 13.5 15.5 8.5 10.5 2 17', 'M16 7h6v6'],
-  tag:         ['M12 2H2v10l9.29 9.29a1 1 0 0 0 1.41 0l7.3-7.3a1 1 0 0 0 0-1.41L12 2',
-                'M7 7h.01'],
-  phone:       'M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 13a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.62 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92',
-  mapPin:      ['M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0',
-                'M12 7a3 3 0 1 0 0 6 3 3 0 0 0 0-6'],
-  instagram:   ['M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069z',
-                'M12 6.865a5.135 5.135 0 1 0 0 10.27 5.135 5.135 0 0 0 0-10.27',
-                'M17.796 6.375a1.2 1.2 0 1 0 0-2.4 1.2 1.2 0 0 0 0 2.4'],
+  globe:      ['M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20', 'M2 12h20', 'M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z'],
+  phone:      'M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 13a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.62 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92',
+  mapPin:     ['M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0', 'M12 7a3 3 0 1 0 0 6 3 3 0 0 0 0-6'],
+  gift:       ['M20 12v10H4V12', 'M2 7h20v5H2z', 'M12 22V7', 'M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z', 'M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z'],
 }
 
 function Icon({ d, size = 10, color = P.mutedLt }) {
@@ -60,21 +46,19 @@ const s = StyleSheet.create({
   page: {
     flexDirection: 'row',
     backgroundColor: P.white,
-    padding: 26,
+    padding: 22,
     fontFamily: 'Helvetica',
     fontSize: 9,
     color: P.fg,
-    gap: 18,
+    gap: 16,
   },
 
-  /* LEFT main */
-  main: { flex: 1, flexDirection: 'column', gap: 10 },
+  main: { flex: 1, flexDirection: 'column', gap: 8 },
 
-  /* Breadcrumb */
-  breadcrumb: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' },
+  breadcrumb: { flexDirection: 'row', alignItems: 'center' },
   crumbText: {
     fontFamily: 'Helvetica-Bold',
-    fontSize: 16,
+    fontSize: 15,
     color: P.fg,
     letterSpacing: 0.5,
   },
@@ -83,174 +67,157 @@ const s = StyleSheet.create({
   grid: {
     borderWidth: 1,
     borderColor: P.border,
-    borderRadius: 8,
+    borderRadius: 7,
     overflow: 'hidden',
   },
   gridRow: { flexDirection: 'row' },
   cell: {
     flex: 1,
-    padding: 9,
+    padding: 8,
     borderRightWidth: 1,
     borderRightColor: P.border,
     backgroundColor: '#f8fafc',
   },
-  cellLast:  { flex: 1, padding: 9, backgroundColor: '#f8fafc' },
+  cellLast:      { flex: 1, padding: 8, backgroundColor: '#f8fafc' },
   cellTopBorder: { borderBottomWidth: 1, borderBottomColor: P.border },
-  cellLabel: { color: P.muted, fontSize: 7, marginBottom: 4 },
-  cellVal:   { fontFamily: 'Helvetica-Bold', fontSize: 13, color: P.fg },
-  cellValM:  { fontFamily: 'Helvetica-Bold', fontSize: 13, color: P.mutedLt },
+  cellLabel:     { color: P.muted, fontSize: 6.5, marginBottom: 3 },
+  cellVal:       { fontFamily: 'Helvetica-Bold', fontSize: 12, color: P.fg },
+  cellValM:      { fontFamily: 'Helvetica-Bold', fontSize: 12, color: P.mutedLt },
+  cellStrike:    { fontSize: 9, color: P.mutedLt, textDecoration: 'line-through' },
 
-  /* Image — reduced to fit benefits section on 1 A4 page */
+  /* Chegirma row — green tint inside grid */
+  chegirmaCell: {
+    flex: 1,
+    padding: 8,
+    borderRightWidth: 1,
+    borderRightColor: '#bbf7d0',
+    backgroundColor: P.greenBg,
+  },
+  chegirmaCellLast: {
+    flex: 1,
+    padding: 8,
+    backgroundColor: P.greenBg,
+  },
+  chegirmaLabel: { color: P.green, fontSize: 6.5, marginBottom: 3 },
+  chegirmaVal:   { fontFamily: 'Helvetica-Bold', fontSize: 12, color: P.fg },
+  chegirmaValGreen: { fontFamily: 'Helvetica-Bold', fontSize: 12, color: P.green },
+  chegirmaValRed:   { fontFamily: 'Helvetica-Bold', fontSize: 12, color: P.red },
+
+  /* Image */
   imgBox: {
     borderWidth: 1,
     borderColor: P.border,
     borderRadius: 6,
     overflow: 'hidden',
     backgroundColor: P.bg,
-    height: 200,
+    height: 152,
     alignItems: 'center',
     justifyContent: 'center',
+    flex: 1,
   },
-  img: { width: '100%', height: 200, objectFit: 'contain' },
+  img:            { width: '100%', height: '100%', objectFit: 'contain' },
   imgPlaceholder: { color: P.mutedLt, fontSize: 7, padding: 20 },
 
-  /* Note */
-  note: {
-    backgroundColor: P.amberBg,
-    borderWidth: 1,
-    borderColor: P.amberBd,
-    borderRadius: 8,
-    padding: 10,
-    flexDirection: 'row',
-    gap: 8,
-    alignItems: 'flex-start',
-  },
-  noteText: { flex: 1 },
-  noteTitle: {
-    fontFamily: 'Helvetica-Bold',
-    fontSize: 8,
-    color: P.amber,
-    marginBottom: 3,
-  },
-  noteBody: { fontSize: 8, color: P.amberFg, lineHeight: 1.6 },
-
-  /* RIGHT sidebar */
-  sidebar: {
-    width: 142,
-    flexDirection: 'column',
-    gap: 12,
-    borderLeftWidth: 1,
-    borderLeftColor: P.border,
-    paddingLeft: 16,
-  },
-
-  /* Logo */
-  logoMark: { width: 36, height: 36, marginBottom: 4 },
-  logoName: { fontFamily: 'Helvetica-Bold', fontSize: 14, color: P.fg, lineHeight: 1.2 },
-  logoSub:  { fontSize: 6, color: P.muted, letterSpacing: 1.5, marginTop: 1 },
-
-  divider: { borderTopWidth: 1, borderTopColor: P.border },
-
-  /* Sidebar sections */
-  section: { gap: 4 },
-  sTitle: { fontFamily: 'Helvetica-Bold', fontSize: 8, color: P.fg },
-  sRow:   { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  sText:  { fontSize: 7.5, color: P.muted, lineHeight: 1.6, flex: 1 },
-
-  /* QR placeholder */
-  qrBox: {
-    width: 72, height: 72,
-    borderWidth: 1,
-    borderColor: P.border,
-    borderRadius: 4,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: P.bg,
-    marginTop: 4,
-  },
-  qrText: { fontSize: 6, color: P.mutedLt, textAlign: 'center' },
-
-  /* Benefits section */
+  /* Benefits */
   benefits: {
     borderWidth: 1,
     borderColor: P.border,
-    borderRadius: 8,
+    borderRadius: 7,
     overflow: 'hidden',
     backgroundColor: '#f8fafc',
-    padding: 10,
+    padding: 9,
     gap: 5,
   },
   benefitsTitle: {
     fontFamily: 'Helvetica-Bold',
-    fontSize: 13,
+    fontSize: 11,
     color: P.fg,
-    marginBottom: 4,
+    marginBottom: 3,
   },
   benefitRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 8,
-    minHeight: 20,
+    gap: 7,
+    minHeight: 18,
   },
   benefitNum: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
     backgroundColor: P.amber,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
-    marginTop: 1,
   },
-  benefitNumText: {
+  benefitNumText: { fontFamily: 'Helvetica-Bold', fontSize: 8, color: P.white },
+  benefitText:    { flex: 1, fontSize: 10, color: P.fg, lineHeight: 1.5, paddingTop: 1 },
+  benefitBold:    { fontFamily: 'Helvetica-Bold' },
+
+  /* RIGHT sidebar */
+  sidebar: {
+    width: 140,
+    flexDirection: 'column',
+    gap: 8,
+    borderLeftWidth: 1,
+    borderLeftColor: P.border,
+    paddingLeft: 14,
+  },
+
+  logoName: { fontFamily: 'Helvetica-Bold', fontSize: 13, color: P.fg, lineHeight: 1.2 },
+  divider:  { borderTopWidth: 1, borderTopColor: P.border },
+  section:  { gap: 3 },
+  sRow:     { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  sText:    { fontSize: 7, color: P.muted, lineHeight: 1.6, flex: 1 },
+
+  /* Bonus sidebar section */
+  bonusTitle: {
     fontFamily: 'Helvetica-Bold',
-    fontSize: 9,
-    color: P.white,
+    fontSize: 7,
+    color: P.amber,
+    letterSpacing: 0.5,
+    marginBottom: 4,
   },
-  benefitText: {
-    flex: 1,
-    fontSize: 12,
-    color: P.fg,
-    lineHeight: 1.5,
-    paddingTop: 2,
+  bonusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 4,
   },
-  benefitBold: {
-    fontFamily: 'Helvetica-Bold',
+  bonusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: P.amber,
+    flexShrink: 0,
   },
+  bonusName: { fontSize: 8, color: P.fg, fontFamily: 'Helvetica-Bold', flex: 1 },
 })
 
-/* ── Logo mark SVG ────────────────────────────────────── */
-function LogoMark() {
-  return (
-    <Svg viewBox="0 0 48 48" style={s.logoMark}>
-      {/* Base building */}
-      <Rect x="6" y="20" width="36" height="24" rx="2" fill={P.fg} />
-      {/* Left tower */}
-      <Rect x="8" y="10" width="12" height="34" rx="2" fill={P.fg} />
-      {/* Right tower */}
-      <Rect x="28" y="14" width="12" height="30" rx="2" fill={P.fg} />
-      {/* Center spire */}
-      <Rect x="20" y="4" width="8" height="40" rx="2" fill={P.red} />
-      {/* Windows */}
-      <Rect x="10" y="14" width="3" height="3" rx="0.5" fill={P.white} />
-      <Rect x="15" y="14" width="3" height="3" rx="0.5" fill={P.white} />
-      <Rect x="10" y="20" width="3" height="3" rx="0.5" fill={P.white} />
-      <Rect x="15" y="20" width="3" height="3" rx="0.5" fill={P.white} />
-      <Rect x="30" y="18" width="3" height="3" rx="0.5" fill={P.white} />
-      <Rect x="35" y="18" width="3" height="3" rx="0.5" fill={P.white} />
-      <Rect x="30" y="24" width="3" height="3" rx="0.5" fill={P.white} />
-      <Rect x="35" y="24" width="3" height="3" rx="0.5" fill={P.white} />
-    </Svg>
-  )
-}
-
 /* ── Grid cell ────────────────────────────────────────── */
-function Cell({ label, value, last = false, top = false }) {
+function Cell({ label, value, strikeValue, last = false, top = false }) {
   const hasValue = value && value !== '—'
   return (
     <View style={[last ? s.cellLast : s.cell, top && s.cellTopBorder]}>
       <Text style={s.cellLabel}>{label}</Text>
-      <Text style={hasValue ? s.cellVal : s.cellValM}>{value || '—'}</Text>
+      {strikeValue ? (
+        <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 5, flexWrap: 'wrap' }}>
+          <Text style={s.cellStrike}>{strikeValue}</Text>
+          <Text style={s.cellVal}>{value || '—'}</Text>
+        </View>
+      ) : (
+        <Text style={hasValue ? s.cellVal : s.cellValM}>{value || '—'}</Text>
+      )}
+    </View>
+  )
+}
+
+function ChegirmaCell({ label, value, color, last = false }) {
+  return (
+    <View style={last ? s.chegirmaCellLast : s.chegirmaCell}>
+      <Text style={s.chegirmaLabel}>{label}</Text>
+      <Text style={color === 'green' ? s.chegirmaValGreen : color === 'red' ? s.chegirmaValRed : s.chegirmaVal}>
+        {value || '—'}
+      </Text>
     </View>
   )
 }
@@ -258,39 +225,55 @@ function Cell({ label, value, last = false, top = false }) {
 /* ── Main component ───────────────────────────────────── */
 export function ContractPDF({
   apartment, floor, blockId, bolimNum,
-  form, type, date, floorImgSrc, managerName, qrDataUrl, logoSrc,
+  form, floorImgSrc, managerName, qrDataUrl, logoSrc,
+  bonusItems = [],
 }) {
   const [, , apt] = (apartment.address ?? '').split('-')
   const aptNum = apt ?? apartment.address
 
-  const rawNum = String(form.boshlangich || '').replace(/\s/g, '')
-  const boshlangichFmt = rawNum
-    ? Number(rawNum).toLocaleString('ru-RU') + ' USD'
-    : '—'
+  const rawDown    = String(form.boshlangich || '').replace(/\s/g, '')
+  const rawUmumiy  = String(form.umumiy      || '').replace(/\s/g, '')
+  const rawNarxM2  = String(form.narx_m2     || '').replace(/\s/g, '')
 
-  const rawUmumiy = String(form.umumiy || '').replace(/\s/g, '')
-  const rawNarxM2 = String(form.narx_m2 || '').replace(/\s/g, '')
+  const boshlangichFmt = rawDown
+    ? Number(rawDown).toLocaleString('ru-RU') + ' USD' : '—'
+
   const calcUmumiy = !rawUmumiy && rawNarxM2 && apartment.size > 0
-    ? Math.round(Number(rawNarxM2) * apartment.size)
-    : null
+    ? Math.round(Number(rawNarxM2) * apartment.size) : null
   const umumiyFmt = rawUmumiy
     ? Number(rawUmumiy).toLocaleString('ru-RU') + ' USD'
-    : calcUmumiy
-      ? calcUmumiy.toLocaleString('ru-RU') + ' USD'
-      : '—'
+    : calcUmumiy ? calcUmumiy.toLocaleString('ru-RU') + ' USD' : '—'
 
   const narxPerM2 = rawNarxM2
     ? Number(rawNarxM2).toLocaleString('ru-RU') + ' USD'
-    : rawNum && apartment.size > 0
-      ? Math.round(Number(rawNum) / apartment.size).toLocaleString('ru-RU') + ' USD'
-      : '—'
+    : rawDown && apartment.size > 0
+      ? Math.round(Number(rawDown) / apartment.size).toLocaleString('ru-RU') + ' USD' : '—'
 
   const umumiyRaw = rawUmumiy ? Number(rawUmumiy) : (calcUmumiy ?? 0)
-  const oylar = parseInt(form.oylar) || 0
-  const oylikVal = umumiyRaw > 0 && oylar > 0
-    ? Math.round((umumiyRaw - Number(rawNum || '0')) / oylar)
-    : 0
-  const oylikFmt = oylikVal > 0 ? oylikVal.toLocaleString('ru-RU') + ' USD' : '—'
+  const oylar     = parseInt(form.oylar) || 0
+
+  // Chegirma
+  const chegirmaM2  = Number(String(form.chegirma_m2  || '').replace(/\s/g, '')) || 0
+  const aslNarxM2   = Number(String(form.asl_narx_m2 || '').replace(/\s/g, '')) || 0
+  const hasChegirma = chegirmaM2 > 0 && aslNarxM2 > 0
+  const tejamTotal  = hasChegirma ? chegirmaM2 * apartment.size : 0
+  const origTotal   = hasChegirma ? Math.round(aslNarxM2 * apartment.size) : 0
+
+  // Oylik to'lov — kalkulatordagi mantiq: boshlangich chegirmali totalni qoplasa ham
+  // pctOfBase < 100 bo'lsa baseTotal - downVal asosida hisoblash
+  const downNum    = Number(rawDown || '0')
+  const baseTotal  = aslNarxM2 > 0 ? Math.round(aslNarxM2 * apartment.size) : umumiyRaw
+  const pctOfBase  = baseTotal > 0 && downNum > 0 ? Math.floor((downNum / baseTotal) * 100) : 0
+  const qolgan     = Math.max(0, umumiyRaw - downNum)
+  const qolganDisp = qolgan > 0 ? qolgan : (pctOfBase < 100 && downNum < umumiyRaw ? Math.max(0, baseTotal - downNum) : 0)
+  const oylikVal   = qolganDisp > 0 && oylar > 0 ? Math.round(qolganDisp / oylar) : 0
+  const oylikFmt   = oylikVal > 0 ? oylikVal.toLocaleString('ru-RU') + ' USD' : '—'
+  // Eng muhim 3 ta foyda (biznes/sotuv nuqtai nazaridan)
+  const BENEFITS = [
+    ['Ajoyib joylashuv', 'Viloyat va vodiyning markazi — maksimal mijoz oqimi'],
+    ["Keng qamrovli transport tarmog'i", 'Logistika markazi — tovar yetkazish oson'],
+    ["Yevropa va Osiyoga to'g'ridan to'g'ri ulanish", 'Import va Export uchun ideal'],
+  ]
 
   return (
     <Document>
@@ -299,30 +282,37 @@ export function ContractPDF({
         {/* ════════════ LEFT: MAIN ════════════ */}
         <View style={s.main}>
 
-          {/* Breadcrumb */}
+          {/* Sarlavha */}
           <View style={s.breadcrumb}>
             <Text style={s.crumbText}>
-              {blockId}-BLOK  {'>'}  {bolimNum}-BO'LIM  {'>'}  {floor}-QAVAT  {'>'}  {aptNum}-DO'KON
+              {blockId}-BLOK {'>'} {bolimNum}-BO'LIM {'>'} {floor}-QAVAT {'>'} {aptNum}-DO'KON
             </Text>
           </View>
 
           {/* Info grid */}
           <View style={s.grid}>
-            {/* Row 1 */}
             <View style={s.gridRow}>
-              <Cell label="1 kv/m"    value={narxPerM2}                                           top />
-              <Cell label="O'lcham"   value={apartment.size > 0 ? `${apartment.size} m²` : '—'}  top />
-              <Cell label="Muddat"    value={`${form.oylar} oy`}                                  top last />
+              <Cell label="1 kv/m"  value={narxPerM2}                                          top />
+              <Cell label="O'lcham" value={apartment.size > 0 ? `${apartment.size} m²` : '—'} top />
+              <Cell label="Muddat"  value={`${form.oylar} oy`}                                 top last />
             </View>
-            {/* Row 2 */}
             <View style={s.gridRow}>
               <Cell label="Kafolat summasi" value={boshlangichFmt} />
               <Cell label="Oylik to'lov"    value={oylikFmt} />
-              <Cell label="Umumiy narx"     value={umumiyFmt}      last />
+              <Cell label="Umumiy narx" value={umumiyFmt}
+                strikeValue={hasChegirma && origTotal > 0 ? origTotal.toLocaleString('ru-RU') + ' USD' : undefined}
+                last />
             </View>
+            {hasChegirma && (
+              <View style={s.gridRow}>
+                <ChegirmaCell label="Asl narx / m²"  value={`${aslNarxM2.toLocaleString('ru-RU')} USD`} />
+                <ChegirmaCell label="Chegirma / m²"  value={`−${chegirmaM2.toLocaleString('ru-RU')} USD`} color="red" />
+                <ChegirmaCell label="Umumiy tejam"   value={`+${tejamTotal.toLocaleString('ru-RU')} USD`} color="green" last />
+              </View>
+            )}
           </View>
 
-          {/* Floor plan — highlighted */}
+          {/* Floor plan */}
           <View style={s.imgBox}>
             {floorImgSrc
               ? <Image src={floorImgSrc} style={s.img} />
@@ -330,16 +320,10 @@ export function ContractPDF({
             }
           </View>
 
-          {/* Benefits */}
+          {/* Benefits — faqat 3 ta */}
           <View style={s.benefits}>
             <Text style={s.benefitsTitle}>Agar JAHON BOZORIdan do'kon xarid qilsam nimalar yutaman?</Text>
-            {[
-              ['Ajoyib joylashuv', 'Viloyat va vodiyning markazi'],
-              ['Keng qamrovli transport tarmog\'i', 'Logistika markazi'],
-              ['Yevropa va Osiyoga to\'g\'ridan to\'g\'ri ulanish', 'Import va Export'],
-              ['Xavfsiz va qulay harakatlanish kafolati', null],
-              ['Yong\'indan mutlaq himoya', 'hududda yong\'indan himoyalanish uchun barcha choralar ko\'rilgan'],
-            ].map(([bold, rest], i) => (
+            {BENEFITS.map(([bold, rest], i) => (
               <View key={i} style={s.benefitRow}>
                 <View style={s.benefitNum}>
                   <Text style={s.benefitNumText}>{i + 1}</Text>
@@ -357,10 +341,10 @@ export function ContractPDF({
         {/* ════════════ RIGHT: SIDEBAR ════════════ */}
         <View style={s.sidebar}>
 
-          {/* Brand */}
+          {/* Logo */}
           <View>
             {logoSrc
-              ? <Image src={logoSrc} style={{ width: 138, height: 90, objectFit: 'contain' }} />
+              ? <Image src={logoSrc} style={{ width: 126, height: 72, objectFit: 'contain' }} />
               : <Text style={s.logoName}>JAHON BOZORI</Text>
             }
           </View>
@@ -379,24 +363,24 @@ export function ContractPDF({
 
           {/* Aloqa */}
           <View style={s.section}>
-            <Text style={{ fontSize: 7.5, color: P.fg, lineHeight: 1.6 }}>
+            <Text style={{ fontSize: 7, color: P.fg, lineHeight: 1.6 }}>
               <Text style={{ fontFamily: 'Helvetica-Bold' }}>Telegram: </Text>
               <Text style={{ color: '#2563eb' }}>@HengTai_Admin</Text>
             </Text>
-            <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 7.5, color: P.fg, marginTop: 3 }}>
+            <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 7, color: P.fg, marginTop: 2 }}>
               Murojaat uchun:
             </Text>
             <View style={s.sRow}>
-              <Icon d={IP.phone} size={9} color={P.muted} />
-              <Text style={{ fontSize: 7.5, color: P.muted }}>88-219-66-66</Text>
+              <Icon d={IP.phone} size={8} color={P.muted} />
+              <Text style={{ fontSize: 7, color: P.muted }}>88-219-66-66</Text>
             </View>
             <View style={s.sRow}>
-              <Icon d={IP.phone} size={9} color={P.muted} />
-              <Text style={{ fontSize: 7.5, color: P.muted }}>88-692-33-33</Text>
+              <Icon d={IP.phone} size={8} color={P.muted} />
+              <Text style={{ fontSize: 7, color: P.muted }}>88-692-33-33</Text>
             </View>
-            <View style={[s.sRow, { marginTop: 3 }]}>
-              <Icon d={IP.globe} size={9} color={P.muted} />
-              <Text style={{ fontSize: 7.5, color: '#2563eb' }}>jahonbozori.uz</Text>
+            <View style={[s.sRow, { marginTop: 2 }]}>
+              <Icon d={IP.globe} size={8} color={P.muted} />
+              <Text style={{ fontSize: 7, color: '#2563eb' }}>jahonbozori.uz</Text>
             </View>
           </View>
 
@@ -407,15 +391,19 @@ export function ContractPDF({
             <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 9, color: P.fg }}>
               {form.ism} {form.familiya}
             </Text>
-            {form.telefon ? <Text style={{ fontSize: 7.5, color: P.muted, marginTop: 3 }}>{form.telefon}</Text> : null}
-            {form.passport ? <Text style={{ fontSize: 7.5, color: P.muted, marginTop: 2 }}>{form.passport}</Text> : null}
+            {form.telefon
+              ? <Text style={{ fontSize: 7, color: P.muted, marginTop: 2 }}>{form.telefon}</Text>
+              : null}
+            {form.passport
+              ? <Text style={{ fontSize: 7, color: P.muted, marginTop: 1 }}>{form.passport}</Text>
+              : null}
           </View>
 
           {managerName ? (
             <>
               <View style={s.divider} />
               <View style={s.section}>
-                <Text style={{ fontSize: 7, color: P.mutedLt, marginBottom: 3, letterSpacing: 0.5 }}>
+                <Text style={{ fontSize: 6.5, color: P.mutedLt, marginBottom: 2, letterSpacing: 0.5 }}>
                   SOTUV MENEJER
                 </Text>
                 <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 9, color: P.fg }}>
@@ -425,14 +413,30 @@ export function ContractPDF({
             </>
           ) : null}
 
-          {/* QR code — sidebar bottom */}
+          {/* Bonus texnikalar */}
+          {bonusItems.length > 0 && (
+            <>
+              <View style={s.divider} />
+              <View style={s.section}>
+                <Text style={s.bonusTitle}>BONUS TEXNIKALAR</Text>
+                {bonusItems.map((item, i) => (
+                  <View key={i} style={s.bonusRow}>
+                    <View style={s.bonusDot} />
+                    <Text style={s.bonusName}>{item.name}</Text>
+                  </View>
+                ))}
+              </View>
+            </>
+          )}
+
+          {/* QR code */}
           {qrDataUrl ? (
             <>
               <View style={{ flex: 1 }} />
               <View style={s.divider} />
-              <View style={{ alignItems: 'center', gap: 4, paddingTop: 8 }}>
-                <Image src={qrDataUrl} style={{ width: 110, height: 110 }} />
-                <Text style={{ fontSize: 7, color: P.muted, textAlign: 'center', fontFamily: 'Helvetica-Bold' }}>
+              <View style={{ alignItems: 'center', gap: 3, paddingTop: 5 }}>
+                <Image src={qrDataUrl} style={{ width: 88, height: 88 }} />
+                <Text style={{ fontSize: 6.5, color: P.muted, textAlign: 'center', fontFamily: 'Helvetica-Bold' }}>
                   Skayner qiling!
                 </Text>
               </View>

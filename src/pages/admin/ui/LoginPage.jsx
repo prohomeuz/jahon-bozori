@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useLocation } from 'react-router'
-import { setToken } from '@/shared/lib/auth'
+import { setToken, setRefreshToken } from '@/shared/lib/auth'
 
 const PAD = ['1','2','3','4','5','6','7','8','9','','0','⌫']
 const REVEAL_MS = 800
@@ -9,9 +9,14 @@ export default function LoginPage() {
   const navigate = useNavigate()
   const location = useLocation()
   const from = location.state?.from ?? '/admin'
-  const [digits, setDigits] = useState([])        // array of entered digit chars
-  const [revealIdx, setRevealIdx] = useState(-1)  // index briefly shown as digit
-  const [error, setError] = useState('')
+  const [digits, setDigits] = useState([])
+  const [revealIdx, setRevealIdx] = useState(-1)
+  const [error, setError] = useState(() => {
+    if (location.state?.outsideHours) return "Ish vaqti tugadi. Tizim faqat 08:00–20:00 orasida ishlaydi."
+    if (new URLSearchParams(location.search).get('reason') === 'outside_hours')
+      return "Ish vaqti tugadi. Tizim faqat 08:00–20:00 orasida ishlaydi."
+    return ''
+  })
   const [loading, setLoading] = useState(false)
   const revealTimer = useRef(null)
 
@@ -51,12 +56,13 @@ export default function LoginPage() {
       })
       const data = await res.json()
       if (!res.ok) {
-        setError(data.error)
+        setError(data.error === 'OUTSIDE_HOURS' ? data.message : data.error)
         setDigits([])
         setRevealIdx(-1)
         return
       }
       setToken(data.token)
+      if (data.refreshToken) setRefreshToken(data.refreshToken)
       navigate(from, { replace: true })
     } finally {
       setLoading(false)
