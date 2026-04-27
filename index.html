@@ -1,6 +1,27 @@
 <!DOCTYPE html>
 <html lang="uz">
   <head>
+    <script>
+      (function () {
+        if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') return;
+        // O'ng tugma menyusini o'chirish
+        document.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+        // Klaviatura shortcut'larni bloklash
+        document.addEventListener('keydown', function (e) {
+          var k = e.key ? e.key.toUpperCase() : '';
+          // F12
+          if (e.key === 'F12') { e.preventDefault(); e.stopPropagation(); return false; }
+          // Ctrl+Shift+I/J/C/K  (Windows/Linux)
+          if (e.ctrlKey && e.shiftKey && (k==='I'||k==='J'||k==='C'||k==='K')) { e.preventDefault(); e.stopPropagation(); return false; }
+          // Ctrl+U — manba ko'rish
+          if (e.ctrlKey && k === 'U') { e.preventDefault(); e.stopPropagation(); return false; }
+          // Cmd+Option+I/J/C  (Mac)
+          if (e.metaKey && e.altKey && (k==='I'||k==='J'||k==='C')) { e.preventDefault(); e.stopPropagation(); return false; }
+          // Cmd+U (Mac manba ko'rish)
+          if (e.metaKey && k === 'U') { e.preventDefault(); e.stopPropagation(); return false; }
+        }, true);
+      })();
+    </script>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <meta name="theme-color" content="#000000" />
