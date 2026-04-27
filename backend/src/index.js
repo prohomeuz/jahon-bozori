@@ -736,7 +736,7 @@ app.get('/api/health', (c) => c.json({ ok: true }))
 // ─── TELEGRAM WEBHOOK SETUP ──────────────────────────────────────────────────
 async function setupTelegramWebhook() {
   const token = process.env.TELEGRAM_BOT_TOKEN
-  const domain = process.env.WEBHOOK_DOMAIN // e.g. https://jahonbozori.uz
+  const domain = process.env.WEBHOOK_DOMAIN // e.g. https://jahon-bozori.prohome.uz
   if (!token || !domain) {
     if (token && !domain) console.log('[telegram] WEBHOOK_DOMAIN yo\'q — webhook o\'rnatilmadi')
     return
