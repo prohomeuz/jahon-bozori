@@ -32,6 +32,9 @@ console.log(`Seeded ${total} apartments.`)
 
 // Default admin user
 try {
-  q.insertUser.run({ username: 'hengtai', password: hashPassword('hengtai6666'), role: 'admin', name: 'Admin', telegram_id: null })
-  console.log('Admin user created: hengtai / hengtai6666')
+  const adminUsername = process.env.ADMIN_USERNAME || 'admin'
+  const adminPassword = process.env.ADMIN_DEFAULT_PASSWORD
+  if (!adminPassword) throw new Error('ADMIN_DEFAULT_PASSWORD not set in .env')
+  q.insertUser.run({ username: adminUsername, password: hashPassword(adminPassword), role: 'admin', name: 'Admin', telegram_id: null })
+  console.log(`Admin user created: ${adminUsername}`)
 } catch { console.log('Admin user already exists.') }
