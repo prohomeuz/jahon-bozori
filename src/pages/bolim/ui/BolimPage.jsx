@@ -293,7 +293,7 @@ export default function BolimPage() {
 
   const { data: wcApts = [] } = useQuery({
     queryKey: ['wc', blockId, bolimNum, activeFloor],
-    queryFn: () => apiFetch(`/api/wc?block=${blockId}&bolim=${bolimNum}&floor=${activeFloor}`).then(r => r.json()),
+    queryFn: () => apiFetch(`/api/wc?block=${blockId}&bolim=${bolimNum}&floor=${activeFloor}`).then(r => r.json()).then(d => d.rows ?? d),
     enabled: wcListOpen,
     staleTime: 30_000,
   })
