@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from '@/shared/lib/auth'
 import { UserPlus, Pencil, Trash2, Eye, EyeOff, Copy, Check, RefreshCw } from 'lucide-react'
 
@@ -265,6 +265,35 @@ function PasswordCell({ password }) {
   )
 }
 
+function ActiveToggle({ user, onDone }) {
+  const cooldownRef = useRef(false)
+  const { mutate, isPending } = useMutation({
+    mutationFn: () => apiFetch(`/api/users/${user.id}/active`, { method: 'PATCH' }).then(r => r.json()),
+    onSuccess: onDone,
+    onSettled: () => { setTimeout(() => { cooldownRef.current = false }, 800) },
+  })
+  const active = !!user.is_active
+  function handleClick() {
+    if (isPending || cooldownRef.current) return
+    cooldownRef.current = true
+    mutate()
+  }
+  return (
+    <button
+      onClick={handleClick}
+      disabled={isPending}
+      title={active ? 'Deaktivlash' : 'Aktivlash'}
+      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus-visible:outline-none disabled:opacity-50 ${
+        active ? 'bg-emerald-500' : 'bg-muted-foreground/30'
+      }`}
+    >
+      <span className={`inline-block h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${
+        active ? 'translate-x-6' : 'translate-x-1'
+      }`} />
+    </button>
+  )
+}
+
 export default function ManagersPage() {
   const queryClient = useQueryClient()
   const [modal, setModal] = useState(null)
@@ -295,6 +324,7 @@ export default function ManagersPage() {
               <th className="px-4 py-3 text-left font-semibold text-muted-foreground">Ism-familiya</th>
               <th className="px-4 py-3 text-left font-semibold text-muted-foreground">Parol</th>
               <th className="px-4 py-3 text-left font-semibold text-muted-foreground">Qo'shilgan</th>
+              <th className="px-4 py-3 text-left font-semibold text-muted-foreground">Holat</th>
               <th className="px-4 py-3" />
             </tr>
           </thead>
@@ -306,6 +336,14 @@ export default function ManagersPage() {
                 <td className="px-4 py-3.5 text-muted-foreground">
                   <div>{new Date(u.created_at).toLocaleDateString('uz-UZ')}</div>
                   <div className="text-xs">{new Date(u.created_at).toLocaleTimeString('uz-UZ')}</div>
+                </td>
+                <td className="px-4 py-3.5">
+                  <div className="flex items-center gap-2">
+                    <ActiveToggle user={u} onDone={refresh} />
+                    <span className={`text-xs font-medium w-16 ${u.is_active ? 'text-emerald-600' : 'text-muted-foreground'}`}>
+                      {u.is_active ? 'Aktiv' : 'Bloklangan'}
+                    </span>
+                  </div>
                 </td>
                 <td className="px-4 py-3.5">
                   <div className="flex items-center justify-end gap-1">
@@ -323,7 +361,7 @@ export default function ManagersPage() {
             ))}
             {!isLoading && users.length === 0 && (
               <tr>
-                <td colSpan={4} className="px-4 py-10 text-center text-muted-foreground">Hech kim yo'q</td>
+                <td colSpan={5} className="px-4 py-10 text-center text-muted-foreground">Hech kim yo'q</td>
               </tr>
             )}
           </tbody>

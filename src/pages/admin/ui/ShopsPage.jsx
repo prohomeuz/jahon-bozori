@@ -86,7 +86,7 @@ const LIMIT = 50
 const STATUS_BADGE = {
   EMPTY:    'bg-emerald-100 text-emerald-700 border border-emerald-200',
   RESERVED: 'bg-amber-100 text-amber-700 border border-amber-200',
-  SOLD:     'bg-blue-100 text-blue-700 border border-blue-200',
+  SOLD:     'bg-red-100 text-red-700 border border-red-200',
   NOT_SALE: 'bg-muted text-muted-foreground border border-border',
 }
 const STATUS_LABEL = {
@@ -99,7 +99,7 @@ const STATUS_LABEL = {
 const STATUS_BG = {
   EMPTY:    'bg-emerald-50 border-emerald-100',
   RESERVED: 'bg-amber-50 border-amber-100',
-  SOLD:     'bg-blue-50 border-blue-100',
+  SOLD:     'bg-red-50 border-red-100',
   NOT_SALE: 'bg-muted border-border',
 }
 

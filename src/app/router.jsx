@@ -19,8 +19,8 @@ const DashboardPage = lazy(() => import('@/pages/admin/ui/DashboardPage'))
 const BookingsPage  = lazy(() => import('@/pages/admin/ui/BookingsPage'))
 const ManagersPage  = lazy(() => import('@/pages/admin/ui/ManagersPage'))
 const PricesPage    = lazy(() => import('@/pages/admin/ui/PricesPage'))
-const ShopsPage     = lazy(() => import('@/pages/admin/ui/ShopsPage'))
-const SalesLockPage = lazy(() => import('@/pages/admin/ui/SalesLockPage'))
+const JoylarPage         = lazy(() => import('@/pages/admin/ui/JoylarPage'))
+const SalesLockPage      = lazy(() => import('@/pages/admin/ui/SalesLockPage'))
 const LivePage      = lazy(() => import('@/pages/live/ui/LivePage'))
 
 function Loader() {
@@ -73,7 +73,7 @@ export default function Router() {
               <Route path="bookings" element={<BookingsPage />} />
               <Route path="managers" element={<ManagersPage />} />
               <Route path="prices" element={<PricesPage />} />
-              <Route path="shops" element={<AdminOnly><ShopsPage /></AdminOnly>} />
+              <Route path="joylar" element={<JoylarPage />} />
               <Route path="sales-lock" element={<AdminOnly><SalesLockPage /></AdminOnly>} />
             </Route>
           </Route>

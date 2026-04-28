@@ -330,6 +330,16 @@ app.patch('/api/users/:id', requireAuth, requireAdmin, async (c) => {
   }
 })
 
+app.patch('/api/users/:id/active', requireAuth, requireAdmin, (c) => {
+  const id = parseInt(c.req.param('id'))
+  const user = db.prepare("SELECT is_active FROM users WHERE id=? AND role='salesmanager'").get(id)
+  if (!user) return c.json({ error: 'Not found' }, 404)
+  const newActive = user.is_active ? 0 : 1
+  db.prepare('UPDATE users SET is_active=? WHERE id=?').run(newActive, id)
+  broadcast('user_invalidated', { id, blocked: !newActive })
+  return c.json({ ok: true, is_active: newActive })
+})
+
 app.delete('/api/users/:id', requireAuth, requireAdmin, (c) => {
   const id = parseInt(c.req.param('id'))
   db.prepare('UPDATE bookings SET user_id=NULL WHERE user_id=?').run(id)
@@ -393,20 +403,26 @@ app.get('/api/prices', requireAuth, (c) => {
   const block = c.req.query('block')
   const bolim = parseInt(c.req.query('bolim'))
   const floor = parseInt(c.req.query('floor'))
+  const isWc  = c.req.query('is_wc') === '1'
   if (!block || isNaN(bolim) || isNaN(floor)) return c.json({ error: 'block, bolim, floor required' }, 400)
-  const row = q.getPrice.get({ block, bolim, floor })
-  return c.json({ price: row?.price ?? 1000 })
+  const row = isWc ? q.getWcPrice.get({ block, bolim, floor }) : q.getPrice.get({ block, bolim, floor })
+  return c.json({ price: row?.price ?? (isWc ? 2000 : 1000) })
 })
 
 app.get('/api/prices/all', requireAuth, requireAdmin, (c) => {
-  return c.json(q.allPrices.all())
+  const isWc = c.req.query('is_wc') === '1'
+  return c.json(isWc ? q.allWcPrices.all() : q.allPrices.all())
 })
 
 app.patch('/api/prices', requireAuth, requireAdmin, async (c) => {
-  const { block, bolim, floor, price } = await c.req.json()
+  const { block, bolim, floor, price, isWc } = await c.req.json()
   if (!block || bolim == null || floor == null || price == null) return c.json({ error: 'block, bolim, floor, price required' }, 400)
   if (typeof price !== 'number' || price < 0) return c.json({ error: 'price must be non-negative number' }, 400)
-  q.upsertPrice.run({ block, bolim: parseInt(bolim), floor: parseInt(floor), price })
+  if (isWc) {
+    q.upsertWcPrice.run({ block, bolim: parseInt(bolim), floor: parseInt(floor), price })
+  } else {
+    q.upsertPrice.run({ block, bolim: parseInt(bolim), floor: parseInt(floor), price })
+  }
   return c.json({ ok: true })
 })
 
@@ -456,7 +472,44 @@ app.patch('/api/apartments/:id/status', requireAuth, requireAdmin, async (c) => 
   return c.json({ ok: true })
 })
 
-app.get('/api/shops', requireAuth, requireAdmin, (c) => {
+app.get('/api/wc', requireAuth, (c) => {
+  const block  = c.req.query('block')  || ''
+  const bolim  = c.req.query('bolim')  || ''
+  const floor  = c.req.query('floor')  || ''
+  const status = c.req.query('status') || ''
+  const search = c.req.query('search') || ''
+  const limit  = Math.min(parseInt(c.req.query('limit')  || '50'), 100)
+  const offset = parseInt(c.req.query('offset') || '0')
+
+  const conditions = ['a.is_wc = 1']
+  const params = { limit, offset }
+
+  if (block)  { conditions.push('a.block = :block');   params.block  = block }
+  if (bolim)  { conditions.push('a.bolim = :bolim');   params.bolim  = parseInt(bolim) }
+  if (floor)  { conditions.push('a.floor = :floor');   params.floor  = parseInt(floor) }
+  if (status) { conditions.push('a.status = :status'); params.status = status }
+  if (search) {
+    conditions.push("(a.id LIKE :search OR CAST(a.bolim AS TEXT) LIKE :search OR CAST(a.floor AS TEXT) LIKE :search)")
+    params.search = `%${search}%`
+  }
+
+  const where = 'WHERE ' + conditions.join(' AND ')
+  const { limit: _l, offset: _o, ...countParams } = params
+  const total = db.prepare(`SELECT COUNT(*) AS n FROM apartments a ${where}`).get(countParams)?.n ?? 0
+  const rows = db.prepare(`
+    SELECT a.id AS address, a.block, a.bolim, a.floor, a.size, a.status, a.not_sale_reason,
+           a.is_wc, COALESCE(wp.price, 2000) AS price
+    FROM apartments a
+    LEFT JOIN wc_prices wp ON wp.block = a.block AND wp.bolim = a.bolim AND wp.floor = a.floor
+    ${where}
+    ORDER BY a.block, a.bolim, a.floor, a.id
+    LIMIT :limit OFFSET :offset
+  `).all(params)
+
+  return c.json({ rows, total })
+})
+
+app.get('/api/shops', requireAuth, (c) => {
   const block  = c.req.query('block')  || ''
   const bolim  = c.req.query('bolim')  || ''
   const floor  = c.req.query('floor')  || ''
@@ -478,6 +531,8 @@ app.get('/api/shops', requireAuth, requireAdmin, (c) => {
   }
 
   const where = 'WHERE ' + conditions.join(' AND ')
+  const { limit: _l, offset: _o, ...countParams } = params
+  const total = db.prepare(`SELECT COUNT(*) AS n FROM apartments a ${where}`).get(countParams)?.n ?? 0
   const rows = db.prepare(`
     SELECT a.id AS address, a.block, a.bolim, a.floor, a.size, a.status, a.not_sale_reason,
            COALESCE(p.price, 1000) AS price
@@ -488,7 +543,7 @@ app.get('/api/shops', requireAuth, requireAdmin, (c) => {
     LIMIT :limit OFFSET :offset
   `).all(params)
 
-  return c.json(rows)
+  return c.json({ rows, total })
 })
 
 // ─── BOOKINGS ─────────────────────────────────────────────────────────────────
@@ -560,6 +615,13 @@ app.get('/api/bookings', requireAuth, (c) => {
   if (dateTo)   { conditions.push(`${dateField} <= :dateTo || ' 23:59:59'`); params.dateTo = dateTo }
 
   const where = 'WHERE ' + conditions.join(' AND ')
+  const { limit: _l, offset: _o, ...countParams } = params
+  const total = db.prepare(`
+    SELECT COUNT(*) AS n FROM bookings b
+    LEFT JOIN users u ON u.id = b.user_id
+    LEFT JOIN apartments a ON a.id = b.apartment_id
+    ${where}
+  `).get(countParams)?.n ?? 0
   const rows = db.prepare(`
     SELECT b.*, u.name AS manager_name, a.block, a.bolim, a.floor
     FROM bookings b
@@ -569,7 +631,7 @@ app.get('/api/bookings', requireAuth, (c) => {
     ORDER BY ${dateField} DESC
     LIMIT :limit OFFSET :offset
   `).all(params)
-  return c.json(rows)
+  return c.json({ rows, total })
 })
 
 app.get('/api/bookings/apartment/:id', requireAuth, (c) => {
@@ -582,7 +644,8 @@ app.patch('/api/bookings/:id/convert', requireAuth, async (c) => {
   const booking = db.prepare('SELECT b.*, a.block, a.bolim, a.floor FROM bookings b JOIN apartments a ON a.id=b.apartment_id WHERE b.id=? AND b.cancelled_at IS NULL').get(id)
   if (!booking) return c.json({ error: 'Topilmadi' }, 404)
   if (booking.type !== 'bron') return c.json({ error: "Faqat bron qilingan do'konni sotishga o'tkazish mumkin" }, 400)
-  if (booking.user_id !== userId) return c.json({ error: "Ruxsat yo'q" }, 403)
+  const { role } = c.get('user')
+  if (booking.user_id !== userId && role !== 'admin') return c.json({ error: "Ruxsat yo'q" }, 403)
   const convertLock = db.prepare("SELECT reason FROM sales_locks WHERE block=? AND bolim=? AND floor=?").get(booking.block, booking.bolim, booking.floor)
   if (convertLock) return c.json({ error: `Sotuv to'xtatilgan: ${convertLock.reason}` }, 403)
 
@@ -617,8 +680,11 @@ app.post('/api/bookings/send-pdf', requireAuth, async (c) => {
   const token = process.env.TELEGRAM_BOT_TOKEN
   if (!token) return c.json({ ok: true })
 
+  const aptInfo = db.prepare('SELECT is_wc FROM apartments WHERE id=?').get(booking.apartment_id)
+  const unitLabel = aptInfo?.is_wc ? 'Hojatxona' : "Do'kon"
+
   const caption = `🟡 <b>Bron</b>\n` +
-    `🏢 <b>Do'kon:</b> ${booking.apartment_id}\n` +
+    `🏢 <b>${unitLabel}:</b> ${booking.apartment_id}\n` +
     `👤 <b>Mijoz:</b> ${booking.ism} ${booking.familiya}\n` +
     (booking.phone ? `📞 <b>Telefon:</b> ${booking.phone}\n` : '') +
     `💰 <b>Boshlang'ich:</b> ${booking.boshlangich}\n` +
@@ -671,26 +737,30 @@ app.post('/api/bookings/send-pdf', requireAuth, async (c) => {
 app.get('/api/dashboard', requireAuth, (c) => {
   const user = c.get('user')
 
-  // Apartment stats by block
-  const rows = q.statsAll.all()
-  const blocks = {}
-  const total = { SOLD: 0, RESERVED: 0, EMPTY: 0, NOT_SALE: 0 }
-  for (const row of rows) {
-    if (!blocks[row.block]) blocks[row.block] = { SOLD: 0, RESERVED: 0, EMPTY: 0, NOT_SALE: 0 }
-    blocks[row.block][row.status] = row.n
-    total[row.status] = (total[row.status] || 0) + row.n
+  function buildBlocks(rows) {
+    const blocks = {}
+    const total  = { SOLD: 0, RESERVED: 0, EMPTY: 0, NOT_SALE: 0 }
+    for (const row of rows) {
+      if (!blocks[row.block]) blocks[row.block] = { SOLD: 0, RESERVED: 0, EMPTY: 0, NOT_SALE: 0 }
+      blocks[row.block][row.status] = row.n
+      total[row.status] = (total[row.status] || 0) + row.n
+    }
+    return { blocks, total }
   }
+
+  const { blocks: shopBlocks, total: shopTotal } = buildBlocks(q.statsShops.all())
+  const { blocks: wcBlocks,   total: wcTotal   } = buildBlocks(q.statsWc.all())
 
   if (user.role === 'admin') {
     const bookings = q.allBookings.all({ limit: 20, offset: 0 })
     const totalB = q.totalBookings.get()
-    return c.json({ blocks, total, bookings, totalBookings: totalB.n })
+    return c.json({ shopBlocks, wcBlocks, shopTotal, wcTotal, bookings, totalBookings: totalB.n })
   } else {
     const myStats = q.statsUser.all({ user_id: user.sub })
     const myTotal = q.bookingsCount.get({ user_id: user.sub })
     const bookings = q.myBookings.all({ user_id: user.sub, limit: 20, offset: 0 })
     const myStatsMap = Object.fromEntries(myStats.map(r => [r.type, r.n]))
-    return c.json({ blocks, total, bookings, myStats: myStatsMap, totalBookings: myTotal.n })
+    return c.json({ shopBlocks, wcBlocks, shopTotal, wcTotal, bookings, myStats: myStatsMap, totalBookings: myTotal.n })
   }
 })
 
@@ -707,9 +777,13 @@ app.get('/api/stats', requireAuth, (c) => {
     return Object.values(map)
   }
   return c.json({
-    byBolim: pivot(q.statsByBolim.all(), 'bolim'),
-    byFloor: pivot(q.statsByFloor.all(), 'floor'),
-    byDate:  q.bookingsByDate.all(),
+    byBolim:      pivot(q.statsByBolim.all(),      'bolim'),
+    byBolimShops: pivot(q.statsByBolimShops.all(), 'bolim'),
+    byBolimWc:    pivot(q.statsByBolimWc.all(),    'bolim'),
+    byFloor:      pivot(q.statsByFloor.all(),      'floor'),
+    byFloorShops: pivot(q.statsByFloorShops.all(), 'floor'),
+    byFloorWc:    pivot(q.statsByFloorWc.all(),    'floor'),
+    byDate:       q.bookingsByDate.all(),
   })
 })
 

@@ -6,6 +6,8 @@ import { usePan } from '../lib/usePan'
 import { useGlobalZoom } from '@/shared/hooks/useGlobalZoom'
 import { useGestureGuard } from '@/shared/hooks/useGestureGuard'
 import { AdminButton } from '@/shared/ui/AdminButton'
+import { useBlockedState } from '@/shared/hooks/useBlockedState'
+import { BlockedOverlay } from '@/shared/ui/BlockedOverlay'
 
 const BLOCKS = [
   {
@@ -38,6 +40,7 @@ export default function HomePage() {
   const containerRef = useRef(null)
   const [imgLoaded, setImgLoaded] = useState(() => imgCache.has(GENPLAN))
   const navigate = useNavigate()
+  const isBlocked = useBlockedState()
 
   const { scale } = useGlobalZoom(containerRef)
   const { pos } = usePan(containerRef)
@@ -49,6 +52,7 @@ export default function HomePage() {
       className="fixed inset-0 overflow-hidden bg-black"
       style={{ touchAction: 'none', cursor: 'grab' }}
     >
+      {isBlocked && <BlockedOverlay />}
       <div className="fixed top-6 right-6 z-10">
         <AdminButton />
       </div>

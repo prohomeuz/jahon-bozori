@@ -72,9 +72,19 @@ export async function requireAuth(c, next) {
   try {
     const payload = await verify(auth.slice(7), SECRET, 'HS256')
 
-    // salesmanager uchun ish vaqti tekshiruvi
-    if (payload.role === 'salesmanager' && !isWorkingHours()) {
-      return c.json({ error: 'OUTSIDE_HOURS', message: "Tizim faqat 08:00–20:00 orasida ishlaydi" }, 403)
+    if (payload.role === 'salesmanager') {
+      const { db } = await import('./db.js')
+      const row = db.prepare('SELECT is_active FROM users WHERE id=?').get(payload.sub)
+      if (!row) return c.json({ error: 'Unauthorized' }, 401)
+
+      // Bloklangan foydalanuvchi faqat o'qish (GET) so'rovlarini amalga oshira oladi
+      if (!row.is_active && c.req.method !== 'GET') {
+        return c.json({ error: 'BLOCKED' }, 403)
+      }
+
+      if (!isWorkingHours()) {
+        return c.json({ error: 'OUTSIDE_HOURS', message: "Tizim faqat 08:00–20:00 orasida ishlaydi" }, 403)
+      }
     }
 
     c.set('user', payload)

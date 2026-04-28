@@ -10,6 +10,7 @@ import { B_RECT_OVERLAYS } from '../config/bRectOverlays'
 import { B_FLOOR2_RECT_OVERLAYS } from '../config/bFloor2RectOverlays'
 import { C_RECT_OVERLAYS } from '../config/cRectOverlays'
 import { C_FLOOR2_RECT_OVERLAYS } from '../config/cFloor2RectOverlays'
+import { WC_OVERLAYS } from '../config/hojatxonaOverlays'
 import { ApartmentModal } from './ApartmentModal'
 import { AdminButton } from '@/shared/ui/AdminButton'
 import { X, Lock } from 'lucide-react'
@@ -45,6 +46,8 @@ function NotSaleInfoModal({ apt, onClose }) {
   )
 }
 import { useRealtimeApts } from '@/shared/hooks/useRealtimeApts'
+import { useBlockedState } from '@/shared/hooks/useBlockedState'
+import { BlockedOverlay } from '@/shared/ui/BlockedOverlay'
 import { apiFetch } from '@/shared/lib/auth'
 import { imgCache } from '@/shared/lib/imgCache'
 
@@ -60,7 +63,7 @@ function getImg(map, num) {
   return entry ? entry[1].default : null
 }
 
-function PanZoomPane({ src, alt, overlay, aptByAddress, onSelect, ready }) {
+function PanZoomPane({ src, alt, overlay, aptByAddress, onSelect, ready, wcZone, onWcClick }) {
   const ref = useRef(null)
   const { scale } = useGlobalZoom(ref)
   const { pos } = usePan(ref)
@@ -146,6 +149,28 @@ function PanZoomPane({ src, alt, overlay, aptByAddress, onSelect, ready }) {
                 })}
               </svg>
             )}
+            {wcZone && (() => {
+              const pts = wcZone.points.split(/\s+/).map(p => p.split(',').map(Number))
+              const cx = pts.reduce((s, p) => s + p[0], 0) / pts.length
+              const cy = pts.reduce((s, p) => s + p[1], 0) / pts.length
+              const vb = wcZone.viewBox.split(' ').map(Number)
+              const r = Math.min(vb[2], vb[3]) * 0.032
+              const fs = r * 0.95
+              return (
+                <svg viewBox={wcZone.viewBox} preserveAspectRatio="none" className="absolute inset-0 w-full h-full" style={{ pointerEvents: 'none' }}>
+                  <polygon
+                    points={wcZone.points}
+                    fill="rgba(56,189,248,0.42)"
+                    stroke="rgba(14,165,233,0.95)"
+                    strokeWidth="4"
+                    style={{ cursor: 'pointer', pointerEvents: 'all' }}
+                    onDoubleClick={() => !gesturedRef.current && onWcClick?.()}
+                  />
+                  <circle cx={cx} cy={cy} r={r} fill="white" stroke="rgba(14,165,233,0.95)" strokeWidth="3" style={{ pointerEvents: 'none' }} />
+                  <text x={cx} y={cy} textAnchor="middle" dominantBaseline="central" fontSize={fs} fontWeight="700" fill="rgba(14,165,233,1)" style={{ pointerEvents: 'none', userSelect: 'none' }}>WC</text>
+                </svg>
+              )
+            })()}
           </div>
         ) : (
           <span className="text-muted-foreground text-sm">Rasm mavjud emas</span>
@@ -173,10 +198,12 @@ export default function BolimPage() {
   const queryClient = useQueryClient()
   const [modal, setModal]               = useState(null)
   const [notSaleApt, setNotSaleApt]     = useState(null)
+  const [wcListOpen, setWcListOpen]     = useState(false)
   const [imgLoaded, setImgLoaded] = useState(false)
   const activeFloor = parseInt(searchParams.get('floor') ?? '1') === 2 ? 2 : 1
   const setActiveFloor = (f) => setSearchParams({ floor: f }, { replace: true })
   useRealtimeApts()
+  const isBlocked = useBlockedState({ hasRealtimeApts: true })
 
   const bolimNum = parseInt(num)
 
@@ -260,10 +287,22 @@ export default function BolimPage() {
     blockId === 'C' ? (C_FLOOR2_RECT_OVERLAYS[bolimNum] ?? null) :
     null
 
+  const wcPoints = WC_OVERLAYS[blockId?.toUpperCase()]?.[activeFloor]?.[bolimNum] ?? null
+  const currentOverlay = activeFloor === 1 ? overlay1 : overlay2
+  const wcZone = wcPoints && currentOverlay ? { points: wcPoints, viewBox: currentOverlay.viewBox } : null
+
+  const { data: wcApts = [] } = useQuery({
+    queryKey: ['wc', blockId, bolimNum, activeFloor],
+    queryFn: () => apiFetch(`/api/wc?block=${blockId}&bolim=${bolimNum}&floor=${activeFloor}`).then(r => r.json()),
+    enabled: wcListOpen,
+    staleTime: 30_000,
+  })
+
   const hasFloor2 = !!img2
 
   return (
     <div className="fixed inset-0 flex flex-col bg-background">
+      {isBlocked && <BlockedOverlay />}
       {/* Header */}
       <div className="flex items-center gap-3 px-5 py-3 border-b border-border bg-background shrink-0">
         <button
@@ -409,6 +448,8 @@ export default function BolimPage() {
             setModal({ apartment: apt, floor: activeFloor })
           }}
           ready={ready}
+          wcZone={wcZone}
+          onWcClick={() => { if (!blockLock) setWcListOpen(true) }}
         />
         {/* Sotuv qulfi banneri — faqat kontent ustida, navigatsiyani bloklamaydi */}
         {blockLock && (
@@ -451,6 +492,107 @@ export default function BolimPage() {
         <NotSaleInfoModal apt={notSaleApt} onClose={() => setNotSaleApt(null)} />
       )}
 
+      {wcListOpen && (
+        <WcListModal
+          apts={wcApts}
+          blockId={blockId?.toUpperCase()}
+          bolimNum={bolimNum}
+          floor={activeFloor}
+          onClose={() => setWcListOpen(false)}
+          onBooked={() => queryClient.invalidateQueries({ queryKey: ['wc', blockId, bolimNum, activeFloor] })}
+        />
+      )}
+
+    </div>
+  )
+}
+
+const WC_STATUS_COLOR = {
+  EMPTY:    { bg: 'bg-emerald-100', text: 'text-emerald-700', border: 'border-emerald-200', dot: 'bg-emerald-500' },
+  RESERVED: { bg: 'bg-amber-100',   text: 'text-amber-700',   border: 'border-amber-200',   dot: 'bg-amber-400'  },
+  SOLD:     { bg: 'bg-red-100',     text: 'text-red-700',     border: 'border-red-200',     dot: 'bg-red-500'    },
+  NOT_SALE: { bg: 'bg-muted',       text: 'text-muted-foreground', border: 'border-border', dot: 'bg-muted-foreground/40' },
+}
+const WC_STATUS_LABEL = { EMPTY: "Bo'sh", RESERVED: 'Bron', SOLD: 'Sotilgan', NOT_SALE: 'Sotilmaydi' }
+
+function WcListModal({ apts, blockId, bolimNum, floor, onClose, onBooked }) {
+  const [selected, setSelected] = useState(null)
+  const [notSale, setNotSale] = useState(null)
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60"
+      style={{ backdropFilter: 'blur(4px)' }}
+      onClick={e => e.target === e.currentTarget && onClose()}
+    >
+      <div className="relative w-full h-full bg-background rounded-2xl shadow-2xl border border-border flex flex-col overflow-hidden">
+
+        {/* LIST VIEW */}
+        <div
+          className="absolute inset-0 flex flex-col transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
+          style={{ transform: selected ? 'translateX(-100%)' : 'translateX(0)' }}
+        >
+          <div className="flex items-center px-6 border-b border-border shrink-0 h-20 bg-sky-50/60">
+            <div className="flex-1">
+              <p className="text-2xl font-black tracking-tight text-sky-900">Hojatxonalar</p>
+              <p className="text-sm text-sky-600 mt-0.5">{blockId}-blok · {bolimNum}-bo'lim · {floor}-qavat</p>
+            </div>
+            <button onClick={onClose} className="w-9 h-9 rounded-full flex items-center justify-center bg-black/8 hover:bg-black/15 transition-colors">
+              <X size={16} strokeWidth={2.5} />
+            </button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto divide-y divide-border/60">
+            {apts.length === 0 && (
+              <p className="px-6 py-12 text-center text-sm text-muted-foreground">Hojatxonalar topilmadi</p>
+            )}
+            {apts.map(wc => {
+              const sc = WC_STATUS_COLOR[wc.status] ?? WC_STATUS_COLOR.NOT_SALE
+              const clickable = wc.status !== 'SOLD'
+              return (
+                <button
+                  key={wc.address}
+                  disabled={!clickable}
+                  onClick={() => {
+                    if (wc.status === 'NOT_SALE') { setNotSale(wc); return }
+                    setSelected(wc)
+                  }}
+                  className={`w-full flex items-center gap-4 px-6 py-4 text-left transition-colors ${clickable ? 'hover:bg-muted/40 active:bg-muted/60' : 'opacity-40 cursor-not-allowed'}`}
+                >
+                  <span className={`w-3 h-3 rounded-full shrink-0 ${sc.dot}`} />
+                  <span className="font-bold text-lg text-foreground flex-1">{wc.address}</span>
+                  <span className="text-sm text-muted-foreground">{wc.size} m²</span>
+                  <span className="text-sm text-muted-foreground">{((wc.price ?? 2000) * wc.size).toLocaleString('ru-RU')} $</span>
+                  <span className={`text-xs font-semibold px-3 py-1 rounded-full border ${sc.bg} ${sc.text} ${sc.border}`}>
+                    {WC_STATUS_LABEL[wc.status] ?? wc.status}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* DETAIL VIEW */}
+        <div
+          className="absolute inset-0 transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
+          style={{ transform: selected ? 'translateX(0)' : 'translateX(100%)' }}
+        >
+          {selected && (
+            <ApartmentModal
+              embedded
+              apartment={selected}
+              floor={floor}
+              blockId={blockId}
+              bolimNum={bolimNum}
+              onClose={() => setSelected(null)}
+              onBooked={() => onBooked?.()}
+            />
+          )}
+        </div>
+
+      </div>
+
+      {notSale && <NotSaleInfoModal apt={notSale} onClose={() => setNotSale(null)} />}
     </div>
   )
 }
