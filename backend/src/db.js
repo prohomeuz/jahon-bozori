@@ -105,6 +105,14 @@ try { db.exec(`CREATE TABLE IF NOT EXISTS backup_meta (key TEXT PRIMARY KEY, val
 // Sales locks — block/bolim/floor darajasida sotuv to'xtatish
 try { db.exec(`CREATE TABLE IF NOT EXISTS sales_locks (block TEXT NOT NULL, bolim INTEGER NOT NULL, floor INTEGER NOT NULL, reason TEXT NOT NULL, locked_at TEXT NOT NULL, locked_by TEXT NOT NULL, PRIMARY KEY (block, bolim, floor))`) } catch {}
 
+// Telegram yuborilgan xabarlar — bekor qilinganda o'chirish uchun
+try { db.exec(`CREATE TABLE IF NOT EXISTS telegram_messages (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  booking_id INTEGER NOT NULL,
+  chat_id TEXT NOT NULL,
+  message_id INTEGER NOT NULL
+)`) } catch {}
+
 // Performance indexes
 try { db.exec(`CREATE INDEX IF NOT EXISTS idx_apts_block_bolim_floor ON apartments(block, bolim, floor)`) } catch {}
 try { db.exec(`CREATE INDEX IF NOT EXISTS idx_bookings_apartment_id  ON bookings(apartment_id)`) } catch {}
@@ -182,7 +190,7 @@ export const q = {
   userByPlainPassword: db.prepare('SELECT * FROM users WHERE plain_password=:plain_password'),
   userById:            db.prepare('SELECT id, role, name, is_active, created_at FROM users WHERE id=:id'),
   insertUser:          db.prepare("INSERT INTO users (username, password, plain_password, role, name, telegram_id, created_at) VALUES (:plain_password, :password, :plain_password, :role, :name, NULL, datetime('now', '+5 hours'))"),
-  allUsers:            db.prepare("SELECT id, name, plain_password, role, is_active, created_at FROM users WHERE role='salesmanager' ORDER BY created_at DESC"),
+  allUsers:            db.prepare("SELECT id, name, plain_password, role, is_active, telegram_id, created_at FROM users WHERE role='salesmanager' ORDER BY created_at DESC"),
   userTelegramId:      db.prepare('SELECT telegram_id FROM users WHERE id=:id'),
 
   // telegram subscribers
@@ -190,7 +198,7 @@ export const q = {
   allSubscribers:    db.prepare("SELECT chat_id FROM telegram_subscribers"),
 
   // apartments
-  apartments:         db.prepare('SELECT id AS address, size, status, notes, not_sale_reason FROM apartments WHERE block=:block AND bolim=:bolim AND floor=:floor ORDER BY id'),
+  apartments:         db.prepare('SELECT id AS address, size, status, is_wc, notes, not_sale_reason FROM apartments WHERE block=:block AND bolim=:bolim AND floor=:floor ORDER BY id'),
   bolims:             db.prepare('SELECT DISTINCT bolim FROM apartments WHERE block=:block ORDER BY bolim'),
   updateStatus:       db.prepare('UPDATE apartments SET status=:status, not_sale_reason=NULL WHERE id=:id'),
   updateStatusReason: db.prepare('UPDATE apartments SET status=:status, not_sale_reason=:reason WHERE id=:id'),
@@ -206,6 +214,10 @@ export const q = {
   myCancelled:    db.prepare('SELECT b.*, u.name AS manager_name FROM bookings b LEFT JOIN users u ON b.user_id=u.id WHERE b.user_id=:user_id AND b.cancelled_at IS NOT NULL ORDER BY b.cancelled_at DESC LIMIT :limit OFFSET :offset'),
   aptBookings:    db.prepare('SELECT b.*, u.name AS manager_name FROM bookings b LEFT JOIN users u ON b.user_id=u.id WHERE b.apartment_id=:apartment_id ORDER BY b.created_at DESC'),
   cancelBooking:  db.prepare("UPDATE bookings SET cancelled_at=datetime('now', '+5 hours') WHERE apartment_id=:apartment_id AND cancelled_at IS NULL"),
+  activeBookingByApt: db.prepare("SELECT id FROM bookings WHERE apartment_id=? AND cancelled_at IS NULL"),
+  saveTgMsg:      db.prepare("INSERT INTO telegram_messages (booking_id, chat_id, message_id) VALUES (?, ?, ?)"),
+  tgMsgsByBooking: db.prepare("SELECT chat_id, message_id FROM telegram_messages WHERE booking_id=?"),
+  delTgMsgsByBooking: db.prepare("DELETE FROM telegram_messages WHERE booking_id=?"),
 
   // dashboard stats
   statsAll:       db.prepare("SELECT block, status, COUNT(*) AS n FROM apartments GROUP BY block, status"),
