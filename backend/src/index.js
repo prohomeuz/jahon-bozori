@@ -79,7 +79,7 @@ async function sendBackupFile(chatId) {
   const token = process.env.TELEGRAM_BOT_TOKEN
   if (!token || !chatId) return false
 
-  db.exec('PRAGMA wal_checkpoint(TRUNCATE)')
+  try { db.exec('PRAGMA wal_checkpoint(TRUNCATE)') } catch {}
   const tmpPath = pathJoin(tmpdir(), `jahon_backup_${Date.now()}.sqlite`)
   try { copyFileSync(dbPath, tmpPath) }
   catch (e) { console.error('[backup] copy xato:', e.message); return false }
@@ -454,18 +454,39 @@ app.patch('/api/apartments/:id/status', requireAuth, requireAdmin, async (c) => 
   const { status, reason } = await c.req.json()
   if (!['EMPTY', 'RESERVED', 'SOLD', 'NOT_SALE'].includes(status)) return c.json({ error: "Status: EMPTY | RESERVED | SOLD | NOT_SALE" }, 400)
   if (status === 'NOT_SALE' && !reason?.trim()) return c.json({ error: "NOT_SALE uchun sabab kiritish majburiy" }, 400)
+  let tgMsgs = []
   db.exec('BEGIN')
   try {
     if (status === 'NOT_SALE') {
       q.updateStatusReason.run({ status, reason: reason.trim(), id })
     } else {
       q.updateStatus.run({ status, id })
-      if (status === 'EMPTY') q.cancelBooking.run({ apartment_id: id })
+      if (status === 'EMPTY') {
+        const activeBooking = q.activeBookingByApt.get(id)
+        if (activeBooking) {
+          tgMsgs = q.tgMsgsByBooking.all(activeBooking.id)
+          q.delTgMsgsByBooking.run(activeBooking.id)
+        }
+        q.cancelBooking.run({ apartment_id: id })
+      }
     }
     db.exec('COMMIT')
   } catch (e) {
     db.exec('ROLLBACK')
     return c.json({ error: e.message }, 500)
+  }
+  // Telegram dan o'chirish (DB commit dan keyin, background)
+  if (tgMsgs.length > 0) {
+    const token = process.env.TELEGRAM_BOT_TOKEN
+    if (token) {
+      Promise.all(tgMsgs.map(({ chat_id, message_id }) =>
+        proxiedFetch(`https://api.telegram.org/bot${token}/deleteMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ chat_id, message_id }),
+        }).catch(() => {})
+      )).catch(() => {})
+    }
   }
   broadcast('apartment', { id, status, not_sale_reason: status === 'NOT_SALE' ? reason.trim() : null })
   broadcast('booking', { cancelled: true })
@@ -710,6 +731,9 @@ app.post('/api/bookings/send-pdf', requireAuth, async (c) => {
         }
       } else {
         console.log('[sendDoc] OK → chatId:', chatId)
+        if (json.result?.message_id) {
+          try { q.saveTgMsg.run(bookingId, String(chatId), json.result.message_id) } catch {}
+        }
       }
     } catch (e) {
       console.error('[sendDoc] fetch xato:', e?.message, 'chatId:', chatId)
@@ -718,12 +742,9 @@ app.post('/api/bookings/send-pdf', requireAuth, async (c) => {
 
   // Barcha subscriberlarga (parallel)
   const targets = new Set()
+  if (OWNER_CHAT_ID) targets.add(String(OWNER_CHAT_ID))   // egaga doim yuborish
   const subscribers = q.allSubscribers.all()
   console.log('[send-pdf] subscribers:', subscribers.length)
-
-  for (const manager of q.allUsers.all()) {
-    if (manager.telegram_id) targets.add(String(manager.telegram_id))
-  }
   for (const sub of subscribers) targets.add(sub.chat_id)
 
   await Promise.all([...targets].map(chatId => sendDoc(chatId)))
@@ -828,32 +849,40 @@ async function setupTelegramWebhook() {
   } catch (e) { console.error('[telegram] Webhook setup xato:', e.message) }
 }
 
-// Har 30 daqiqada webhook sog'ligini tekshiradi — muammo bo'lsa qayta o'rnatadi
+// Har 30 daqiqada webhook sog'ligini tekshiradi — muammo bo'lsa xabar yuboradi
+let _webhookWarnedAt = 0
 async function checkWebhookHealth() {
   const token = process.env.TELEGRAM_BOT_TOKEN
   const domain = process.env.WEBHOOK_DOMAIN
   if (!token || !domain) return
   try {
-    const res = await proxiedFetch(`https://api.telegram.org/bot${token}/getWebhookInfo`)
-    const json = await res.json()
-    if (!json.ok) return
-    const info = json.result
+    const info = await proxiedFetch(`https://api.telegram.org/bot${token}/getWebhookInfo`)
+      .then(r => r.json()).then(j => j.ok ? j.result : null)
+    if (!info) return
     const expectedUrl = `${domain.replace(/\/$/, '')}/api/telegram/webhook`
-    // URL noto'g'ri, xato xabari bor, yoki 100+ pending update (ishlamayapti)
-    const needsFix = info.url !== expectedUrl || !!info.last_error_message || info.pending_update_count > 100
-    if (needsFix) {
-      console.log('[telegram] Webhook muammo — qayta o\'rnatilmoqda. url_ok:', info.url === expectedUrl, 'error:', info.last_error_message, 'pending:', info.pending_update_count)
+    if (info.url !== expectedUrl) {
+      // Avval tuzatishga urinish
       await setupTelegramWebhook()
-      await proxiedFetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          chat_id: OWNER_CHAT_ID,
-          text: `⚠️ <b>Bot webhook muammo aniqlandi va qayta o'rnatildi</b>\n\nURL to'g'ri: ${info.url === expectedUrl ? 'Ha' : 'Yo\'q'}\nXato: ${info.last_error_message ?? 'yo\'q'}\nPending: ${info.pending_update_count}`,
-          parse_mode: 'HTML',
-        }),
-      }).catch(() => {})
+      // Tuzatishdan keyin qayta tekshiruv
+      const info2 = await proxiedFetch(`https://api.telegram.org/bot${token}/getWebhookInfo`)
+        .then(r => r.json()).then(j => j.ok ? j.result : null)
+      if (!info2 || info2.url === expectedUrl) return  // tuzatildi — silent
     }
+    // Hali ham muammo bor yoki pending ko'p — xabar yuborish (2 soatda bir marta)
+    const hasProblem = info.url !== expectedUrl || info.pending_update_count > 100
+    if (!hasProblem) return
+    const now = Date.now()
+    if (now - _webhookWarnedAt < 2 * 3600_000) return
+    _webhookWarnedAt = now
+    await proxiedFetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: OWNER_CHAT_ID,
+        text: `⚠️ <b>Webhook muammo hal etilmadi</b>\n\nURL: ${info.url || 'yo\'q'}\nPending: ${info.pending_update_count}`,
+        parse_mode: 'HTML',
+      }),
+    }).catch(() => {})
   } catch (e) { console.error('[telegram] Webhook health check xato:', e.message) }
 }
 

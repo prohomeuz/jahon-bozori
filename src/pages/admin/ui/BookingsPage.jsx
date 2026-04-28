@@ -27,6 +27,60 @@ function loadImg(blockId, floor, bolimNum) {
   return entry?.[1]?.default ?? null
 }
 
+async function getBolimViewBox(blockId, floor, bolimNum) {
+  try {
+    const LOADERS = {
+      A: [
+        () => import('../../../pages/bolim/config/aRectOverlays').then(m => m.A_RECT_OVERLAYS),
+        () => import('../../../pages/bolim/config/aFloor2RectOverlays').then(m => m.A_FLOOR2_RECT_OVERLAYS),
+      ],
+      B: [
+        () => import('../../../pages/bolim/config/bRectOverlays').then(m => m.B_RECT_OVERLAYS),
+        () => import('../../../pages/bolim/config/bFloor2RectOverlays').then(m => m.B_FLOOR2_RECT_OVERLAYS),
+      ],
+      C: [
+        () => import('../../../pages/bolim/config/cRectOverlays').then(m => m.C_RECT_OVERLAYS),
+        () => import('../../../pages/bolim/config/cFloor2RectOverlays').then(m => m.C_FLOOR2_RECT_OVERLAYS),
+      ],
+    }
+    const overlays = await LOADERS[blockId]?.[floor === 2 ? 1 : 0]?.()
+    return overlays?.[bolimNum]?.viewBox ?? null
+  } catch { return null }
+}
+
+async function drawWcHighlight(imgSrc, points, viewBox) {
+  const img = new Image()
+  await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = imgSrc })
+  const canvas = document.createElement('canvas')
+  canvas.width = img.naturalWidth; canvas.height = img.naturalHeight
+  const ctx = canvas.getContext('2d')
+  ctx.drawImage(img, 0, 0)
+  if (!points || !viewBox) return canvas.toDataURL('image/png')
+  const [, , vw, vh] = viewBox.split(' ').map(Number)
+  const sx = img.naturalWidth / vw, sy = img.naturalHeight / vh
+  const coords = points.trim().split(/[\s,]+/).map(Number)
+  const path = new Path2D()
+  for (let i = 0; i + 1 < coords.length; i += 2) {
+    if (i === 0) path.moveTo(coords[i] * sx, coords[i + 1] * sy)
+    else path.lineTo(coords[i] * sx, coords[i + 1] * sy)
+  }
+  path.closePath()
+  ctx.fillStyle = 'rgba(56,189,248,0.35)'; ctx.fill(path)
+  ctx.strokeStyle = '#0ea5e9'; ctx.lineWidth = Math.max(4, vw / 130); ctx.stroke(path)
+  const xs = [], ys = []
+  for (let i = 0; i + 1 < coords.length; i += 2) { xs.push(coords[i] * sx); ys.push(coords[i + 1] * sy) }
+  const bboxPx = Math.min(...xs), bboxPy = Math.min(...ys)
+  const bboxPw = Math.max(...xs) - bboxPx, bboxPh = Math.max(...ys) - bboxPy
+  const padX = bboxPw * 2.5, padY = bboxPh * 1.5
+  const cx = Math.max(0, bboxPx - padX), cy = Math.max(0, bboxPy - padY)
+  const cw = Math.min(img.naturalWidth - cx, bboxPw + padX * 2)
+  const ch = Math.min(img.naturalHeight - cy, bboxPh + padY * 2)
+  const cropped = document.createElement('canvas')
+  cropped.width = cw; cropped.height = ch
+  cropped.getContext('2d').drawImage(canvas, cx, cy, cw, ch, 0, 0, cw, ch)
+  return cropped.toDataURL('image/png')
+}
+
 async function getAptRect(blockId, floor, bolimNum, address) {
   try {
     const LOADERS = {
@@ -117,8 +171,15 @@ async function downloadBookingPDF(b) {
   let floorImgSrc = null
   if (rawFloorImg) {
     try {
-      const overlay = await getAptRect(blockId, floor, bolimNum, b.apartment_id)
-      floorImgSrc = await drawHighlight(rawFloorImg, overlay?.rect ?? null, overlay?.viewBox ?? null)
+      if (apartment.is_wc) {
+        const { WC_OVERLAYS } = await import('@/pages/bolim/config/hojatxonaOverlays')
+        const wcPoints = WC_OVERLAYS[blockId]?.[floor]?.[bolimNum] ?? null
+        const viewBox  = await getBolimViewBox(blockId, floor, bolimNum)
+        floorImgSrc = await drawWcHighlight(rawFloorImg, wcPoints, viewBox)
+      } else {
+        const overlay = await getAptRect(blockId, floor, bolimNum, b.apartment_id)
+        floorImgSrc = await drawHighlight(rawFloorImg, overlay?.rect ?? null, overlay?.viewBox ?? null)
+      }
     } catch { floorImgSrc = null }
   }
 
