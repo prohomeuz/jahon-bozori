@@ -7,6 +7,7 @@ import { B_RECT_OVERLAYS } from '@/pages/bolim/config/bRectOverlays'
 import { B_FLOOR2_RECT_OVERLAYS } from '@/pages/bolim/config/bFloor2RectOverlays'
 import { C_RECT_OVERLAYS } from '@/pages/bolim/config/cRectOverlays'
 import { C_FLOOR2_RECT_OVERLAYS } from '@/pages/bolim/config/cFloor2RectOverlays'
+import { WC_OVERLAYS } from '@/pages/bolim/config/hojatxonaOverlays'
 
 const aImg1 = import.meta.glob('@/assets/blocks/A/1/*.webp', { eager: true })
 const aImg2 = import.meta.glob('@/assets/blocks/A/2/*.webp', { eager: true })
@@ -239,7 +240,17 @@ const ZoomablePane = memo(function ZoomablePane({ children, zoomingRef }) {
 })
 
 // memo: aptMap o'zgarmasa qayta render bo'lmaydi
-const OverlayPane = memo(function OverlayPane({ src, overlay, aptMap }) {
+const OverlayPane = memo(function OverlayPane({ src, overlay, aptMap, wcPoints }) {
+  const wcCircle = useMemo(() => {
+    if (!wcPoints || !overlay) return null
+    const pts = wcPoints.split(/\s+/).map(p => p.split(',').map(Number))
+    const cx = pts.reduce((s, p) => s + p[0], 0) / pts.length
+    const cy = pts.reduce((s, p) => s + p[1], 0) / pts.length
+    const vb = overlay.viewBox.split(' ').map(Number)
+    const r  = Math.min(vb[2], vb[3]) * 0.032
+    return { cx, cy, r, fs: r * 0.95 }
+  }, [wcPoints, overlay])
+
   return (
     <div className="relative h-full overflow-hidden" style={{
       backgroundImage: 'radial-gradient(circle, #d1d5db 1px, transparent 1px)',
@@ -262,6 +273,13 @@ const OverlayPane = memo(function OverlayPane({ src, overlay, aptMap }) {
               ? <path key={r.id} d={r.d} style={s} />
               : <rect key={r.id} x={r.x} y={r.y} width={r.width} height={r.height} style={s} />
           })}
+          {wcCircle && wcPoints && (
+            <>
+              <polygon points={wcPoints} fill="rgba(56,189,248,0.42)" stroke="rgba(14,165,233,0.95)" strokeWidth="4" />
+              <circle cx={wcCircle.cx} cy={wcCircle.cy} r={wcCircle.r} fill="white" stroke="rgba(14,165,233,0.95)" strokeWidth="3" />
+              <text x={wcCircle.cx} y={wcCircle.cy} textAnchor="middle" dominantBaseline="central" fontSize={wcCircle.fs} fontWeight="700" fill="rgba(14,165,233,1)" style={{ userSelect: 'none' }}>WC</text>
+            </>
+          )}
         </svg>
       )}
     </div>
@@ -531,6 +549,8 @@ export default function LivePage() {
   const src2 = cur ? getImg(cur.block, 2, cur.bolim) : null
   const ov1  = cur ? getOverlay(cur.block, 1, cur.bolim) : null
   const ov2  = cur ? getOverlay(cur.block, 2, cur.bolim) : null
+  const wc1  = cur ? (WC_OVERLAYS[cur.block]?.[1]?.[cur.bolim] ?? null) : null
+  const wc2  = cur ? (WC_OVERLAYS[cur.block]?.[2]?.[cur.bolim] ?? null) : null
 
   // Joriy slide rasmlari tayyor bo'lguncha spinner
   const [imgReady, setImgReady] = useState(false)
@@ -604,7 +624,7 @@ export default function LivePage() {
 
       {/* ── TOP BANNER ── */}
       <div className="shrink-0 bg-gray-100">
-      <div className="relative flex items-center gap-2 px-4 mx-auto w-full max-w-[500px]" style={{ height: '44px' }}>
+      <div className="relative flex items-center gap-2 px-4 mx-auto w-full max-w-[600px]" style={{ height: '44px' }}>
         <span className="font-black text-[15px] tracking-widest text-gray-800 leading-none uppercase">{cur?.block} {t.blok}</span>
         <span className="text-gray-300 text-[15px] font-light leading-none select-none">·</span>
         <span className="font-black text-[15px] tracking-widest text-gray-800 leading-none uppercase tabular-nums">{cur?.bolim}-{t.bolim}</span>
@@ -643,7 +663,7 @@ export default function LivePage() {
             onClick={dismissIntro}
           >
             <div
-              className="bg-white px-6 py-7 w-full max-w-[500px] min-[500px]:rounded-2xl flex flex-col items-center gap-5"
+              className="bg-white px-6 py-7 w-full max-w-[600px] min-[500px]:rounded-2xl flex flex-col items-center gap-5"
               onClick={e => e.stopPropagation()}
             >
               {/* Til tanlash — segmented control */}
@@ -663,10 +683,8 @@ export default function LivePage() {
                 ))}
               </div>
 
-              <div className="w-10 h-10 rounded-full bg-gray-900 flex items-center justify-center shrink-0">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
-                </svg>
+              <div className="shrink-0">
+                <img src="/logo.png" alt="Jahon Bozori" className="h-36 w-auto object-contain" draggable={false} />
               </div>
 
               <p className="text-gray-700 text-base font-medium text-center leading-relaxed">
@@ -716,7 +734,7 @@ export default function LivePage() {
           </div>
           <div key={`${safeIdx}-f1`} className={`flex-1 min-h-0 px-3 ${dir === 'left' ? 'live-slide-in-left' : 'live-slide-in-right'}`}>
             <ZoomablePane zoomingRef={zoomingRef}>
-              <OverlayPane src={src1} overlay={ov1} aptMap={map1} />
+              <OverlayPane src={src1} overlay={ov1} aptMap={map1} wcPoints={wc1} />
             </ZoomablePane>
           </div>
         </div>
@@ -729,7 +747,7 @@ export default function LivePage() {
             </div>
             <div key={`${safeIdx}-f2`} className={`flex-1 min-h-0 px-3 ${dir === 'left' ? 'live-slide-in-left' : 'live-slide-in-right'}`}>
               <ZoomablePane zoomingRef={zoomingRef}>
-                <OverlayPane src={src2} overlay={ov2} aptMap={map2} />
+                <OverlayPane src={src2} overlay={ov2} aptMap={map2} wcPoints={wc2} />
               </ZoomablePane>
             </div>
           </div>
@@ -738,15 +756,23 @@ export default function LivePage() {
 
       {/* ── BOTTOM BAR ── */}
       <div className="shrink-0 bg-white border-t border-gray-200">
-        <div className="mx-auto w-full max-w-[500px]">
-        <div className="grid grid-cols-2 border-b border-gray-200">
-          {LEGEND.map(({ c, k }, i) => (
-            <div key={k} className={`flex items-center justify-center gap-2 py-3 ${i % 2 === 0 ? 'border-r border-gray-200' : ''} ${i < 2 ? 'border-b border-gray-200' : ''}`} style={{}}>
-              <span className="w-3.5 h-3.5 rounded-full shrink-0" style={{ background: c }} />
-              <span className="text-sm font-black text-gray-900 leading-none tabular-nums">{counts[k] ?? 0}</span>
-              <span className="text-sm text-gray-500 font-medium leading-none">{t[STATUS_LABEL_KEY[k]]}</span>
-            </div>
-          ))}
+        <div className="mx-auto w-full max-w-[600px]">
+        <div className="grid grid-cols-2 sm:grid-cols-4 border-b border-gray-200">
+          {LEGEND.map(({ c, k }, i) => {
+            const border = [
+              'border-r border-b sm:border-b-0',
+              'border-b sm:border-b-0 sm:border-r',
+              'border-r',
+              '',
+            ][i]
+            return (
+              <div key={k} className={`flex items-center justify-center gap-1.5 py-3 sm:py-2.5 border-gray-200 ${border}`}>
+                <span className="w-3 h-3 rounded-full shrink-0" style={{ background: c }} />
+                <span className="text-xs font-black text-gray-900 leading-none tabular-nums">{counts[k] ?? 0}</span>
+                <span className="text-xs text-gray-500 font-medium leading-none">{t[STATUS_LABEL_KEY[k]]}</span>
+              </div>
+            )
+          })}
         </div>
 
         {/* Controls: [picker | mr-auto] [← arrow] [timer] [→ arrow] */}

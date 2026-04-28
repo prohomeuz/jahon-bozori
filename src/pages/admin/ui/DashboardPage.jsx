@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { getUser, apiFetch } from '@/shared/lib/auth'
 import { useRealtimeApts } from '@/shared/hooks/useRealtimeApts'
-import { TrendingUp, ShoppingCart, Clock, LayoutGrid, Medal, Ban } from 'lucide-react'
+import { TrendingUp, ShoppingCart, Clock, LayoutGrid, Medal, Ban, Toilet, Store } from 'lucide-react'
 
 /* ── Palette ──────────────────────────────────────────────────────────────── */
 const C = { SOLD: '#ef4444', RESERVED: '#f59e0b', EMPTY: '#22c55e', NOT_SALE: '#6b7280' }
@@ -272,9 +272,10 @@ export default function DashboardPage() {
   const user    = getUser()
   const isAdmin = user?.role === 'admin'
 
-  const [detailTab,   setDetailTab]   = useState('bolim')
-  const [blockFilter, setBlockFilter] = useState('A')
-  const [dateRange,   setDateRange]   = useState({ from: '', to: '' })
+  const [detailTab,    setDetailTab]    = useState('bolim')
+  const [blockFilter,  setBlockFilter]  = useState('A')
+  const [dateRange,    setDateRange]    = useState({ from: '', to: '' })
+  const [inventoryTab, setInventoryTab] = useState('all')
 
   const { data: dash, isLoading } = useQuery({
     queryKey: ['dashboard'],
@@ -307,10 +308,37 @@ export default function DashboardPage() {
     </div>
   )
 
-  const { total = {}, blocks = {}, myStats = {}, totalBookings = 0 } = dash ?? {}
-  const { byBolim = [], byFloor = [] } = stats ?? {}
+  const { shopBlocks = {}, wcBlocks = {}, shopTotal = {}, wcTotal = {}, myStats = {}, totalBookings = 0 } = dash ?? {}
 
-  const detailSource = detailTab === 'bolim' ? byBolim : byFloor
+  const allBlocks = Object.fromEntries(
+    ['A','B','C'].map(b => {
+      const s = shopBlocks[b] ?? {}, w = wcBlocks[b] ?? {}
+      return [b, {
+        SOLD:     (s.SOLD     ?? 0) + (w.SOLD     ?? 0),
+        RESERVED: (s.RESERVED ?? 0) + (w.RESERVED ?? 0),
+        EMPTY:    (s.EMPTY    ?? 0) + (w.EMPTY    ?? 0),
+        NOT_SALE: (s.NOT_SALE ?? 0) + (w.NOT_SALE ?? 0),
+      }]
+    })
+  )
+  const allTotal = {
+    SOLD:     (shopTotal.SOLD     ?? 0) + (wcTotal.SOLD     ?? 0),
+    RESERVED: (shopTotal.RESERVED ?? 0) + (wcTotal.RESERVED ?? 0),
+    EMPTY:    (shopTotal.EMPTY    ?? 0) + (wcTotal.EMPTY    ?? 0),
+    NOT_SALE: (shopTotal.NOT_SALE ?? 0) + (wcTotal.NOT_SALE ?? 0),
+  }
+
+  const activeBlocks = inventoryTab === 'shops' ? shopBlocks : inventoryTab === 'wc' ? wcBlocks : allBlocks
+  const activeTotal  = inventoryTab === 'shops' ? shopTotal  : inventoryTab === 'wc' ? wcTotal  : allTotal
+  const {
+    byBolim = [], byBolimShops = [], byBolimWc = [],
+    byFloor = [], byFloorShops = [], byFloorWc = [],
+  } = stats ?? {}
+
+  const byBolimActive = inventoryTab === 'shops' ? byBolimShops : inventoryTab === 'wc' ? byBolimWc : byBolim
+  const byFloorActive = inventoryTab === 'shops' ? byFloorShops : inventoryTab === 'wc' ? byFloorWc : byFloor
+
+  const detailSource = detailTab === 'bolim' ? byBolimActive : byFloorActive
   const detailKey    = detailTab === 'bolim' ? 'bolim' : 'floor'
   const detailRows   = detailSource
     .filter(r => r.block === blockFilter)
@@ -322,31 +350,66 @@ export default function DashboardPage() {
     <div className="p-4 md:p-6 flex flex-col gap-6 w-full">
       <h1 className="text-2xl font-bold">Dashboard</h1>
 
-      {/* Stat cards — 2 cols always, clean on tablet */}
-      <div className="grid grid-cols-2 gap-3">
-        {isAdmin ? (
-          <>
-            <StatCard label="Sotilgan"      value={total.SOLD}          color={C.SOLD}     icon={ShoppingCart} />
-            <StatCard label="Bron"          value={total.RESERVED}      color={C.RESERVED} icon={Clock} />
-            <StatCard label="Bo'sh"         value={total.EMPTY}         color={C.EMPTY}    icon={LayoutGrid} />
-            <StatCard label="Sotilmaydi"    value={total.NOT_SALE ?? 0} color={C.NOT_SALE} icon={Ban} />
-            <StatCard label="Jami bitimlar" value={totalBookings}       color="#6366f1"    icon={TrendingUp} />
-          </>
-        ) : (
-          <>
-            <StatCard label="Sotish"        value={myStats.sotish} color={C.SOLD}     icon={ShoppingCart} />
-            <StatCard label="Bron qilish"   value={myStats.bron}   color={C.RESERVED} icon={Clock} />
-            <StatCard label="Jami bitimlar" value={totalBookings}  color="#6366f1"    icon={TrendingUp} />
-          </>
-        )}
-      </div>
+      {/* Stat cards — faqat salesmanager uchun */}
+      {!isAdmin && (
+        <div className="grid grid-cols-2 gap-3">
+          <StatCard label="Sotish"        value={myStats.sotish} color={C.SOLD}     icon={ShoppingCart} />
+          <StatCard label="Bron qilish"   value={myStats.bron}   color={C.RESERVED} icon={Clock} />
+          <StatCard label="Jami bitimlar" value={totalBookings}  color="#6366f1"    icon={TrendingUp} />
+        </div>
+      )}
 
       {/* Bloklar donuts — 3 cols always (3 ta blok) */}
       {isAdmin && (
         <section className="flex flex-col gap-3">
-          <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Bloklar bo'yicha</h2>
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Bloklar bo'yicha</h2>
+            <div className="flex items-center bg-muted rounded-xl p-1 gap-0.5">
+              <button
+                onClick={() => setInventoryTab('all')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${inventoryTab === 'all' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+              >
+                Jami
+              </button>
+              <button
+                onClick={() => setInventoryTab('shops')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${inventoryTab === 'shops' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+              >
+                <Store size={11} />
+                Do'konlar
+              </button>
+              <button
+                onClick={() => setInventoryTab('wc')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${inventoryTab === 'wc' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+              >
+                <Toilet size={11} />
+                Hojatxonalar
+              </button>
+            </div>
+          </div>
+
+          {/* Summary strip */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            {[
+              { label: 'Sotilgan',      value: activeTotal.SOLD,          color: C.SOLD },
+              { label: 'Bron',          value: activeTotal.RESERVED,      color: C.RESERVED },
+              { label: "Bo'sh",         value: activeTotal.EMPTY,         color: C.EMPTY },
+              { label: 'Sotilmaydi',    value: activeTotal.NOT_SALE ?? 0, color: C.NOT_SALE },
+            ].map(({ label, value, color }) => (
+              <div key={label} className="bg-card border border-border rounded-xl px-3 py-2.5 flex flex-col gap-0.5">
+                <span className="text-[10px] text-muted-foreground font-medium">{label}</span>
+                <span className="text-lg font-bold tabular-nums leading-tight" style={{ color }}>{value ?? 0}</span>
+              </div>
+            ))}
+          </div>
+          {/* Jami bitimlar */}
+          <div className="bg-card border border-border rounded-xl px-4 py-2.5 flex items-center justify-between">
+            <span className="text-xs text-muted-foreground font-medium">Jami bitimlar</span>
+            <span className="text-lg font-bold tabular-nums" style={{ color: '#6366f1' }}>{totalBookings}</span>
+          </div>
+
           <div className="grid grid-cols-3 gap-3">
-            {BLOCKS.map(b => <BlockCard key={b} blockId={b} stats={blocks[b] ?? {}} />)}
+            {BLOCKS.map(b => <BlockCard key={b} blockId={b} stats={activeBlocks[b] ?? {}} />)}
           </div>
         </section>
       )}

@@ -9,6 +9,8 @@ import { useGestureGuard } from '@/shared/hooks/useGestureGuard'
 import { BLOCK_BUILDINGS, BLOCK_VIEW_BOX } from '../config/buildings'
 import { imgCache } from '@/shared/lib/imgCache'
 import { AdminButton } from '@/shared/ui/AdminButton'
+import { useBlockedState } from '@/shared/hooks/useBlockedState'
+import { BlockedOverlay } from '@/shared/ui/BlockedOverlay'
 
 const BLOCK_META = {
   A: { label: 'A-BLOK', image: ABLOK },
@@ -27,6 +29,7 @@ export default function BlockPage() {
   const buildings = BLOCK_BUILDINGS[blockId] ?? []
   const viewBox = BLOCK_VIEW_BOX[blockId] ?? '0 0 1597 672'
 
+  const isBlocked = useBlockedState()
   const { scale } = useGlobalZoom(containerRef)
   const { pos } = usePan(containerRef)
   const gesturedRef = useGestureGuard(containerRef)
@@ -42,6 +45,7 @@ export default function BlockPage() {
       className="fixed inset-0 overflow-hidden bg-black"
       style={{ touchAction: 'none', cursor: 'grab' }}
     >
+      {isBlocked && <BlockedOverlay />}
       <div
         className="relative w-full h-full"
         style={{

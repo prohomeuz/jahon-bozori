@@ -3,15 +3,17 @@ import { NavLink, Outlet, useNavigate } from 'react-router'
 import { useQueryClient } from '@tanstack/react-query'
 import { getUser, getToken, removeToken, apiFetch } from '@/shared/lib/auth'
 import { startInactivityWatcher } from '@/shared/lib/inactivity'
-import { LayoutDashboard, Users, ClipboardList, LogOut, Home, PanelLeftClose, PanelLeftOpen, KeyRound, CheckCircle, Tag, Store, WifiOff, Wifi, ShieldOff } from 'lucide-react'
+import { LayoutDashboard, Users, ClipboardList, LogOut, Home, PanelLeftClose, PanelLeftOpen, KeyRound, CheckCircle, Tag, MapPin, WifiOff, Wifi, ShieldOff } from 'lucide-react'
+import { useBlockedState } from '@/shared/hooks/useBlockedState'
+import { BlockedOverlay } from '@/shared/ui/BlockedOverlay'
 
 const NAV = [
-  { to: '/admin',             label: 'Dashboard',          icon: LayoutDashboard, end: true },
-  { to: '/admin/bookings',    label: 'Bitimlar',            icon: ClipboardList },
-  { to: '/admin/shops',       label: "Do'konlar",           icon: Store,           adminOnly: true },
-  { to: '/admin/managers',    label: 'Salesmanagerlar',     icon: Users,           adminOnly: true },
-  { to: '/admin/prices',      label: 'Narxlar',             icon: Tag,             adminOnly: true },
-  { to: '/admin/sales-lock',  label: "Sotuvni to'xtatish",  icon: ShieldOff,       adminOnly: true },
+  { to: '/admin',              label: 'Dashboard',          icon: LayoutDashboard, end: true },
+  { to: '/admin/bookings',     label: 'Bitimlar',            icon: ClipboardList },
+  { to: '/admin/joylar',       label: 'Joylar',              icon: MapPin },
+  { to: '/admin/managers',     label: 'Salesmanagerlar',     icon: Users,           adminOnly: true },
+  { to: '/admin/prices',       label: 'Narxlar',             icon: Tag,             adminOnly: true },
+  { to: '/admin/sales-lock',   label: "Sotuvni to'xtatish",  icon: ShieldOff,       adminOnly: true },
 ]
 
 const PAD = ['1','2','3','4','5','6','7','8','9','','0','⌫']
@@ -228,6 +230,7 @@ export default function AdminLayout() {
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
   const [showChangePw, setShowChangePw] = useState(false)
   const [forcedOut, setForcedOut] = useState(false)
+  const isBlocked = useBlockedState({ hasRealtimeApts: true })
   const [isOnline, setIsOnline] = useState(() => navigator.onLine)
   const [showReconnected, setShowReconnected] = useState(false)
 
@@ -242,6 +245,7 @@ export default function AdminLayout() {
   useEffect(() => {
     if (!user) navigate('/admin/login', { replace: true })
   }, [])
+
 
   useEffect(() => {
     if (!user) return
@@ -278,10 +282,17 @@ export default function AdminLayout() {
             if (!dataLine) continue
             const event = eventLine?.[1] ?? 'message'
             if (event === 'user_invalidated') {
-              const { id } = JSON.parse(dataLine[1])
+              const detail = JSON.parse(dataLine[1])
+              const { id, blocked } = detail
               if (id === user?.sub) {
-                setForcedOut(true)
-                setTimeout(() => { removeToken(); navigate('/admin/login', { replace: true }) }, 3000)
+                if (blocked === true || blocked === false) {
+                  // useBlockedState window event orqali boshqaradi
+                  window.dispatchEvent(new CustomEvent('user-invalidated', { detail }))
+                } else {
+                  // Ma'lumot o'zgardi yoki o'chirildi — chiqarish
+                  setForcedOut(true)
+                  setTimeout(() => { removeToken(); navigate('/admin/login', { replace: true }) }, 3000)
+                }
                 return
               }
             }
@@ -443,6 +454,8 @@ export default function AdminLayout() {
           </div>
         </div>
       )}
+
+      {isBlocked && <BlockedOverlay />}
 
       {/* Offline overlay — blocks all interaction */}
       {!isOnline && (

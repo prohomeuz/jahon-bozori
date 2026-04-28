@@ -2,6 +2,7 @@ import { Loader2, RotateCcw, FileText, CheckCircle, X, ChevronDown, Calculator }
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { apiFetch, getUser } from '@/shared/lib/auth'
 import { ContractPDF } from './ContractPDF'
+import { WC_OVERLAYS } from '../config/hojatxonaOverlays'
 import imgKonditsioner from '@/assets/bonus/konditsioner.webp'
 import imgTV from '@/assets/bonus/tv.webp'
 import imgMuzlatgich from '@/assets/bonus/muzlatgich.webp'
@@ -116,6 +117,96 @@ async function drawHighlight(imgSrc, rect, viewBox) {
   return cropped.toDataURL('image/png')
 }
 
+async function drawWcHighlight(imgSrc, points, viewBox) {
+  const img = new Image()
+  await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = imgSrc })
+  const canvas = document.createElement('canvas')
+  canvas.width = img.naturalWidth; canvas.height = img.naturalHeight
+  const ctx = canvas.getContext('2d')
+  ctx.drawImage(img, 0, 0)
+  if (!points || !viewBox) return canvas.toDataURL('image/png')
+  const [, , vw, vh] = viewBox.split(' ').map(Number)
+  const sx = img.naturalWidth / vw, sy = img.naturalHeight / vh
+  const coords = points.trim().split(/[\s,]+/).map(Number)
+  const path = new Path2D()
+  for (let i = 0; i + 1 < coords.length; i += 2) {
+    if (i === 0) path.moveTo(coords[i] * sx, coords[i + 1] * sy)
+    else path.lineTo(coords[i] * sx, coords[i + 1] * sy)
+  }
+  path.closePath()
+  ctx.fillStyle = 'rgba(56,189,248,0.35)'; ctx.fill(path)
+  ctx.strokeStyle = '#0ea5e9'; ctx.lineWidth = Math.max(4, vw / 130); ctx.stroke(path)
+  const xs = [], ys = []
+  for (let i = 0; i + 1 < coords.length; i += 2) { xs.push(coords[i] * sx); ys.push(coords[i + 1] * sy) }
+  const bboxPx = Math.min(...xs), bboxPy = Math.min(...ys)
+  const bboxPw = Math.max(...xs) - bboxPx, bboxPh = Math.max(...ys) - bboxPy
+
+  // WC polygon chegarasidan tashqariga strelka
+  const wcCx = bboxPx + bboxPw / 2
+  const wcCy = bboxPy + bboxPh / 2
+  const arrowAngle = Math.PI * 0.75 // pastki-chap tomondan (225°)
+  // uchni markazdan polygon chetiga (+ gap) siljitamiz
+  const tipGap = Math.min(bboxPw, bboxPh) * 0.6
+  const arrowTip = {
+    x: wcCx + Math.cos(arrowAngle) * tipGap,
+    y: wcCy + Math.sin(arrowAngle) * tipGap,
+  }
+  const arrowLen = Math.max(bboxPw, bboxPh) * 1.6
+  const arrowStart = {
+    x: wcCx + Math.cos(arrowAngle) * arrowLen,
+    y: wcCy + Math.sin(arrowAngle) * arrowLen,
+  }
+  const lw = Math.max(8, Math.min(bboxPw, bboxPh) * 0.10)
+  const headLen = lw * 5
+  const headHalf = Math.PI / 5 // 36° har tomonga — o'tkir uchburchak
+  const angle = Math.atan2(arrowTip.y - arrowStart.y, arrowTip.x - arrowStart.x)
+  // shaft headLen qadar orqada tugaydi — uchi bilan ustma-ust tushmaydi
+  const shaftEndX = arrowTip.x - Math.cos(angle) * headLen * 0.85
+  const shaftEndY = arrowTip.y - Math.sin(angle) * headLen * 0.85
+  ctx.save()
+  ctx.strokeStyle = '#1d4ed8'; ctx.fillStyle = '#1d4ed8'
+  // Shaft
+  ctx.lineWidth = lw; ctx.lineCap = 'butt'
+  ctx.beginPath(); ctx.moveTo(arrowStart.x, arrowStart.y); ctx.lineTo(shaftEndX, shaftEndY); ctx.stroke()
+  // O'tkir uchburchak bosh
+  ctx.beginPath()
+  ctx.moveTo(arrowTip.x, arrowTip.y)
+  ctx.lineTo(arrowTip.x - headLen * Math.cos(angle - headHalf), arrowTip.y - headLen * Math.sin(angle - headHalf))
+  ctx.lineTo(arrowTip.x - headLen * Math.cos(angle + headHalf), arrowTip.y - headLen * Math.sin(angle + headHalf))
+  ctx.closePath(); ctx.fill()
+  ctx.restore()
+
+  const padX = bboxPw * 2.5, padY = bboxPh * 1.5
+  const cx = Math.max(0, bboxPx - padX), cy = Math.max(0, bboxPy - padY)
+  const cw = Math.min(img.naturalWidth - cx, bboxPw + padX * 2)
+  const ch = Math.min(img.naturalHeight - cy, bboxPh + padY * 2)
+  const cropped = document.createElement('canvas')
+  cropped.width = cw; cropped.height = ch
+  cropped.getContext('2d').drawImage(canvas, cx, cy, cw, ch, 0, 0, cw, ch)
+  return cropped.toDataURL('image/png')
+}
+
+async function getBolimViewBox(blockId, floor, bolimNum) {
+  try {
+    const LOADERS = {
+      A: [
+        () => import('../config/aRectOverlays').then(m => m.A_RECT_OVERLAYS),
+        () => import('../config/aFloor2RectOverlays').then(m => m.A_FLOOR2_RECT_OVERLAYS),
+      ],
+      B: [
+        () => import('../config/bRectOverlays').then(m => m.B_RECT_OVERLAYS),
+        () => import('../config/bFloor2RectOverlays').then(m => m.B_FLOOR2_RECT_OVERLAYS),
+      ],
+      C: [
+        () => import('../config/cRectOverlays').then(m => m.C_RECT_OVERLAYS),
+        () => import('../config/cFloor2RectOverlays').then(m => m.C_FLOOR2_RECT_OVERLAYS),
+      ],
+    }
+    const overlays = await LOADERS[blockId]?.[floor === 2 ? 1 : 0]?.()
+    return overlays?.[bolimNum]?.viewBox ?? null
+  } catch { return null }
+}
+
 // react-pdf doesn't support WebP — convert to PNG via canvas
 async function imgToDataUrl(url) {
   try {
@@ -169,8 +260,14 @@ async function downloadContractPDF({ apartment, floor, blockId, bolimNum, form, 
   let floorImgSrc = null
   if (rawFloorImg) {
     try {
-      const overlay = await getAptRect(blockId, floor, bolimNum, apartment.address)
-      floorImgSrc = await drawHighlight(rawFloorImg, overlay?.rect ?? null, overlay?.viewBox ?? null)
+      if (apartment.is_wc) {
+        const wcPoints = WC_OVERLAYS[blockId]?.[floor]?.[bolimNum] ?? null
+        const viewBox  = await getBolimViewBox(blockId, floor, bolimNum)
+        floorImgSrc = await drawWcHighlight(rawFloorImg, wcPoints, viewBox)
+      } else {
+        const overlay = await getAptRect(blockId, floor, bolimNum, apartment.address)
+        floorImgSrc = await drawHighlight(rawFloorImg, overlay?.rect ?? null, overlay?.viewBox ?? null)
+      }
     } catch { floorImgSrc = null }
   }
 
@@ -357,16 +454,35 @@ function PassportField({ label, value, onChange }) {
   )
 }
 
-function ConvertToSaleModal({ apartment, booking, onClose, onBooked }) {
+function StatusCard({ apartment, isReserved, onClose, onBooked }) {
+  const currentUser = getUser()
+  const isAdmin = currentUser?.role === 'admin'
+  const [booking, setBooking] = useState(null)
   const [form, setForm] = useState({ passport: '', passport_place: '', manzil: '' })
   const [converting, setConverting] = useState(false)
-  const [error, setError] = useState(null)
+  const [convertError, setConvertError] = useState(null)
+
+  useEffect(() => {
+    apiFetch(`/api/apartments/booking?id=${apartment.address}`)
+      .then(r => r.json())
+      .then(d => setBooking(d))
+      .catch(() => {})
+  }, [apartment.address])
 
   useEffect(() => {
     const handler = (e) => { if (e.key === 'Escape') onClose() }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
   }, [onClose])
+
+  // Only the booking owner or admin can convert to sale
+  const canConvert = isReserved && booking && currentUser &&
+    (booking.user_id === currentUser.sub || isAdmin)
+
+  const accent = isReserved
+    ? { dot: 'bg-amber-400', badge: 'bg-amber-100 text-amber-700 border-amber-200', label: 'Bron' }
+    : { dot: 'bg-red-500',   badge: 'bg-red-100 text-red-700 border-red-200',       label: 'Sotilgan' }
+
 
   function fmtDate(str) {
     if (!str) return null
@@ -375,10 +491,10 @@ function ConvertToSaleModal({ apartment, booking, onClose, onBooked }) {
     return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`
   }
 
-  async function handleSubmit(e) {
+  async function handleConvert(e) {
     e.preventDefault()
     setConverting(true)
-    setError(null)
+    setConvertError(null)
     try {
       const res = await apiFetch(`/api/bookings/${booking.id}/convert`, {
         method: 'PATCH',
@@ -391,207 +507,148 @@ function ConvertToSaleModal({ apartment, booking, onClose, onBooked }) {
       })
       if (!res.ok) {
         const data = await res.json().catch(() => ({}))
-        setError(data.error || 'Xatolik yuz berdi')
+        setConvertError(data.error || 'Xatolik yuz berdi')
         return
       }
       onBooked?.()
       onClose()
     } catch {
-      setError('Internet aloqasi uzildi')
+      setConvertError('Internet aloqasi uzildi')
     } finally {
       setConverting(false)
     }
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60"
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60"
       style={{ backdropFilter: 'blur(4px)' }}
-      onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="relative w-full max-w-lg bg-background rounded-2xl shadow-2xl border border-border flex flex-col overflow-hidden"
-        style={{ maxHeight: '90vh' }}>
+      onClick={e => e.target === e.currentTarget && onClose()}
+    >
+      <div className="apt-modal-enter relative w-full h-full bg-background rounded-2xl overflow-hidden flex flex-col">
 
-        {/* Header */}
-        <div className="flex items-center px-6 border-b border-border shrink-0 h-20 gap-4">
-          <div className="flex items-center gap-3 flex-1">
-            <span className="text-2xl font-bold text-foreground">{apartment.address}</span>
+        {/* ── HEADER ── */}
+        <div className={`shrink-0 px-6 flex items-center gap-4 h-24 ${isReserved ? 'bg-amber-50 border-b border-amber-100' : 'bg-red-50 border-b border-red-100'}`}>
+          <div className="flex-1 min-w-0">
+            <p className="text-3xl font-black tracking-tight text-foreground leading-none">{apartment.address}</p>
             {apartment.size > 0 && (
-              <span className="text-lg text-muted-foreground font-medium">{apartment.size} m²</span>
+              <p className="text-base text-muted-foreground font-medium mt-1">{apartment.size} m²</p>
             )}
-            <span className="text-xs font-bold px-2.5 py-1 rounded-full border bg-emerald-100 text-emerald-700 border-emerald-200">
-              Sotishga o'tkazish
-            </span>
           </div>
-          <button onClick={onClose}
-            className="w-12 h-12 rounded-full flex items-center justify-center text-muted-foreground hover:bg-accent hover:text-foreground transition-colors shrink-0 text-3xl">
-            ×
+          <span className={`shrink-0 text-sm font-bold px-3 py-1.5 rounded-full border ${accent.badge}`}>
+            {isReserved && canConvert ? "Sotishga o'tkazish" : accent.label}
+          </span>
+          <button onClick={onClose} className="shrink-0 w-10 h-10 rounded-full flex items-center justify-center bg-black/8 hover:bg-black/15 transition-colors">
+            <X size={16} strokeWidth={2.5} />
           </button>
         </div>
 
-        {/* Body */}
-        <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0 overflow-y-auto">
-          <div className="px-6 py-5 flex flex-col gap-5">
+        {/* ── BODY ── */}
+        <div className="flex-1 overflow-y-auto">
 
-            {/* Bron ma'lumotlari — read only xulosa */}
-            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 flex flex-col gap-2.5">
-              <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide mb-0.5">Bron ma'lumotlari</p>
-              {booking.ism && (
-                <div className="flex justify-between">
-                  <span className="text-xs text-amber-800/70">Xaridor</span>
-                  <span className="text-sm font-bold text-amber-900">{booking.ism}</span>
-                </div>
-              )}
-              <div className="flex justify-between">
-                <span className="text-xs text-amber-800/70">Menejer</span>
-                <span className="text-sm font-semibold text-amber-900">{booking.manager_name ?? '—'}</span>
-              </div>
-              {booking.created_at && (
-                <div className="flex justify-between">
-                  <span className="text-xs text-amber-800/70">Bron sanasi</span>
-                  <span className="text-sm font-semibold text-amber-900">{fmtDate(booking.created_at)}</span>
-                </div>
-              )}
-            </div>
-
-            {/* Qo'shimcha maydonlar */}
-            <div className="flex flex-col gap-4">
-              <p className="text-sm font-semibold text-muted-foreground">
-                Qo'shimcha ma'lumotlar <span className="font-normal">(ixtiyoriy)</span>
-              </p>
-              <div className="grid grid-cols-2 gap-4">
-                <PassportField label="Passport seriya/raqam" value={form.passport}
-                  onChange={(v) => setForm(f => ({ ...f, passport: v }))} />
-                <Field label="Passport berilgan joy" placeholder="Toshkent sh. IIB"
-                  value={form.passport_place}
-                  onChange={e => setForm(f => ({ ...f, passport_place: e.target.value }))} />
-              </div>
-              <Field label="Manzil" placeholder="Toshkent, Chilonzor"
-                value={form.manzil}
-                onChange={e => setForm(f => ({ ...f, manzil: e.target.value }))} />
-            </div>
-          </div>
-
-          {/* Footer */}
-          <div className="px-6 pb-6 pt-3 shrink-0 border-t border-border flex flex-col gap-2">
-            {error && (
-              <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm font-medium">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
-                  <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
-                </svg>
-                {error}
-              </div>
-            )}
-            <div className="flex gap-3">
-              <button type="button" onClick={onClose}
-                className="flex-1 py-4 rounded-xl border border-border text-sm font-semibold text-muted-foreground hover:bg-muted transition-colors">
-                Bekor qilish
-              </button>
-              <button type="submit" disabled={converting}
-                className="flex-1 py-4 rounded-xl bg-green-600 text-white font-semibold text-base active:scale-[0.98] transition-all hover:bg-green-700 disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2">
-                {converting && <Loader2 size={18} className="animate-spin" />}
-                {converting ? 'Saqlanmoqda...' : 'Sotishga o\'tkazish'}
-              </button>
-            </div>
-          </div>
-        </form>
-      </div>
-    </div>
-  )
-}
-
-function StatusCard({ apartment, isReserved, onClose, onBooked }) {
-  const [booking, setBooking] = useState(null)
-  const [showConvert, setShowConvert] = useState(false)
-  const currentUser = getUser()
-
-  useEffect(() => {
-    apiFetch(`/api/apartments/booking?id=${apartment.address}`)
-      .then(r => r.json())
-      .then(d => setBooking(d))
-      .catch(() => {})
-  }, [apartment.address])
-
-  const accent = isReserved
-    ? { dot: 'bg-amber-400', badge: 'bg-amber-50 text-amber-700 border-amber-200', label: 'Bron' }
-    : { dot: 'bg-red-500',   badge: 'bg-red-50 text-red-700 border-red-200',       label: 'Sotilgan' }
-
-  const isOwner = isReserved && booking && currentUser && booking.user_id === currentUser.sub
-
-  function fmtDate(str) {
-    if (!str) return null
-    const d = new Date(str)
-    const months = ['yan','fev','mar','apr','may','iyn','iyl','avg','sen','okt','noy','dek']
-    return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`
-  }
-
-  if (showConvert && booking) {
-    return (
-      <ConvertToSaleModal
-        apartment={apartment}
-        booking={booking}
-        onClose={() => setShowConvert(false)}
-        onBooked={onBooked}
-      />
-    )
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60"
-      style={{ backdropFilter: 'blur(4px)' }}
-      onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="relative bg-background rounded-2xl shadow-2xl border border-border w-full max-w-xs overflow-hidden">
-        {/* Header strip */}
-        <div className={`px-5 py-4 flex items-center gap-3 ${isReserved ? 'bg-amber-50 border-b border-amber-100' : 'bg-red-50 border-b border-red-100'}`}>
-          <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${accent.dot}`} />
-          <span className="font-black text-lg text-foreground tracking-tight flex-1">{apartment.address}</span>
-          <span className={`text-xs font-bold px-2.5 py-1 rounded-full border ${accent.badge}`}>{accent.label}</span>
-          <button onClick={onClose} className="w-7 h-7 rounded-full flex items-center justify-center bg-black/8 text-foreground hover:bg-black/15 transition-colors ml-1">
-            <X size={13} strokeWidth={2.5} />
-          </button>
-        </div>
-
-        {/* Info rows */}
-        <div className="px-5 py-4 flex flex-col gap-3">
-          {booking ? (
-            <>
-              {booking.ism && (
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-muted-foreground">{isReserved ? 'Kim uchun bron' : 'Xaridor'}</span>
-                  <span className="text-sm font-bold text-foreground">{booking.ism}</span>
-                </div>
-              )}
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-muted-foreground">Menejer</span>
-                <span className="text-sm font-semibold text-foreground">{booking.manager_name ?? '—'}</span>
-              </div>
-              {booking.created_at && (
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-muted-foreground">{isReserved ? 'Bron sanasi' : 'Sotilgan sana'}</span>
-                  <span className="text-sm font-semibold text-foreground">{fmtDate(booking.created_at)}</span>
-                </div>
-              )}
-            </>
-          ) : (
-            <div className="flex items-center justify-center py-2">
-              <svg className="w-5 h-5 animate-spin text-muted-foreground" viewBox="0 0 24 24" fill="none">
+          {/* LOADING */}
+          {!booking && (
+            <div className="flex items-center justify-center py-14">
+              <svg className="w-6 h-6 animate-spin text-muted-foreground" viewBox="0 0 24 24" fill="none">
                 <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeOpacity="0.2" />
                 <path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
               </svg>
             </div>
           )}
-          {apartment.size > 0 && (
-            <div className="flex items-center justify-between pt-1 border-t border-border">
-              <span className="text-xs text-muted-foreground">Maydon</span>
-              <span className="text-sm font-semibold text-foreground">{apartment.size} m²</span>
+
+          {/* READ-ONLY INFO — SOLD or non-owner RESERVED */}
+          {booking && !canConvert && (
+            <div className="px-6 py-6 flex flex-col gap-1">
+              {booking.ism && (
+                <div className="flex items-center justify-between py-3.5 border-b border-border/50">
+                  <span className="text-sm text-muted-foreground">{isReserved ? 'Kim uchun bron' : 'Xaridor'}</span>
+                  <span className="text-base font-bold text-foreground">{booking.ism}</span>
+                </div>
+              )}
+              <div className="flex items-center justify-between py-3.5 border-b border-border/50">
+                <span className="text-sm text-muted-foreground">Menejer</span>
+                <span className="text-base font-semibold text-foreground">{booking.manager_name ?? '—'}</span>
+              </div>
+              {booking.created_at && (
+                <div className="flex items-center justify-between py-3.5 border-b border-border/50">
+                  <span className="text-sm text-muted-foreground">{isReserved ? 'Bron sanasi' : 'Sotilgan sana'}</span>
+                  <span className="text-base font-semibold text-foreground">{fmtDate(booking.created_at)}</span>
+                </div>
+              )}
+              {apartment.size > 0 && (
+                <div className="flex items-center justify-between py-3.5">
+                  <span className="text-sm text-muted-foreground">Maydon</span>
+                  <span className="text-base font-semibold text-foreground">{apartment.size} m²</span>
+                </div>
+              )}
             </div>
           )}
 
-          {isOwner && (
-            <button type="button" onClick={() => setShowConvert(true)}
-              className="w-full py-2.5 rounded-xl text-sm font-semibold border border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100 transition-colors mt-1">
-              Sotishga o'tkazish
-            </button>
+          {/* CONVERT FORM — owner or admin only */}
+          {canConvert && (
+            <form id="convert-form" onSubmit={handleConvert} className="px-6 py-6 flex flex-col gap-6">
+              <div className="rounded-2xl bg-amber-50/70 border border-amber-200/80 overflow-hidden">
+                {booking.ism && (
+                  <div className="flex items-center justify-between px-5 py-3.5 border-b border-amber-200/60">
+                    <span className="text-sm text-amber-700/80">Xaridor</span>
+                    <span className="text-sm font-bold text-amber-900">{booking.ism}</span>
+                  </div>
+                )}
+                <div className="flex items-center justify-between px-5 py-3.5 border-b border-amber-200/60">
+                  <span className="text-sm text-amber-700/80">Menejer</span>
+                  <span className="text-sm font-semibold text-amber-900">{booking.manager_name ?? '—'}</span>
+                </div>
+                {booking.created_at && (
+                  <div className="flex items-center justify-between px-5 py-3.5">
+                    <span className="text-sm text-amber-700/80">Bron sanasi</span>
+                    <span className="text-sm font-semibold text-amber-900">{fmtDate(booking.created_at)}</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex flex-col gap-5">
+                <p className="text-sm font-semibold text-muted-foreground">
+                  Qo'shimcha ma'lumotlar <span className="font-normal opacity-70">(ixtiyoriy)</span>
+                </p>
+                <div className="grid grid-cols-2 gap-4">
+                  <PassportField label="Passport seriya/raqam" value={form.passport}
+                    onChange={(v) => setForm(f => ({ ...f, passport: v }))} />
+                  <Field label="Passport berilgan joy" placeholder="Toshkent sh. IIB"
+                    value={form.passport_place}
+                    onChange={e => setForm(f => ({ ...f, passport_place: e.target.value }))} />
+                </div>
+                <Field label="Manzil" placeholder="Toshkent, Chilonzor"
+                  value={form.manzil}
+                  onChange={e => setForm(f => ({ ...f, manzil: e.target.value }))} />
+              </div>
+
+              {convertError && (
+                <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm font-medium">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+                    <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+                  </svg>
+                  {convertError}
+                </div>
+              )}
+            </form>
           )}
         </div>
+
+        {/* ── FOOTER — only for canConvert ── */}
+        {canConvert && (
+          <div className="shrink-0 px-6 pb-6 pt-4 border-t border-border">
+            <button
+              type="submit"
+              form="convert-form"
+              disabled={converting}
+              className="w-full py-5 rounded-2xl bg-green-600 text-white font-bold text-lg active:scale-[0.99] transition-all hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2.5"
+            >
+              {converting && <Loader2 size={20} className="animate-spin" />}
+              {converting ? 'Saqlanmoqda...' : "Sotishga o'tkazish"}
+            </button>
+          </div>
+        )}
+
       </div>
     </div>
   )
@@ -642,7 +699,7 @@ function playDiscountSound() {
 const BRON_EMPTY = { ism: '', familiya: '', telefon: '', boshlangich: '', oylar: '12', umumiy: '', narx_m2: '', chegirma_m2: '', asl_narx_m2: '' }
 const SOTISH_EMPTY = { ism: '', familiya: '', telefon: '', boshlangich: '', oylar: '12', umumiy: '', narx_m2: '', passport: '', passport_place: '', manzil: '' }
 
-export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, onBooked }) {
+export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, onBooked, embedded = false }) {
   const currentUser = getUser()
   const [tab, setTab] = useState('bron')
   const [bronForm, setBronForm] = useState(BRON_EMPTY)
@@ -715,20 +772,18 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
     const months   = parseInt(calc.oylar) || 12
     const baseTotal = Math.round(narxVal * apartment.size)
     const pctOfBase = baseTotal > 0 && downVal > 0 ? Math.floor((downVal / baseTotal) * 100) : 0
-    const pctBracket = CHEGIRMA_BRACKETS.find(p => pctOfBase >= p) ?? null
-    const chegirma  = pctBracket ? CHEGIRMA_TABLE[pctBracket] : 0
+    const pctBracket = apartment.is_wc ? null : (CHEGIRMA_BRACKETS.find(p => pctOfBase >= p) ?? null)
+    const chegirma  = apartment.is_wc ? 0 : (pctBracket ? CHEGIRMA_TABLE[pctBracket] : 0)
     const yakuniy   = narxVal > 0 ? Math.max(0, narxVal - chegirma) : 0
     const total     = Math.round(yakuniy * apartment.size)
     const percent   = Math.min(100, pctOfBase)
     const qolgan    = Math.max(0, total - downVal)
-    // 100% to'lagunicha oylik to'lov ko'rinadi; downVal chegirmali_totaldan oshib ketsa
-    // (85–99% zona), qolgan baseTotal bo'yicha hisoblanadi
     const qolganDisplay = qolgan > 0 ? qolgan : (pctOfBase < 100 ? Math.max(0, baseTotal - downVal) : 0)
     const monthly   = qolganDisplay > 0 && months > 0 ? Math.round(qolganDisplay / months) : 0
     const bonusBracket = BONUS_BRACKETS.find(p => pctOfBase >= p) ?? null
-    const bonus     = bonusBracket ? BONUS_TABLE[bonusBracket] : null
+    const bonus     = apartment.is_wc ? null : (bonusBracket ? BONUS_TABLE[bonusBracket] : null)
     return { narxVal, downVal, months, baseTotal, pctOfBase, pctBracket, chegirma, yakuniy, total, percent, qolgan, monthly, bonus }
-  }, [calc.narxM2, calc.boshlangich, calc.oylar, apartment.size])
+  }, [calc.narxM2, calc.boshlangich, calc.oylar, apartment.size, apartment.is_wc])
 
   // Chegirma bracket o'zgarganda confetti + sound
   const { pctBracket: currentBracket } = calcDerived
@@ -747,7 +802,8 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
     if (!showCalc || !calcLoadFromDB.current) return
     let cancelled = false
     const [block, bolimStr] = apartment.address.split('-')
-    apiFetch(`/api/prices?block=${block}&bolim=${parseInt(bolimStr)}&floor=${floor}`)
+    const isWc = apartment.is_wc ? '&is_wc=1' : ''
+    apiFetch(`/api/prices?block=${block}&bolim=${parseInt(bolimStr)}&floor=${floor}${isWc}`)
       .then(r => r.json())
       .then(({ price }) => {
         if (!cancelled && price) setCalc(f => ({ ...f, narxM2: f.narxM2 === '' ? String(price) : f.narxM2 }))
@@ -758,7 +814,8 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
 
   function fetchCalcPrice() {
     const [block, bolimStr] = apartment.address.split('-')
-    apiFetch(`/api/prices?block=${block}&bolim=${parseInt(bolimStr)}&floor=${floor}`)
+    const isWc = apartment.is_wc ? '&is_wc=1' : ''
+    apiFetch(`/api/prices?block=${block}&bolim=${parseInt(bolimStr)}&floor=${floor}${isWc}`)
       .then(r => r.json())
       .then(({ price }) => { if (price) setCalc(f => ({ ...f, narxM2: String(price) })) })
       .catch(() => {})
@@ -1062,8 +1119,8 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
           </button>
         </div>
 
-        {/* Chegirma darajalari */}
-        <div className="rounded-2xl border border-border bg-background overflow-hidden shrink-0">
+        {/* Chegirma darajalari — faqat do'konlar uchun */}
+        {!apartment.is_wc && <div className="rounded-2xl border border-border bg-background overflow-hidden shrink-0">
             <div className="px-3 py-1.5 border-b border-border bg-muted/40">
               <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Chegirma darajalari</p>
             </div>
@@ -1091,10 +1148,11 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
                 )
               })}
             </div>
-          </div>
+          </div>}
 
-        {/* Bonus stepper */}
+        {/* Bonus stepper — faqat do'konlar uchun */}
         {(() => {
+              if (apartment.is_wc) return null
               const MILESTONES = [
                 { pct: 30,  items: [{ img: imgKonditsioner, name: 'Konditsioner' }] },
                 { pct: 50,  items: [{ img: imgKonditsioner, name: 'Konditsioner' }, { img: imgTV, name: 'TV (43)' }] },
@@ -1157,13 +1215,11 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
                 </div>
               )
             })()}
-
-        {/* Chegirma banner */}
-        {narxVal > 0 && chegirma > 0 && (
+        {/* Chegirma banner — faqat do'konlar uchun */}
+        {!apartment.is_wc && narxVal > 0 && chegirma > 0 && (
           <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
             <p className="text-[10px] font-bold text-amber-600 uppercase tracking-widest mb-3">Chegirma faollashdi</p>
             <div className="flex items-start justify-between gap-4">
-              {/* Chap: narx o'zgarishi */}
               <div>
                 <p className="text-xs text-zinc-400 mb-1">Narx/m²</p>
                 <div className="flex items-baseline gap-2">
@@ -1174,14 +1230,10 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
                   {yakuniy.toLocaleString('ru-RU')} <span className="text-sm font-normal text-zinc-500">$/m²</span>
                 </p>
               </div>
-              {/* Ajratuvchi */}
               <div className="w-px bg-amber-200 self-stretch" />
-              {/* O'ng: foyda hisobi */}
               <div className="text-right">
                 <p className="text-xs text-zinc-400 mb-1">Siz tejaysiz</p>
-                <p className="text-xs text-zinc-500 mb-0.5">
-                  {chegirma} $ × {apartment.size} m² =
-                </p>
+                <p className="text-xs text-zinc-500 mb-0.5">{chegirma} $ × {apartment.size} m² =</p>
                 <p className="text-2xl font-bold text-emerald-600 leading-tight">
                   {(chegirma * apartment.size).toLocaleString('ru-RU')} <span className="text-sm font-normal">$</span>
                 </p>
@@ -1448,29 +1500,8 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
     )
   }
 
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60"
-      style={{ backdropFilter: 'blur(4px)' }}
-      onClick={(e) => e.target === e.currentTarget && onClose()}
-    >
-      {bonusPreview && (
-        <div className="fixed inset-0 z-70 flex items-center justify-center p-6 bg-black/75"
-          onClick={() => setBonusPreview(null)}>
-          <div className="relative bg-white rounded-3xl overflow-hidden shadow-2xl max-w-sm w-full" onClick={e => e.stopPropagation()}>
-            <img src={bonusPreview.img} alt={bonusPreview.name} className="w-full aspect-square object-cover" />
-            <div className="px-5 py-4 flex items-center justify-between">
-              <p className="text-lg font-bold text-foreground">{bonusPreview.name}</p>
-              <span className="text-xs font-semibold text-amber-600 bg-amber-100 px-3 py-1 rounded-full">Bonus</span>
-            </div>
-            <button type="button" onClick={() => setBonusPreview(null)}
-              className="absolute top-3 right-3 w-8 h-8 rounded-full bg-black/40 text-white flex items-center justify-center">
-              <X size={16} />
-            </button>
-          </div>
-        </div>
-      )}
-      <div className="relative w-full h-full bg-background rounded-2xl shadow-2xl border border-border flex flex-col overflow-hidden">
+  const innerContent = (
+    <div className={`${embedded ? 'apt-modal-enter' : 'apt-modal-enter'} relative w-full h-full bg-background ${embedded ? '' : 'rounded-2xl shadow-2xl border border-border'} flex flex-col overflow-hidden`}>
         {/* Header */}
         <div className="flex items-center px-5 border-b border-border shrink-0 h-24">
           <div className="flex items-center gap-4">
@@ -1647,6 +1678,33 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
           </div>}
         </div>
       </div>
+  )
+
+  if (embedded) return innerContent
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60"
+      style={{ backdropFilter: 'blur(4px)' }}
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+    >
+      {bonusPreview && (
+        <div className="fixed inset-0 z-70 flex items-center justify-center p-6 bg-black/75"
+          onClick={() => setBonusPreview(null)}>
+          <div className="relative bg-white rounded-3xl overflow-hidden shadow-2xl max-w-sm w-full" onClick={e => e.stopPropagation()}>
+            <img src={bonusPreview.img} alt={bonusPreview.name} className="w-full aspect-square object-cover" />
+            <div className="px-5 py-4 flex items-center justify-between">
+              <p className="text-lg font-bold text-foreground">{bonusPreview.name}</p>
+              <span className="text-xs font-semibold text-amber-600 bg-amber-100 px-3 py-1 rounded-full">Bonus</span>
+            </div>
+            <button type="button" onClick={() => setBonusPreview(null)}
+              className="absolute top-3 right-3 w-8 h-8 rounded-full bg-black/40 text-white flex items-center justify-center">
+              <X size={16} />
+            </button>
+          </div>
+        </div>
+      )}
+      {innerContent}
     </div>
   )
 }

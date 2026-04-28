@@ -67,7 +67,9 @@ function GenplanStep({ onSelect }) {
 
 // ─── Step 2: Block — bo'lim tanlash + inline narx tahrirlash ─────────────────
 
-function BlockStep({ blockId, onSwitchBlock, grouped }) {
+const WC_BOLIMS = [1, 3]
+
+function BlockStep({ blockId, onSwitchBlock, grouped, groupedWc, mode, onModeChange }) {
   const meta = BLOCK_META[blockId]
   const [loaded, setLoaded] = useState(() => imgCache.has(meta?.image))
   const [hovered, setHovered] = useState(null)
@@ -83,6 +85,9 @@ function BlockStep({ blockId, onSwitchBlock, grouped }) {
   const viewBox = BLOCK_VIEW_BOX[blockId] ?? '0 0 1539 672'
   const qc = useQueryClient()
 
+  // Mode'ga ko'ra narx manbasi
+  const activeGrouped = mode === 'wc' ? groupedWc : grouped
+
   const { mutateAsync: savePrice } = useMutation({
     mutationFn: (body) => apiFetch('/api/prices', {
       method: 'PATCH',
@@ -91,15 +96,18 @@ function BlockStep({ blockId, onSwitchBlock, grouped }) {
     }).then(r => { if (!r.ok) throw new Error() }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['prices-all'] })
+      qc.invalidateQueries({ queryKey: ['prices-all-wc'] })
       qc.invalidateQueries({ queryKey: ['shops'] })
     },
   })
 
-  // Reset when block changes
+  // Block yoki mode o'zgarganda reset
   useEffect(() => {
     setSelected(null)
     setLoaded(imgCache.has(BLOCK_META[blockId]?.image))
   }, [blockId])
+
+  useEffect(() => { setSelected(null) }, [mode])
 
   function fmt(digits) { return digits.replace(/\B(?=(\d{3})+(?!\d))/g, ' ') }
 
@@ -117,19 +125,21 @@ function BlockStep({ blockId, onSwitchBlock, grouped }) {
 
   function flashKey(k) { setActiveKey(k); setTimeout(() => setActiveKey(null), 150) }
 
+  const defaultPrice = mode === 'wc' ? 2000 : 1000
+
   function selectBolim(building) {
     const num = parseInt(building.label)
-    const floors = grouped[blockId]?.[num] ?? {}
+    const floors = activeGrouped[blockId]?.[num] ?? {}
     const firstFloor = Math.min(...Object.keys(floors).map(Number).filter(f => !isNaN(f)), 1)
     setSelected({ bolimNum: num, building })
     setActiveFloor(firstFloor)
-    setEditVal(fmt(String(floors[firstFloor] ?? 1000)))
+    setEditVal(fmt(String(floors[firstFloor] ?? defaultPrice)))
     setSavedFlash(false)
   }
 
   function changeFloor(f) {
     setActiveFloor(f)
-    const price = grouped[blockId]?.[selected?.bolimNum]?.[f] ?? 1000
+    const price = activeGrouped[blockId]?.[selected?.bolimNum]?.[f] ?? defaultPrice
     setEditVal(fmt(String(price)))
     setSavedFlash(false)
   }
@@ -140,13 +150,13 @@ function BlockStep({ blockId, onSwitchBlock, grouped }) {
     if (isNaN(num) || num < 0) return
     setSaving(true)
     try {
-      await savePrice({ block: blockId, bolim: selected.bolimNum, floor: activeFloor, price: num })
+      await savePrice({ block: blockId, bolim: selected.bolimNum, floor: activeFloor, price: num, isWc: mode === 'wc' })
       setSavedFlash(true)
       setTimeout(() => setSavedFlash(false), 1800)
     } finally { setSaving(false) }
   }
 
-  const selectedFloors = selected ? Object.keys(grouped[blockId]?.[selected.bolimNum] ?? {}).map(Number).sort() : []
+  const selectedFloors = selected ? Object.keys(activeGrouped[blockId]?.[selected.bolimNum] ?? {}).map(Number).sort() : []
   const panelOpen = !!selected
   const NUMPAD = ['7','8','9','4','5','6','1','2','3','⌫','0','✓']
 
@@ -175,35 +185,43 @@ function BlockStep({ blockId, onSwitchBlock, grouped }) {
             {buildings.map(b => {
               const num = parseInt(b.label)
               const isSelected = selected?.bolimNum === num
-              const isHovered = hovered === b.id && !isSelected
-              const bolimFloors = grouped[blockId]?.[num] ?? {}
+              const isHovered  = hovered === b.id && !isSelected
+              // WC mode'da faqat 1 va 3-bo'limlar active
+              const isDisabled = mode === 'wc' && !WC_BOLIMS.includes(num)
+              const bolimFloors = activeGrouped[blockId]?.[num] ?? {}
               const floorNums = Object.keys(bolimFloors).map(Number).sort()
               const hasTwo = floorNums.length >= 2
-              const p1Raw = bolimFloors[floorNums[0]] ?? 1000
-              const p2Raw = hasTwo ? (bolimFloors[floorNums[1]] ?? 1000) : null
+              const p1Raw = bolimFloors[floorNums[0]] ?? defaultPrice
+              const p2Raw = hasTwo ? (bolimFloors[floorNums[1]] ?? defaultPrice) : null
               const editNum = Number(String(editVal).replace(/[\s,]/g, ''))
               const p1 = isSelected && activeFloor === floorNums[0] && !isNaN(editNum) ? editNum : p1Raw
               const p2 = isSelected && hasTwo && activeFloor === floorNums[1] && !isNaN(editNum) ? editNum : p2Raw
               // badge dimensions
               const bw = 124, bh = hasTwo ? 60 : 40, br = 10
               const bx = b.textX - bw / 2, by = b.textY - bh / 2
-              const priceColor = isSelected ? '#1a0f00' : 'rgba(255,255,255,0.95)'
-              const bgFill = isSelected ? 'rgba(251,191,36,0.97)' : 'rgba(0,0,0,0.78)'
-              const bgStroke = isSelected ? 'rgba(180,130,0,0.6)' : 'rgba(255,255,255,0.18)'
+              const priceColor = isSelected ? '#1a0f00' : isDisabled ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.95)'
+              const bgFill   = isSelected ? 'rgba(251,191,36,0.97)' : isDisabled ? 'rgba(0,0,0,0.35)' : 'rgba(0,0,0,0.78)'
+              const bgStroke = isSelected ? 'rgba(180,130,0,0.6)'   : isDisabled ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.18)'
 
               return (
-                <g key={b.id}>
+                <g key={b.id} style={{
+                  opacity:         isDisabled ? 0 : 1,
+                  transform:       isDisabled ? 'scale(0.92)' : 'scale(1)',
+                  transformOrigin: `${b.textX}px ${b.textY}px`,
+                  transition:      'opacity 0.4s cubic-bezier(0.4,0,0.2,1), transform 0.4s cubic-bezier(0.4,0,0.2,1)',
+                  pointerEvents:   isDisabled ? 'none' : 'all',
+                }}>
                   {/* Base pulse polygon */}
                   <polygon points={b.points}
                     fill={isSelected ? 'rgba(251,191,36,0.35)' : isHovered ? 'rgba(255,255,255,0.08)' : 'black'}
                     stroke={isSelected ? 'rgba(251,191,36,0.9)' : 'rgba(0,0,0,0.75)'}
                     strokeWidth={isSelected ? 3 : 1}
                     strokeLinejoin="round"
-                    className={!isSelected && !isHovered ? 'block-pulse' : ''}
-                    style={{ cursor: 'pointer', animationDelay: b.delay }}
-                    onMouseEnter={() => setHovered(b.id)}
+                    className={!isSelected && !isHovered && !isDisabled ? 'block-pulse' : ''}
+                    style={{ cursor: isDisabled ? 'default' : 'pointer', animationDelay: b.delay }}
+                    onMouseEnter={() => !isDisabled && setHovered(b.id)}
                     onMouseLeave={() => setHovered(null)}
-                    onClick={() => selectBolim(b)}
+                    onClick={() => !isDisabled && selectBolim(b)}
                   />
                   {/* White border */}
                   <polygon points={b.points} fill="none"
@@ -260,9 +278,21 @@ function BlockStep({ blockId, onSwitchBlock, grouped }) {
       {/* Top hint */}
       {!panelOpen && (
         <div className="absolute top-6 left-1/2 -translate-x-1/2 px-5 py-2 rounded-full bg-black/70 backdrop-blur-sm border border-white/10 text-white text-sm font-medium pointer-events-none">
-          Narx o'zgartirish uchun bo'limni tanlang
+          {mode === 'wc' ? "WC narxini o'zgartirish uchun bo'limni tanlang" : "Narx o'zgartirish uchun bo'limni tanlang"}
         </div>
       )}
+
+      {/* Top left mode switcher */}
+      <div className="absolute top-6 left-6 flex gap-1 p-1 bg-black/70 backdrop-blur-sm border border-white/10 rounded-xl">
+        <button onClick={() => onModeChange('dokonlar')}
+          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${mode === 'dokonlar' ? 'bg-white text-black' : 'text-white/60 hover:text-white'}`}>
+          Do'konlar
+        </button>
+        <button onClick={() => onModeChange('wc')}
+          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${mode === 'wc' ? 'bg-sky-400 text-sky-950' : 'text-white/60 hover:text-white'}`}>
+          WC
+        </button>
+      </div>
 
       {/* Top right block switcher */}
       <div className="absolute top-6 right-6 flex items-center gap-2">
@@ -302,7 +332,7 @@ function BlockStep({ blockId, onSwitchBlock, grouped }) {
                 </span>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-black text-foreground leading-tight truncate">{blockId}-BLOK · {selected?.bolimNum}-bo'lim</p>
-                  <p className="text-xs text-muted-foreground">{activeFloor}-qavat narxi</p>
+                  <p className="text-xs text-muted-foreground">{activeFloor}-qavat {mode === 'wc' ? 'WC' : "do'kon"} narxi</p>
                 </div>
               </div>
 
@@ -331,7 +361,7 @@ function BlockStep({ blockId, onSwitchBlock, grouped }) {
             </div>
 
             {/* RIGHT: numpad */}
-            <div className="grid grid-cols-3 gap-1.5 shrink-0 w-[168px]">
+            <div className="grid grid-cols-3 gap-1.5 shrink-0 w-42">
               {NUMPAD.map(k => {
                 const isActive = activeKey === k
                 const isSave = k === '✓'
@@ -366,8 +396,9 @@ export default function PricesPage() {
   const navigate = useNavigate()
   const [params, setParams] = useSearchParams()
   const user = getUser()
+  const [mode, setMode] = useState('dokonlar') // 'dokonlar' | 'wc'
 
-  const step = params.get('step') ?? 'genplan'
+  const step    = params.get('step')  ?? 'genplan'
   const blockId = params.get('block') ?? 'A'
 
   function goBlock(bid) { setParams({ step: 'block', block: bid }, { replace: true }) }
@@ -383,12 +414,25 @@ export default function PricesPage() {
     enabled: user?.role === 'admin',
   })
 
-  const grouped = {}
-  for (const row of allPrices) {
-    if (!grouped[row.block]) grouped[row.block] = {}
-    if (!grouped[row.block][row.bolim]) grouped[row.block][row.bolim] = {}
-    grouped[row.block][row.bolim][row.floor] = row.price
+  const { data: allWcPrices = [] } = useQuery({
+    queryKey: ['prices-all-wc'],
+    queryFn: () => apiFetch('/api/prices/all?is_wc=1').then(r => r.json()),
+    staleTime: 60_000,
+    enabled: user?.role === 'admin',
+  })
+
+  function buildGrouped(rows) {
+    const g = {}
+    for (const row of rows) {
+      if (!g[row.block]) g[row.block] = {}
+      if (!g[row.block][row.bolim]) g[row.block][row.bolim] = {}
+      g[row.block][row.bolim][row.floor] = row.price
+    }
+    return g
   }
+
+  const grouped   = buildGrouped(allPrices)
+  const groupedWc = buildGrouped(allWcPrices)
 
   if (!user || user.role !== 'admin') return null
 
@@ -402,6 +446,9 @@ export default function PricesPage() {
       blockId={blockId}
       onSwitchBlock={goBlock}
       grouped={grouped}
+      groupedWc={groupedWc}
+      mode={mode}
+      onModeChange={setMode}
     />
   )
 }

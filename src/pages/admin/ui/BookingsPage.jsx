@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react'
-import { useInfiniteQuery, useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query'
+import { useInfiniteQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import { getUser, apiFetch } from '@/shared/lib/auth'
 import { useRealtimeApts } from '@/shared/hooks/useRealtimeApts'
 import { Search, Download, X, FileText, Eye, SlidersHorizontal } from 'lucide-react'
@@ -386,7 +386,14 @@ function BookingRow({ b, isAdmin, cancelled, onReset, scrolled }) {
 }
 
 const LIMIT = 50
-const BLOCKS = ['A', 'B', 'C']
+const BLOCKS      = ['A', 'B', 'C']
+const ALL_BOLIMS = [1,2,3,4,5,6,7,8,9,10,11,12,13]
+const BOLIMS_BY_BLOCK = {
+  A: [1,2,3,4,5,6,7,8,9,10,11],
+  B: ALL_BOLIMS,
+  C: ALL_BOLIMS,
+}
+const ALL_FLOORS  = [1, 2]
 
 function BookingsTable({ cancelled, isAdmin, onReset, search, typeFilter, dateFrom, dateTo, blockFilter, bolimFilter, floorFilter }) {
   const [scrolled, setScrolled] = useState(false)
@@ -419,11 +426,12 @@ function BookingsTable({ cancelled, isAdmin, onReset, search, typeFilter, dateFr
     },
     initialPageParam: 0,
     getNextPageParam: (lastPage, allPages) =>
-      lastPage.length < LIMIT ? undefined : allPages.flat().length,
+      lastPage.rows.length < LIMIT ? undefined : allPages.flatMap(p => p.rows).length,
     placeholderData: keepPreviousData,
   })
 
-  const bookingsRaw = useMemo(() => data?.pages.flat() ?? [], [data])
+  const total      = data?.pages[0]?.total ?? null
+  const bookingsRaw = useMemo(() => data?.pages.flatMap(p => p.rows) ?? [], [data])
   // Filter o'zgarganda eski ma'lumotlar ko'rsatilib turadi — flicker yo'q
   const bookingsRef = useRef([])
   if (bookingsRaw.length > 0) bookingsRef.current = bookingsRaw
@@ -451,6 +459,12 @@ function BookingsTable({ cancelled, isAdmin, onReset, search, typeFilter, dateFr
 
   return (
     <div className="bg-card border border-border rounded-2xl overflow-hidden flex flex-col flex-1 min-h-0">
+      {total !== null && (
+        <div className="px-4 py-2 border-b border-border flex items-center gap-1.5 shrink-0">
+          <span className="text-xs text-muted-foreground">Jami:</span>
+          <span className="text-xs font-semibold tabular-nums">{total} ta</span>
+        </div>
+      )}
       <div
         ref={scrollRef}
         className="overflow-x-auto overflow-y-auto flex-1 min-h-0 no-scrollbar"
@@ -562,33 +576,6 @@ export default function BookingsPage() {
   }
 
   const activeFilterCount = [typeFilter !== 'all' ? typeFilter : '', blockFilter, bolimFilter, floorFilter, dateFrom, dateTo].filter(Boolean).length
-  const pendingFilterCount = [pendingType !== 'all' ? pendingType : '', pendingBlock, pendingBolim, pendingFloor, pendingFrom, pendingTo].filter(Boolean).length
-
-  const { data: bolimList = [] } = useQuery({
-    queryKey: ['bolims', pendingBlock],
-    queryFn: () => apiFetch(`/api/bolims?block=${pendingBlock}`).then(r => r.json()),
-    enabled: !!pendingBlock,
-    staleTime: Infinity,
-  })
-
-  const { data: floorList = [] } = useQuery({
-    queryKey: ['floors', pendingBlock, pendingBolim],
-    queryFn: () => {
-      const p = new URLSearchParams({ block: pendingBlock })
-      if (pendingBolim) p.set('bolim', pendingBolim)
-      return apiFetch(`/api/floors?${p}`).then(r => r.json())
-    },
-    enabled: !!pendingBlock,
-    staleTime: Infinity,
-  })
-
-  const bolimListRef = useRef([])
-  if (bolimList.length > 0) bolimListRef.current = bolimList
-  const bolimDisplay = bolimList.length > 0 ? bolimList : bolimListRef.current
-
-  const floorListRef = useRef([])
-  if (floorList.length > 0) floorListRef.current = floorList
-  const floorDisplay = floorList.length > 0 ? floorList : floorListRef.current
 
   function resetFilters() {
     setSearch(''); setTypeFilter('all')
@@ -726,7 +713,13 @@ export default function BookingsPage() {
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Blok</p>
                 <div className="flex gap-1.5">
                   {['', ...BLOCKS].map(b => (
-                    <button key={b || 'all'} onClick={() => { setPendingBlock(b); setPendingBolim(''); setPendingFloor('') }}
+                    <button key={b || 'all'} onClick={() => {
+                      const newBolims = b ? BOLIMS_BY_BLOCK[b] : Object.values(BOLIMS_BY_BLOCK).flat()
+                      const bolimStillValid = pendingBolim && newBolims.includes(Number(pendingBolim))
+                      setPendingBlock(b)
+                      if (!bolimStillValid) setPendingBolim('')
+                      setPendingFloor('')
+                    }}
                       className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-colors ${
                         pendingBlock === b ? 'bg-foreground text-background' : 'bg-muted text-muted-foreground'
                       }`}>
@@ -736,41 +729,35 @@ export default function BookingsPage() {
                 </div>
               </div>
 
-              <div className={`transition-opacity duration-200 ${!pendingBlock ? 'opacity-40 pointer-events-none' : ''}`}>
+              <div>
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Bo'lim</p>
-                <div className="flex flex-wrap gap-1.5 min-h-8 items-start content-start">
-                  {bolimDisplay.length > 0 ? (
-                    ['', ...bolimDisplay].map(n => (
-                      <button key={n === '' ? 'all' : n}
-                        onClick={() => { setPendingBolim(n === '' ? '' : String(n)); setPendingFloor('') }}
-                        className={`px-3 py-2 rounded-lg text-xs font-semibold transition-colors ${
-                          (n === '' ? !pendingBolim : pendingBolim === String(n)) ? 'bg-foreground text-background' : 'bg-muted text-muted-foreground'
-                        }`}>
-                        {n === '' ? 'Barcha' : n}
-                      </button>
-                    ))
-                  ) : (
-                    <span className="text-xs text-muted-foreground/50 self-center">Avval blok tanlang</span>
-                  )}
+                <div className="flex flex-wrap gap-1.5 items-start content-start">
+                  <button onClick={() => { setPendingBolim(''); setPendingFloor('') }}
+                    className={`px-3 py-2 rounded-lg text-xs font-semibold transition-colors ${!pendingBolim ? 'bg-foreground text-background' : 'bg-muted text-muted-foreground'}`}>
+                    Barcha
+                  </button>
+                  {(pendingBlock ? BOLIMS_BY_BLOCK[pendingBlock] : ALL_BOLIMS).map(n => (
+                    <button key={n} onClick={() => { setPendingBolim(String(n)); setPendingFloor('') }}
+                      className={`px-3 py-2 rounded-lg text-xs font-semibold transition-colors ${pendingBolim === String(n) ? 'bg-foreground text-background' : 'bg-muted text-muted-foreground'}`}>
+                      {n}
+                    </button>
+                  ))}
                 </div>
               </div>
 
-              <div className={`transition-opacity duration-200 ${!pendingBlock ? 'opacity-40 pointer-events-none' : ''}`}>
+              <div>
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Qavat</p>
-                <div className="flex flex-wrap gap-1.5 min-h-8 items-start content-start">
-                  {floorDisplay.length > 0 ? (
-                    ['', ...floorDisplay].map(f => (
-                      <button key={f === '' ? 'all' : f}
-                        onClick={() => setPendingFloor(f === '' ? '' : String(f))}
-                        className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-colors ${
-                          (f === '' ? !pendingFloor : pendingFloor === String(f)) ? 'bg-foreground text-background' : 'bg-muted text-muted-foreground'
-                        }`}>
-                        {f === '' ? 'Barcha' : f}
-                      </button>
-                    ))
-                  ) : (
-                    <span className="text-xs text-muted-foreground/50 self-center">Avval blok tanlang</span>
-                  )}
+                <div className="flex flex-wrap gap-1.5 items-start content-start">
+                  <button onClick={() => setPendingFloor('')}
+                    className={`px-3 py-2 rounded-lg text-xs font-semibold transition-colors ${!pendingFloor ? 'bg-foreground text-background' : 'bg-muted text-muted-foreground'}`}>
+                    Barcha
+                  </button>
+                  {ALL_FLOORS.map(f => (
+                    <button key={f} onClick={() => setPendingFloor(String(f))}
+                      className={`px-3 py-2 rounded-lg text-xs font-semibold transition-colors ${pendingFloor === String(f) ? 'bg-foreground text-background' : 'bg-muted text-muted-foreground'}`}>
+                      {f}-qavat
+                    </button>
+                  ))}
                 </div>
               </div>
 

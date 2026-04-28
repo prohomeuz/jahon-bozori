@@ -11,9 +11,9 @@ export default function LoginPage() {
   const from = location.state?.from ?? '/admin'
   const [digits, setDigits] = useState([])
   const [revealIdx, setRevealIdx] = useState(-1)
+  const reason = new URLSearchParams(location.search).get('reason')
   const [error, setError] = useState(() => {
-    if (location.state?.outsideHours) return "Ish vaqti tugadi. Tizim faqat 08:00–20:00 orasida ishlaydi."
-    if (new URLSearchParams(location.search).get('reason') === 'outside_hours')
+    if (location.state?.outsideHours || reason === 'outside_hours')
       return "Ish vaqti tugadi. Tizim faqat 08:00–20:00 orasida ishlaydi."
     return ''
   })
@@ -100,7 +100,7 @@ export default function LoginPage() {
       <div className="flex flex-col items-center gap-6 w-full max-w-[260px] px-4">
 
         {/* Logo */}
-        <img src="/logo.png" alt="Jahon Bozori" className="h-24 object-contain" onError={e => { e.currentTarget.style.display = 'none' }} />
+        <img src="/logo.png" alt="Jahon Bozori" className="h-36 object-contain" onError={e => { e.currentTarget.style.display = 'none' }} />
 
         {/* OTP — bir qator */}
         <div className="flex items-center gap-2">

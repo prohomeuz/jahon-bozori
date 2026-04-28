@@ -71,6 +71,8 @@ try { db.exec(`ALTER TABLE bookings ADD COLUMN chegirma_m2 TEXT`) } catch {}
 try { db.exec(`ALTER TABLE bookings ADD COLUMN asl_narx_m2 TEXT`) } catch {}
 // Add not_sale_reason to apartments if missing (migration)
 try { db.exec(`ALTER TABLE apartments ADD COLUMN not_sale_reason TEXT`) } catch {}
+// Add is_active to users if missing (migration)
+try { db.exec(`ALTER TABLE users ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1`) } catch {}
 // Prices table — har bir block/bolim/floor uchun narx (USD/m²)
 try {
   db.exec(`CREATE TABLE IF NOT EXISTS prices (
@@ -83,6 +85,18 @@ try {
   // Mavjud bo'lmagan (block,bolim,floor) kombinatsiyalari uchun 1000$ seed
   db.exec(`INSERT OR IGNORE INTO prices (block, bolim, floor, price)
     SELECT DISTINCT block, bolim, floor, 1000 FROM apartments`)
+} catch {}
+// WC narxlar jadvali — hojatxonalar uchun alohida narx (default 2000 $/m²)
+try {
+  db.exec(`CREATE TABLE IF NOT EXISTS wc_prices (
+    block TEXT NOT NULL,
+    bolim INTEGER NOT NULL,
+    floor INTEGER NOT NULL,
+    price REAL NOT NULL DEFAULT 2000,
+    PRIMARY KEY (block, bolim, floor)
+  )`)
+  db.exec(`INSERT OR IGNORE INTO wc_prices (block, bolim, floor, price)
+    SELECT DISTINCT block, bolim, floor, 2000 FROM apartments WHERE is_wc=1`)
 } catch {}
 // Telegram subscribers — /start bosgan har kim
 try { db.exec(`CREATE TABLE IF NOT EXISTS telegram_subscribers (chat_id TEXT PRIMARY KEY, first_name TEXT, joined_at TEXT NOT NULL DEFAULT (datetime('now', '+5 hours')))`) } catch {}
@@ -115,8 +129,46 @@ try {
     'C-3-239','C-3-240'
   )`)
 } catch {}
-// Do'kon bo'lmagan (is_shop=0) apartamentlarni bazadan o'chirish
-try { db.exec(`DELETE FROM apartments WHERE is_shop = 0`) } catch {}
+// is_wc — hojatxonalar (is_shop=0 bo'lsa ham o'chirilmaydi)
+try { db.exec(`ALTER TABLE apartments ADD COLUMN is_wc INTEGER NOT NULL DEFAULT 0`) } catch {}
+// Do'kon bo'lmagan va hojatxona ham bo'lmagan apartamentlarni o'chirish
+try { db.exec(`DELETE FROM apartments WHERE is_shop = 0 AND is_wc = 0`) } catch {}
+// 31 ta hojatxona yozuvlarini qo'shish
+try {
+  db.exec(`INSERT OR IGNORE INTO apartments (id, block, bolim, floor, size, status, is_shop, is_wc) VALUES
+    ('A-1-121','A',1,1,14.41,'EMPTY',0,1),
+    ('A-1-122','A',1,1,24.18,'EMPTY',0,1),
+    ('A-1-123','A',1,1,19.45,'EMPTY',0,1),
+    ('A-1-215','A',1,2,15.30,'EMPTY',0,1),
+    ('A-1-216','A',1,2,23.34,'EMPTY',0,1),
+    ('A-3-122','A',3,1, 8.10,'EMPTY',0,1),
+    ('A-3-123','A',3,1,25.59,'EMPTY',0,1),
+    ('A-3-124','A',3,1,19.19,'EMPTY',0,1),
+    ('A-3-222','A',3,2, 8.05,'EMPTY',0,1),
+    ('A-3-223','A',3,2,17.21,'EMPTY',0,1),
+    ('A-3-224','A',3,2,18.44,'EMPTY',0,1),
+    ('B-1-129','B',1,1,23.18,'EMPTY',0,1),
+    ('B-1-130','B',1,1,28.46,'EMPTY',0,1),
+    ('B-1-131','B',1,1, 5.34,'EMPTY',0,1),
+    ('B-1-233','B',1,2,18.82,'EMPTY',0,1),
+    ('B-1-234','B',1,2,25.84,'EMPTY',0,1),
+    ('B-3-133','B',3,1,27.90,'EMPTY',0,1),
+    ('B-3-134','B',3,1,23.18,'EMPTY',0,1),
+    ('B-3-135','B',3,1, 5.14,'EMPTY',0,1),
+    ('B-3-234','B',3,2,25.84,'EMPTY',0,1),
+    ('B-3-235','B',3,2,18.59,'EMPTY',0,1),
+    ('C-1-133','C',1,1,23.18,'EMPTY',0,1),
+    ('C-1-134','C',1,1,27.90,'EMPTY',0,1),
+    ('C-1-135','C',1,1, 5.14,'EMPTY',0,1),
+    ('C-1-235','C',1,2,18.59,'EMPTY',0,1),
+    ('C-1-236','C',1,2,25.84,'EMPTY',0,1),
+    ('C-3-138','C',3,1,28.46,'EMPTY',0,1),
+    ('C-3-139','C',3,1,23.18,'EMPTY',0,1),
+    ('C-3-140','C',3,1, 5.34,'EMPTY',0,1),
+    ('C-3-239','C',3,2,25.84,'EMPTY',0,1),
+    ('C-3-240','C',3,2,18.82,'EMPTY',0,1)
+  `)
+} catch {}
 // Translate Chinese notes → Uzbek
 try { db.exec(`UPDATE apartments SET notes = 'Ko''cha bo''yi'           WHERE notes = '临街铺'`) } catch {}
 try { db.exec(`UPDATE apartments SET notes = 'Ko''cha bo''yi'           WHERE notes = '临街商铺'`) } catch {}
@@ -128,9 +180,9 @@ try { db.exec(`UPDATE apartments SET notes = 'Ko''cha bo''yi, Burchak'  WHERE no
 export const q = {
   // users
   userByPlainPassword: db.prepare('SELECT * FROM users WHERE plain_password=:plain_password'),
-  userById:            db.prepare('SELECT id, role, name, created_at FROM users WHERE id=:id'),
+  userById:            db.prepare('SELECT id, role, name, is_active, created_at FROM users WHERE id=:id'),
   insertUser:          db.prepare("INSERT INTO users (username, password, plain_password, role, name, telegram_id, created_at) VALUES (:plain_password, :password, :plain_password, :role, :name, NULL, datetime('now', '+5 hours'))"),
-  allUsers:            db.prepare("SELECT id, name, plain_password, role, created_at FROM users WHERE role='salesmanager' ORDER BY created_at DESC"),
+  allUsers:            db.prepare("SELECT id, name, plain_password, role, is_active, created_at FROM users WHERE role='salesmanager' ORDER BY created_at DESC"),
   userTelegramId:      db.prepare('SELECT telegram_id FROM users WHERE id=:id'),
 
   // telegram subscribers
@@ -157,6 +209,8 @@ export const q = {
 
   // dashboard stats
   statsAll:       db.prepare("SELECT block, status, COUNT(*) AS n FROM apartments GROUP BY block, status"),
+  statsShops:     db.prepare("SELECT block, status, COUNT(*) AS n FROM apartments WHERE is_shop=1 GROUP BY block, status"),
+  statsWc:        db.prepare("SELECT block, status, COUNT(*) AS n FROM apartments WHERE is_wc=1 GROUP BY block, status"),
   blockStats:     db.prepare("SELECT status, COUNT(*) AS n FROM apartments WHERE block=:block GROUP BY status"),
   bolimStats:     db.prepare("SELECT status, COUNT(*) AS n FROM apartments WHERE block=:block AND bolim=:bolim GROUP BY status"),
   statsUser:      db.prepare("SELECT type, COUNT(*) AS n FROM bookings WHERE user_id=:user_id GROUP BY type"),
@@ -164,8 +218,12 @@ export const q = {
   totalBookings:  db.prepare('SELECT COUNT(*) AS n FROM bookings'),
 
   // detailed stats
-  statsByBolim:    db.prepare("SELECT block, bolim, status, COUNT(*) AS n FROM apartments GROUP BY block, bolim, status ORDER BY block, bolim"),
-  statsByFloor:    db.prepare("SELECT block, floor, status, COUNT(*) AS n FROM apartments GROUP BY block, floor, status ORDER BY block, floor"),
+  statsByBolim:      db.prepare("SELECT block, bolim, status, COUNT(*) AS n FROM apartments GROUP BY block, bolim, status ORDER BY block, bolim"),
+  statsByBolimShops: db.prepare("SELECT block, bolim, status, COUNT(*) AS n FROM apartments WHERE is_shop=1 GROUP BY block, bolim, status ORDER BY block, bolim"),
+  statsByBolimWc:    db.prepare("SELECT block, bolim, status, COUNT(*) AS n FROM apartments WHERE is_wc=1 GROUP BY block, bolim, status ORDER BY block, bolim"),
+  statsByFloor:      db.prepare("SELECT block, floor, status, COUNT(*) AS n FROM apartments GROUP BY block, floor, status ORDER BY block, floor"),
+  statsByFloorShops: db.prepare("SELECT block, floor, status, COUNT(*) AS n FROM apartments WHERE is_shop=1 GROUP BY block, floor, status ORDER BY block, floor"),
+  statsByFloorWc:    db.prepare("SELECT block, floor, status, COUNT(*) AS n FROM apartments WHERE is_wc=1 GROUP BY block, floor, status ORDER BY block, floor"),
   bookingsByDate:  db.prepare("SELECT date(created_at) AS date, block, COUNT(*) AS n FROM bookings b JOIN apartments a ON a.id=b.apartment_id WHERE b.cancelled_at IS NULL GROUP BY date, block ORDER BY date ASC LIMIT 180"),
   managerStats:    db.prepare(`
     SELECT u.id, u.name,
@@ -186,10 +244,14 @@ export const q = {
   upsertLock:  db.prepare("INSERT OR REPLACE INTO sales_locks (block, bolim, floor, reason, locked_at, locked_by) VALUES (:block, :bolim, :floor, :reason, :locked_at, :locked_by)"),
   deleteLock:  db.prepare("DELETE FROM sales_locks WHERE block=:block AND bolim=:bolim AND floor=:floor"),
 
-  // prices
+  // prices (do'konlar)
   getPrice:        db.prepare("SELECT price FROM prices WHERE block=:block AND bolim=:bolim AND floor=:floor"),
   upsertPrice:     db.prepare("INSERT OR REPLACE INTO prices (block, bolim, floor, price) VALUES (:block, :bolim, :floor, :price)"),
   allPrices:       db.prepare("SELECT block, bolim, floor, price FROM prices ORDER BY block, bolim, floor"),
+  // wc narxlar
+  getWcPrice:      db.prepare("SELECT price FROM wc_prices WHERE block=:block AND bolim=:bolim AND floor=:floor"),
+  upsertWcPrice:   db.prepare("INSERT OR REPLACE INTO wc_prices (block, bolim, floor, price) VALUES (:block, :bolim, :floor, :price)"),
+  allWcPrices:     db.prepare("SELECT block, bolim, floor, price FROM wc_prices ORDER BY block, bolim, floor"),
 
   totalByBlock:    db.prepare("SELECT COUNT(*) AS n FROM apartments WHERE block=:block"),
   snapshotByBlock: db.prepare(`
