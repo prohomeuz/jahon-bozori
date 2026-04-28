@@ -1091,82 +1091,10 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
                 )
               })}
             </div>
+          </div>
 
-            {/* Keyingi bonus milestone motivatsiyasi */}
-            {narxVal > 0 && (() => {
-              const BONUS_MS = [
-                { pct: 30,  disc: 100, items: [{ img: imgKonditsioner, name: 'Konditsioner' }] },
-                { pct: 50,  disc: 200, items: [{ img: imgKonditsioner, name: 'Konditsioner' }, { img: imgTV, name: 'TV (43)' }] },
-                { pct: 70,  disc: 300, items: [{ img: imgKonditsioner, name: 'Konditsioner' }, { img: imgMuzlatgich, name: 'Muzlatgich' }] },
-                { pct: 100, disc: 400, items: [{ img: imgKonditsioner, name: 'Konditsioner' }, { img: imgTV, name: 'TV (43)' }, { img: imgMuzlatgich, name: 'Muzlatgich' }] },
-              ]
-              const nextMs   = BONUS_MS.find(m => pctOfBase < m.pct)
-              if (!nextMs) return null
-              const prevMs   = BONUS_MS.slice().reverse().find(m => pctOfBase >= m.pct)
-              const nextAmt  = baseTotal > 0 ? Math.round(baseTotal * nextMs.pct / 100) : 0
-              const prevAmt  = prevMs && baseTotal > 0 ? Math.round(baseTotal * prevMs.pct / 100) : 0
-              const needed   = Math.max(0, nextAmt - downVal)
-              const rangeLen = nextAmt - prevAmt
-              const progress = rangeLen > 0 ? Math.min(100, Math.round(((downVal - prevAmt) / rangeLen) * 100)) : 0
-              return (
-                <div className="border-t border-border/60 px-3 py-3">
-                  <div className="rounded-2xl bg-amber-50 border border-amber-200 px-5 py-4">
-
-                    {/* Sarlavha: qancha qoldi */}
-                    <div className="flex items-end justify-between mb-4">
-                      <div>
-                        <p className="text-xs text-amber-500 font-medium mb-1">Keyingi darajaga</p>
-                        <p className="text-3xl font-bold text-amber-700 leading-none">
-                          {needed.toLocaleString('ru-RU')}
-                          <span className="text-lg font-semibold ml-1">$</span>
-                          <span className="text-sm font-normal text-amber-500 ml-1">qo'shsangiz</span>
-                        </p>
-                      </div>
-                      {/* Chegirma foyda */}
-                      <div className="text-right">
-                        <p className="text-[10px] text-amber-500 mb-1">{nextMs.pct}% chegirma</p>
-                        <p className="text-2xl font-bold text-emerald-600 leading-none">−{nextMs.disc} <span className="text-sm font-normal">$/m²</span></p>
-                        <p className="text-xs text-emerald-500 mt-0.5">= {(nextMs.disc * apartment.size).toLocaleString('ru-RU')} $ tejash</p>
-                      </div>
-                    </div>
-
-                    {/* Bonus texnikalar — faqat YANGI (qo'shimcha) itemlar */}
-                    {(() => {
-                      const displayItems = nextMs.items
-                      return (
-                        <div className="flex items-center gap-2 mb-4">
-                          <span className="text-xs text-amber-600 font-semibold shrink-0">Bonus:</span>
-                          <div className="flex items-center gap-1.5">
-                            {displayItems.map((item, i) => (
-                              <div key={item.name} className="flex items-center gap-1">
-                                {i > 0 && <span className="text-amber-400 font-bold text-xs">+</span>}
-                                <div className="w-9 h-9 rounded-xl overflow-hidden border-2 border-amber-400">
-                                  <img src={item.img} alt={item.name} className="w-full h-full object-cover" />
-                                </div>
-                                <span className="text-xs font-semibold text-amber-800">{item.name}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )
-                    })()}
-
-                    {/* Progress bar */}
-                    <div className="w-full h-3 bg-amber-200 rounded-full overflow-hidden">
-                      <div className="h-full bg-amber-400 rounded-full transition-all duration-500" style={{ width: `${progress}%` }} />
-                    </div>
-                    <div className="flex justify-between mt-1.5">
-                      <span className="text-xs text-amber-600 font-semibold">{downVal.toLocaleString('ru-RU')} $</span>
-                      <span className="text-xs text-amber-400">{nextAmt.toLocaleString('ru-RU')} $</span>
-                    </div>
-
-                  </div>
-                </div>
-              )
-            })()}
-
-            {/* Bonus stepper */}
-            {(() => {
+        {/* Bonus stepper */}
+        {(() => {
               const MILESTONES = [
                 { pct: 30,  items: [{ img: imgKonditsioner, name: 'Konditsioner' }] },
                 { pct: 50,  items: [{ img: imgKonditsioner, name: 'Konditsioner' }, { img: imgTV, name: 'TV (43)' }] },
@@ -1174,10 +1102,9 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
                 { pct: 100, items: [{ img: imgKonditsioner, name: 'Konditsioner' }, { img: imgTV, name: 'TV (43)' }, { img: imgMuzlatgich, name: 'Muzlatgich' }] },
               ]
               const reachedCount = MILESTONES.filter(m => pctOfBase >= m.pct).length
-              // Track fill: 0 steps = 0%, 1 = 0%, 2 = 33%, 3 = 66%, 4 = 100%
               const trackFill = reachedCount <= 1 ? (reachedCount === 0 ? 0 : 0) : ((reachedCount - 1) / (MILESTONES.length - 1)) * 100
               return (
-                <div className="border-t border-border/60 px-4 pt-4 pb-3">
+                <div className="rounded-2xl border border-border bg-background overflow-hidden shrink-0 px-4 pt-4 pb-3">
                   <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-4">Bonus texnikalar</p>
                   <div className="relative flex justify-between items-start">
                     {/* Track bg — circle center to circle center */}
@@ -1230,7 +1157,6 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
                 </div>
               )
             })()}
-          </div>
 
         {/* Chegirma banner */}
         {narxVal > 0 && chegirma > 0 && (
