@@ -152,10 +152,63 @@ async function drawHighlight(imgSrc, rect, viewBox) {
   return cropped.toDataURL('image/png')
 }
 
+async function drawPairHighlight(imgSrc, rect1, rect2, viewBox) {
+  const img = new Image()
+  await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = imgSrc })
+  const canvas = document.createElement('canvas')
+  canvas.width = img.naturalWidth; canvas.height = img.naturalHeight
+  const ctx = canvas.getContext('2d')
+  ctx.drawImage(img, 0, 0)
+  if (!viewBox) return canvas.toDataURL('image/png')
+  const [, , vw, vh] = viewBox.split(' ').map(Number)
+  const sx = img.naturalWidth / vw, sy = img.naturalHeight / vh
+  const bboxes = []
+  function drawRect(rect) {
+    if (!rect) return
+    let bboxVb
+    if (rect.d) {
+      ctx.save(); ctx.scale(sx, sy)
+      ctx.fillStyle = 'rgba(239,68,68,0.22)'; ctx.fill(new Path2D(rect.d))
+      ctx.strokeStyle = '#dc2626'; ctx.lineWidth = vw / 90; ctx.stroke(new Path2D(rect.d))
+      ctx.restore(); bboxVb = pathBBox(rect.d)
+    } else {
+      const lw = Math.max(4, img.naturalWidth / 250)
+      ctx.fillStyle = 'rgba(239,68,68,0.22)'; ctx.fillRect(rect.x * sx, rect.y * sy, rect.width * sx, rect.height * sy)
+      ctx.strokeStyle = '#dc2626'; ctx.lineWidth = lw; ctx.strokeRect(rect.x * sx, rect.y * sy, rect.width * sx, rect.height * sy)
+      bboxVb = { x: rect.x, y: rect.y, width: rect.width, height: rect.height }
+    }
+    bboxes.push({ px: bboxVb.x * sx, py: bboxVb.y * sy, pw: bboxVb.width * sx, ph: bboxVb.height * sy })
+  }
+  drawRect(rect1); drawRect(rect2)
+  if (bboxes.length === 0) return canvas.toDataURL('image/png')
+  const allMinX = Math.min(...bboxes.map(b => b.px))
+  const allMinY = Math.min(...bboxes.map(b => b.py))
+  const allMaxX = Math.max(...bboxes.map(b => b.px + b.pw))
+  const allMaxY = Math.max(...bboxes.map(b => b.py + b.ph))
+  const combinedW = allMaxX - allMinX, combinedH = allMaxY - allMinY
+  const padX = combinedW * 4, padY = combinedH * 1.5
+  const cx = Math.max(0, allMinX - padX), cy = Math.max(0, allMinY - padY)
+  const cw = Math.min(img.naturalWidth - cx, combinedW + padX * 2)
+  const ch = Math.min(img.naturalHeight - cy, combinedH + padY * 2)
+  const cropped = document.createElement('canvas')
+  cropped.width = cw; cropped.height = ch
+  cropped.getContext('2d').drawImage(canvas, cx, cy, cw, ch, 0, 0, cw, ch)
+  return cropped.toDataURL('image/png')
+}
+
 async function downloadBookingPDF(b) {
   const [blockId, bolimStr, aptStr] = b.apartment_id.split('-')
   const bolimNum = parseInt(bolimStr)
   const floor = aptStr ? parseInt(aptStr[0]) : 1
+
+  // Juft bron bo'lsa pair partner ma'lumotini olamiz
+  let partnerBooking = null
+  if (b.pair_group_id) {
+    try {
+      const pairRes = await apiFetch(`/api/bookings/pair-group/${b.pair_group_id}`).then(r => r.json())
+      partnerBooking = Array.isArray(pairRes) ? pairRes.find(p => p.id !== b.id) : null
+    } catch { partnerBooking = null }
+  }
 
   const [{ pdf }, aptRes, qrImg] = await Promise.all([
     import('@react-pdf/renderer'),
@@ -167,6 +220,28 @@ async function downloadBookingPDF(b) {
   const aptData = Array.isArray(aptRes) ? aptRes.find(a => a.address === b.apartment_id) : null
   const apartment = aptData ?? { address: b.apartment_id, size: 0, status: b.type === 'sotish' ? 'SOLD' : 'RESERVED' }
 
+  // Pair partner apartment ma'lumoti
+  let partnerApt = null
+  if (partnerBooking) {
+    const [pBlockId, pBolimStr, pAptStr] = partnerBooking.apartment_id.split('-')
+    const pBolimNum = parseInt(pBolimStr)
+    const pFloor = pAptStr ? parseInt(pAptStr[0]) : 1
+    if (pBlockId === blockId && pBolimNum === bolimNum && pFloor === floor) {
+      const pAptData = Array.isArray(aptRes) ? aptRes.find(a => a.address === partnerBooking.apartment_id) : null
+      partnerApt = pAptData ?? { address: partnerBooking.apartment_id, size: 0 }
+    } else {
+      try {
+        const pAptRes = await apiFetch(`/api/apartments?block=${pBlockId}&bolim=${pBolimNum}&floor=${pFloor}`).then(r => r.json())
+        const pAptData = Array.isArray(pAptRes) ? pAptRes.find(a => a.address === partnerBooking.apartment_id) : null
+        partnerApt = pAptData ?? { address: partnerBooking.apartment_id, size: 0 }
+      } catch { partnerApt = { address: partnerBooking.apartment_id, size: 0 } }
+    }
+  }
+
+  const effectiveSize = partnerApt
+    ? Number((apartment.size + partnerApt.size).toFixed(2))
+    : apartment.size
+
   const rawFloorImg = loadImg(blockId, floor, bolimNum)
   let floorImgSrc = null
   if (rawFloorImg) {
@@ -176,6 +251,14 @@ async function downloadBookingPDF(b) {
         const wcPoints = WC_OVERLAYS[blockId]?.[floor]?.[bolimNum] ?? null
         const viewBox  = await getBolimViewBox(blockId, floor, bolimNum)
         floorImgSrc = await drawWcHighlight(rawFloorImg, wcPoints, viewBox)
+      } else if (partnerApt) {
+        const [overlay1, overlay2] = await Promise.all([
+          getAptRect(blockId, floor, bolimNum, b.apartment_id),
+          getAptRect(blockId, floor, bolimNum, partnerApt.address),
+        ])
+        floorImgSrc = await drawPairHighlight(
+          rawFloorImg, overlay1?.rect ?? null, overlay2?.rect ?? null, overlay1?.viewBox ?? null
+        )
       } else {
         const overlay = await getAptRect(blockId, floor, bolimNum, b.apartment_id)
         floorImgSrc = await drawHighlight(rawFloorImg, overlay?.rect ?? null, overlay?.viewBox ?? null)
@@ -215,8 +298,8 @@ async function downloadBookingPDF(b) {
   let bonusItems = []
   const chegirmaM2 = Number(String(b.chegirma_m2 || '').replace(/\s/g, '')) || 0
   const aslNarxM2  = Number(String(b.asl_narx_m2 || '').replace(/\s/g, '')) || 0
-  if (chegirmaM2 > 0 && aslNarxM2 > 0 && apartment.size > 0) {
-    const baseTotal  = Math.round(aslNarxM2 * apartment.size)
+  if (chegirmaM2 > 0 && aslNarxM2 > 0 && effectiveSize > 0) {
+    const baseTotal  = Math.round(aslNarxM2 * effectiveSize)
     const downVal    = Number(String(b.boshlangich || '').replace(/\s/g, '')) || 0
     const umumiyNum  = Number(String(b.umumiy || '').replace(/\s/g, '')) || 0
     const pctOfBase  = baseTotal > 0 && downVal > 0
@@ -228,10 +311,14 @@ async function downloadBookingPDF(b) {
 
   const logoSrc = await toDataUrl('/logo.png')
 
+  const pdfApartment = partnerApt
+    ? { ...apartment, size: effectiveSize, pairAddress: partnerApt.address }
+    : apartment
+
   const date = new Date(b.created_at).toLocaleDateString('uz-UZ', { year: 'numeric', month: 'long', day: 'numeric' })
   const blob = await pdf(
     <ContractPDF
-      apartment={apartment}
+      apartment={pdfApartment}
       floor={floor}
       blockId={blockId}
       bolimNum={bolimNum}
@@ -248,7 +335,10 @@ async function downloadBookingPDF(b) {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = `shartnoma-${b.apartment_id}.pdf`
+  const aptNum = b.apartment_id.split('-').pop()
+  a.download = partnerApt
+    ? `shartnoma-${aptNum}-${partnerApt.address.split('-').pop()}.pdf`
+    : `shartnoma-${b.apartment_id}.pdf`
   a.click()
   URL.revokeObjectURL(url)
 }
@@ -308,7 +398,7 @@ function SotishDetailModal({ booking, onClose }) {
   )
 }
 
-function BookingRow({ b, isAdmin, cancelled, onReset, scrolled }) {
+function BookingRow({ b, isAdmin, cancelled, onReset, scrolled, pairPosition }) {
   const [loading, setLoading]         = useState(false)
   const [pdfLoading, setPdfLoading]   = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
@@ -316,6 +406,7 @@ function BookingRow({ b, isAdmin, cancelled, onReset, scrolled }) {
 
   const [block, bolim, aptStr] = b.apartment_id.split('-')
   const floor = aptStr ? aptStr[0] : '?'
+  const isPair = !!pairPosition
 
   async function handleDownloadPDF() {
     setPdfLoading(true)
@@ -337,80 +428,96 @@ function BookingRow({ b, isAdmin, cancelled, onReset, scrolled }) {
   return (
     <>
       <tr
-        className={`border-t border-border transition-colors duration-300 ${
-          cancelled ? 'opacity-55' : 'hover:bg-muted/40'
-        } ${b.type === 'sotish' && !cancelled ? 'cursor-pointer' : ''}`}
+        className={`transition-colors duration-300
+          ${pairPosition === 'last' ? 'border-t border-violet-100' : 'border-t border-border'}
+          ${isPair && !cancelled ? 'bg-violet-50/40 hover:bg-violet-50/70' : cancelled ? 'opacity-55' : 'hover:bg-muted/40'}
+          ${b.type === 'sotish' && !cancelled ? 'cursor-pointer' : ''}`}
         onDoubleClick={() => b.type === 'sotish' && !cancelled && setShowDetail(true)}
       >
-        <td className={`px-4 py-3 whitespace-nowrap sticky left-0 transition-shadow ${
-          cancelled ? 'bg-card opacity-100' : 'bg-card'
-        } ${scrolled ? 'shadow-[4px_0_12px_-2px_rgba(0,0,0,0.08)]' : ''}`}>
-          <p className="font-mono font-bold text-sm">{b.apartment_id}</p>
+        <td className={`px-4 py-3 whitespace-nowrap sticky left-0 transition-shadow
+          ${isPair && !cancelled ? 'bg-violet-50/60' : cancelled ? 'bg-card opacity-100' : 'bg-card'}
+          ${scrolled ? 'shadow-[4px_0_12px_-2px_rgba(0,0,0,0.08)]' : ''}
+          ${isPair ? 'border-l-[3px] border-l-violet-400' : ''}`}>
+          <div className="flex items-center gap-2">
+            <p className="font-mono font-bold text-sm">{b.apartment_id}</p>
+            {pairPosition === 'first' && (
+              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-violet-100 text-violet-700 border border-violet-200 leading-none">JUFT</span>
+            )}
+            {pairPosition === 'last' && (
+              <span className="text-[10px] text-violet-400 leading-none">↑ juft</span>
+            )}
+          </div>
           <p className="text-xs text-muted-foreground mt-0.5">
             {block}-blok · {bolim}-bo'lim · {floor}-qavat
           </p>
         </td>
 
-        <td className="px-4 py-3">
-          <p className="text-sm font-medium">{b.ism} {b.familiya}</p>
-          <div className="flex items-center gap-2 mt-0.5">
-            {b.phone && <p className="text-xs text-muted-foreground">{b.phone}</p>}
-            <span className={`text-xs font-semibold px-1.5 py-0.5 rounded-full ${TYPE_BADGE[b.type] ?? ''}`}>
-              {TYPE_LABEL[b.type] ?? b.type}
-            </span>
-          </div>
-        </td>
+        {pairPosition !== 'last' && (
+          <td className="px-4 py-3 align-middle" rowSpan={isPair ? 2 : 1}>
+            <p className="text-sm font-medium">{b.ism} {b.familiya}</p>
+            <div className="flex items-center gap-2 mt-0.5">
+              {b.phone && <p className="text-xs text-muted-foreground">{b.phone}</p>}
+              <span className={`text-xs font-semibold px-1.5 py-0.5 rounded-full ${TYPE_BADGE[b.type] ?? ''}`}>
+                {TYPE_LABEL[b.type] ?? b.type}
+              </span>
+            </div>
+          </td>
+        )}
 
-        {isAdmin && (
-          <td className="px-4 py-3 text-sm text-muted-foreground whitespace-nowrap">
+        {isAdmin && pairPosition !== 'last' && (
+          <td className="px-4 py-3 text-sm text-muted-foreground whitespace-nowrap align-middle" rowSpan={isPair ? 2 : 1}>
             {b.manager_name || '—'}
           </td>
         )}
 
-        <td className="px-4 py-3 whitespace-nowrap">
-          {cancelled ? (
-            <p className="text-xs text-red-500 font-medium">
-              {new Date(b.cancelled_at).toLocaleString('uz-UZ')}
-            </p>
-          ) : (
-            <p className="text-xs text-muted-foreground">
-              {new Date(b.created_at).toLocaleString('uz-UZ')}
-            </p>
-          )}
-        </td>
-
-        <td className="px-4 py-3">
-          <div className="flex items-center gap-2">
-            {b.type === 'bron' ? (
-              <button
-                onClick={handleDownloadPDF}
-                disabled={pdfLoading}
-                className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border border-border text-muted-foreground hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 transition-colors disabled:opacity-40"
-              >
-                {pdfLoading ? <FileText size={13} className="animate-pulse" /> : <Download size={13} />}
-                Shartnoma
-              </button>
+        {pairPosition !== 'last' && (
+          <td className="px-4 py-3 whitespace-nowrap align-middle" rowSpan={isPair ? 2 : 1}>
+            {cancelled ? (
+              <p className="text-xs text-red-500 font-medium">
+                {new Date(b.cancelled_at).toLocaleString('uz-UZ')}
+              </p>
             ) : (
-              <button
-                onClick={() => setShowDetail(true)}
-                className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border border-border text-muted-foreground hover:bg-emerald-50 hover:text-emerald-600 hover:border-emerald-200 transition-colors"
-              >
-                <Eye size={13} />
-                Ko'rish
-              </button>
+              <p className="text-xs text-muted-foreground">
+                {new Date(b.created_at).toLocaleString('uz-UZ')}
+              </p>
             )}
-            {isAdmin && !cancelled && (
-              <button
-                onClick={() => setShowConfirm(true)}
-                disabled={loading}
-                className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border border-border text-muted-foreground hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors disabled:opacity-40"
-              >
-                <X size={13} />
-                Bekor
-              </button>
-            )}
-          </div>
-        </td>
+          </td>
+        )}
+
+        {pairPosition !== 'last' && (
+          <td className="px-4 py-3 align-middle" rowSpan={isPair ? 2 : 1}>
+            <div className="flex items-center gap-2">
+              {b.type === 'bron' ? (
+                <button
+                  onClick={handleDownloadPDF}
+                  disabled={pdfLoading}
+                  className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border border-border text-muted-foreground hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 transition-colors disabled:opacity-40"
+                >
+                  {pdfLoading ? <FileText size={13} className="animate-pulse" /> : <Download size={13} />}
+                  Shartnoma
+                </button>
+              ) : (
+                <button
+                  onClick={() => setShowDetail(true)}
+                  className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border border-border text-muted-foreground hover:bg-emerald-50 hover:text-emerald-600 hover:border-emerald-200 transition-colors"
+                >
+                  <Eye size={13} />
+                  Ko'rish
+                </button>
+              )}
+              {isAdmin && !cancelled && (
+                <button
+                  onClick={() => setShowConfirm(true)}
+                  disabled={loading}
+                  className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border border-border text-muted-foreground hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors disabled:opacity-40"
+                >
+                  <X size={13} />
+                  Bekor
+                </button>
+              )}
+            </div>
+          </td>
+        )}
       </tr>
 
       {showConfirm && (
@@ -419,9 +526,17 @@ function BookingRow({ b, isAdmin, cancelled, onReset, scrolled }) {
             onClick={e => e.target === e.currentTarget && setShowConfirm(false)}>
             <div className="bg-background border border-border rounded-2xl p-6 w-full max-w-sm shadow-2xl">
               <h3 className="text-lg font-bold mb-2">Bitimni bekor qilish</h3>
-              <p className="text-sm text-muted-foreground mb-6">
+              <p className="text-sm text-muted-foreground mb-3">
                 <span className="font-semibold text-foreground">{b.apartment_id}</span> xonadonining bitimi bekor qilinadi.
               </p>
+              {isPair && (
+                <div className="flex items-start gap-2.5 px-3.5 py-3 rounded-xl bg-violet-50 border border-violet-200 mb-4">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-violet-600 shrink-0 mt-0.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                  <p className="text-xs text-violet-700 font-medium leading-relaxed">
+                    Bu <b>juft bron</b> — ikkinchi do'kon ham avtomatik bekor qilinadi.
+                  </p>
+                </div>
+              )}
               <div className="flex gap-2">
                 <button onClick={() => setShowConfirm(false)}
                   className="flex-1 py-3 rounded-xl border border-border text-sm font-medium hover:bg-muted transition-colors">
@@ -456,7 +571,7 @@ const BOLIMS_BY_BLOCK = {
 }
 const ALL_FLOORS  = [1, 2]
 
-function BookingsTable({ cancelled, isAdmin, onReset, search, typeFilter, dateFrom, dateTo, blockFilter, bolimFilter, floorFilter }) {
+function BookingsTable({ cancelled, isAdmin, onReset, search, typeFilter, dateFrom, dateTo, blockFilter, bolimFilter, floorFilter, managerFilter }) {
   const [scrolled, setScrolled] = useState(false)
   const scrollRef        = useRef(null)
   const hasNextPageRef   = useRef(false)
@@ -472,7 +587,7 @@ function BookingsTable({ cancelled, isAdmin, onReset, search, typeFilter, dateFr
   }, [])
 
   const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading } = useInfiniteQuery({
-    queryKey: ['bookings', cancelled ? 'cancelled' : 'active', search, typeFilter, dateFrom, dateTo, blockFilter, bolimFilter, floorFilter],
+    queryKey: ['bookings', cancelled ? 'cancelled' : 'active', search, typeFilter, dateFrom, dateTo, blockFilter, bolimFilter, floorFilter, managerFilter],
     queryFn: ({ pageParam = 0 }) => {
       const params = new URLSearchParams({ limit: String(LIMIT), offset: String(pageParam) })
       if (cancelled)              params.set('cancelled', '1')
@@ -483,6 +598,7 @@ function BookingsTable({ cancelled, isAdmin, onReset, search, typeFilter, dateFr
       if (floorFilter)            params.set('floor',     floorFilter)
       if (dateFrom)               params.set('from',      dateFrom)
       if (dateTo)                 params.set('to',        dateTo)
+      if (managerFilter)          params.set('manager',   managerFilter)
       return apiFetch(`/api/bookings?${params}`).then(r => r.json())
     },
     initialPageParam: 0,
@@ -559,16 +675,27 @@ function BookingsTable({ cancelled, isAdmin, onReset, search, typeFilter, dateFr
                     </td>
                   </tr>
                 )
-              : bookings.map(b => (
-                  <BookingRow
-                    key={b.id}
-                    b={b}
-                    isAdmin={isAdmin}
-                    cancelled={cancelled}
-                    onReset={onReset}
-                    scrolled={scrolled}
-                  />
-                ))
+              : (() => {
+                  const pairSeen = new Set()
+                  return bookings.map(b => {
+                    let pairPosition = null
+                    if (b.pair_group_id) {
+                      pairPosition = pairSeen.has(b.pair_group_id) ? 'last' : 'first'
+                      pairSeen.add(b.pair_group_id)
+                    }
+                    return (
+                      <BookingRow
+                        key={b.id}
+                        b={b}
+                        isAdmin={isAdmin}
+                        cancelled={cancelled}
+                        onReset={onReset}
+                        scrolled={scrolled}
+                        pairPosition={pairPosition}
+                      />
+                    )
+                  })
+                })()
             }
 
             {bookings.length > 0 && (
@@ -601,27 +728,38 @@ export default function BookingsPage() {
   const isAdmin = user?.role === 'admin'
   const queryClient = useQueryClient()
 
-  const [tab,          setTab]          = useState('active')
-  const [search,       setSearch]       = useState('')
-  const [typeFilter,   setTypeFilter]   = useState('all')
-  const [blockFilter,  setBlockFilter]  = useState('')
-  const [bolimFilter,  setBolimFilter]  = useState('')
-  const [floorFilter,  setFloorFilter]  = useState('')
-  const [dateFrom,     setDateFrom]     = useState('')
-  const [dateTo,       setDateTo]       = useState('')
-  const [filterOpen,   setFilterOpen]   = useState(false)
+  const [tab,           setTab]           = useState('active')
+  const [search,        setSearch]        = useState('')
+  const [typeFilter,    setTypeFilter]    = useState('all')
+  const [blockFilter,   setBlockFilter]   = useState('')
+  const [bolimFilter,   setBolimFilter]   = useState('')
+  const [floorFilter,   setFloorFilter]   = useState('')
+  const [dateFrom,      setDateFrom]      = useState('')
+  const [dateTo,        setDateTo]        = useState('')
+  const [managerFilter, setManagerFilter] = useState('')
+  const [filterOpen,    setFilterOpen]    = useState(false)
+  const [managers,      setManagers]      = useState([])
 
-  const [pendingType,  setPendingType]  = useState('all')
-  const [pendingBlock, setPendingBlock] = useState('')
-  const [pendingBolim, setPendingBolim] = useState('')
-  const [pendingFloor, setPendingFloor] = useState('')
-  const [pendingFrom,  setPendingFrom]  = useState('')
-  const [pendingTo,    setPendingTo]    = useState('')
+  const [pendingType,    setPendingType]    = useState('all')
+  const [pendingBlock,   setPendingBlock]   = useState('')
+  const [pendingBolim,   setPendingBolim]   = useState('')
+  const [pendingFloor,   setPendingFloor]   = useState('')
+  const [pendingFrom,    setPendingFrom]    = useState('')
+  const [pendingTo,      setPendingTo]      = useState('')
+  const [pendingManager, setPendingManager] = useState('')
+
+  useEffect(() => {
+    if (!isAdmin) return
+    apiFetch('/api/managers').then(r => r.json()).then(list => {
+      if (Array.isArray(list)) setManagers(list)
+    }).catch(() => {})
+  }, [isAdmin])
 
   function openSheet() {
     setPendingType(typeFilter); setPendingBlock(blockFilter)
     setPendingBolim(bolimFilter); setPendingFloor(floorFilter)
     setPendingFrom(dateFrom); setPendingTo(dateTo)
+    setPendingManager(managerFilter)
     setFilterOpen(true)
   }
 
@@ -629,19 +767,21 @@ export default function BookingsPage() {
     setTypeFilter(pendingType); setBlockFilter(pendingBlock)
     setBolimFilter(pendingBolim); setFloorFilter(pendingFloor)
     setDateFrom(pendingFrom); setDateTo(pendingTo)
+    setManagerFilter(pendingManager)
     setFilterOpen(false)
   }
 
   function clearPending() {
-    setPendingType('all'); setPendingBlock(''); setPendingBolim(''); setPendingFloor(''); setPendingFrom(''); setPendingTo('')
+    setPendingType('all'); setPendingBlock(''); setPendingBolim('')
+    setPendingFloor(''); setPendingFrom(''); setPendingTo(''); setPendingManager('')
   }
 
-  const activeFilterCount = [typeFilter !== 'all' ? typeFilter : '', blockFilter, bolimFilter, floorFilter, dateFrom, dateTo].filter(Boolean).length
+  const activeFilterCount = [typeFilter !== 'all' ? typeFilter : '', blockFilter, bolimFilter, floorFilter, dateFrom, dateTo, managerFilter].filter(Boolean).length
 
   function resetFilters() {
     setSearch(''); setTypeFilter('all')
     setBlockFilter(''); setBolimFilter(''); setFloorFilter('')
-    setDateFrom(''); setDateTo('')
+    setDateFrom(''); setDateTo(''); setManagerFilter('')
   }
 
   function onReset() {
@@ -694,7 +834,7 @@ export default function BookingsPage() {
           {/* Clear filters button */}
           {activeFilterCount > 0 && (
             <button
-              onClick={() => { setTypeFilter('all'); setBlockFilter(''); setBolimFilter(''); setFloorFilter(''); setDateFrom(''); setDateTo('') }}
+              onClick={() => { setTypeFilter('all'); setBlockFilter(''); setBolimFilter(''); setFloorFilter(''); setDateFrom(''); setDateTo(''); setManagerFilter('') }}
               className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-border text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0"
             >
               <X size={13} strokeWidth={2.5} />
@@ -735,6 +875,7 @@ export default function BookingsPage() {
         floorFilter={floorFilter}
         dateFrom={dateFrom}
         dateTo={dateTo}
+        managerFilter={managerFilter}
       />
 
       {/* Filter bottom sheet */}
@@ -821,6 +962,24 @@ export default function BookingsPage() {
                   ))}
                 </div>
               </div>
+
+              {isAdmin && managers.length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Menejer</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    <button onClick={() => setPendingManager('')}
+                      className={`px-3 py-2 rounded-lg text-xs font-semibold transition-colors ${!pendingManager ? 'bg-foreground text-background' : 'bg-muted text-muted-foreground'}`}>
+                      Barcha
+                    </button>
+                    {managers.map(m => (
+                      <button key={m.id} onClick={() => setPendingManager(String(m.id))}
+                        className={`px-3 py-2 rounded-lg text-xs font-semibold transition-colors ${pendingManager === String(m.id) ? 'bg-foreground text-background' : 'bg-muted text-muted-foreground'}`}>
+                        {m.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div>
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Sana</p>
