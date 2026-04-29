@@ -186,6 +186,51 @@ async function drawWcHighlight(imgSrc, points, viewBox) {
   return cropped.toDataURL('image/png')
 }
 
+// Ikkala do'konni bitta rasmda ajratib ko'rsatish
+async function drawPairHighlight(imgSrc, rect1, rect2, viewBox) {
+  const img = new Image()
+  await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = imgSrc })
+  const canvas = document.createElement('canvas')
+  canvas.width = img.naturalWidth; canvas.height = img.naturalHeight
+  const ctx = canvas.getContext('2d')
+  ctx.drawImage(img, 0, 0)
+  if (!viewBox) return canvas.toDataURL('image/png')
+  const [, , vw, vh] = viewBox.split(' ').map(Number)
+  const sx = img.naturalWidth / vw, sy = img.naturalHeight / vh
+  const bboxes = []
+  function drawRect(rect) {
+    if (!rect) return
+    let bboxVb
+    if (rect.d) {
+      ctx.save(); ctx.scale(sx, sy)
+      ctx.fillStyle = 'rgba(239,68,68,0.22)'; ctx.fill(new Path2D(rect.d))
+      ctx.strokeStyle = '#dc2626'; ctx.lineWidth = vw / 90; ctx.stroke(new Path2D(rect.d))
+      ctx.restore(); bboxVb = pathBBox(rect.d)
+    } else {
+      const lw = Math.max(4, img.naturalWidth / 250)
+      ctx.fillStyle = 'rgba(239,68,68,0.22)'; ctx.fillRect(rect.x * sx, rect.y * sy, rect.width * sx, rect.height * sy)
+      ctx.strokeStyle = '#dc2626'; ctx.lineWidth = lw; ctx.strokeRect(rect.x * sx, rect.y * sy, rect.width * sx, rect.height * sy)
+      bboxVb = { x: rect.x, y: rect.y, width: rect.width, height: rect.height }
+    }
+    bboxes.push({ px: bboxVb.x * sx, py: bboxVb.y * sy, pw: bboxVb.width * sx, ph: bboxVb.height * sy })
+  }
+  drawRect(rect1); drawRect(rect2)
+  if (bboxes.length === 0) return canvas.toDataURL('image/png')
+  const allMinX = Math.min(...bboxes.map(b => b.px))
+  const allMinY = Math.min(...bboxes.map(b => b.py))
+  const allMaxX = Math.max(...bboxes.map(b => b.px + b.pw))
+  const allMaxY = Math.max(...bboxes.map(b => b.py + b.ph))
+  const combinedW = allMaxX - allMinX, combinedH = allMaxY - allMinY
+  const padX = combinedW * 4, padY = combinedH * 1.5
+  const cx = Math.max(0, allMinX - padX), cy = Math.max(0, allMinY - padY)
+  const cw = Math.min(img.naturalWidth - cx, combinedW + padX * 2)
+  const ch = Math.min(img.naturalHeight - cy, combinedH + padY * 2)
+  const cropped = document.createElement('canvas')
+  cropped.width = cw; cropped.height = ch
+  cropped.getContext('2d').drawImage(canvas, cx, cy, cw, ch, 0, 0, cw, ch)
+  return cropped.toDataURL('image/png')
+}
+
 async function getBolimViewBox(blockId, floor, bolimNum) {
   try {
     const LOADERS = {
@@ -231,20 +276,24 @@ const PDF_BONUS_TABLE = {
   100: ['Konditsioner', 'TV (43)', 'Muzlatgich'],
 }
 
-async function downloadContractPDF({ apartment, floor, blockId, bolimNum, form, type, managerName }) {
+async function downloadContractPDF({ apartment, floor, blockId, bolimNum, form, type, managerName, pairApartment = null }) {
   const { pdf } = await import('@react-pdf/renderer')
   const qrImg = await import('@/assets/qrcode.png')
   const qrDataUrl = qrImg.default
+
+  // Juft bo'lsa combined size ishlatiladi
+  const effectiveSize = pairApartment
+    ? Number((apartment.size + pairApartment.size).toFixed(2))
+    : apartment.size
 
   // Bonus items — chegirma bracketini form dan hisoblaymiz (faqat nom kerak, rasm yo'q)
   const chegirmaM2 = Number(String(form.chegirma_m2 || '').replace(/\s/g, '')) || 0
   const aslNarxM2  = Number(String(form.asl_narx_m2 || '').replace(/\s/g, '')) || 0
   let bonusDataItems = []
   if (chegirmaM2 > 0 && aslNarxM2 > 0) {
-    const baseTotal  = Math.round(aslNarxM2 * apartment.size)
+    const baseTotal  = Math.round(aslNarxM2 * effectiveSize)
     const downVal    = Number(String(form.boshlangich || '').replace(/\s/g, '')) || 0
     const umumiyNum  = Number(String(form.umumiy || '').replace(/\s/g, '')) || 0
-    // boshlangich chegirmali totalni to'liq qoplasa — 100% tier (cap sababli pctOfBase past chiqmasin)
     const pctOfBase  = baseTotal > 0 && downVal > 0
       ? (umumiyNum > 0 && downVal >= umumiyNum ? 100 : Math.floor((downVal / baseTotal) * 100))
       : 0
@@ -264,6 +313,14 @@ async function downloadContractPDF({ apartment, floor, blockId, bolimNum, form, 
         const wcPoints = WC_OVERLAYS[blockId]?.[floor]?.[bolimNum] ?? null
         const viewBox  = await getBolimViewBox(blockId, floor, bolimNum)
         floorImgSrc = await drawWcHighlight(rawFloorImg, wcPoints, viewBox)
+      } else if (pairApartment) {
+        const [overlay1, overlay2] = await Promise.all([
+          getAptRect(blockId, floor, bolimNum, apartment.address),
+          getAptRect(blockId, floor, bolimNum, pairApartment.address),
+        ])
+        floorImgSrc = await drawPairHighlight(
+          rawFloorImg, overlay1?.rect ?? null, overlay2?.rect ?? null, overlay1?.viewBox ?? null
+        )
       } else {
         const overlay = await getAptRect(blockId, floor, bolimNum, apartment.address)
         floorImgSrc = await drawHighlight(rawFloorImg, overlay?.rect ?? null, overlay?.viewBox ?? null)
@@ -271,10 +328,15 @@ async function downloadContractPDF({ apartment, floor, blockId, bolimNum, form, 
     } catch { floorImgSrc = null }
   }
 
+  // Juft bo'lsa apartment.size combined, pairAddress orqali breadcrumb quriladi
+  const pdfApartment = pairApartment
+    ? { ...apartment, size: effectiveSize, pairAddress: pairApartment.address }
+    : apartment
+
   const date = new Date().toLocaleDateString('uz-UZ', { year: 'numeric', month: 'long', day: 'numeric' })
   const blob = await pdf(
     <ContractPDF
-      apartment={apartment}
+      apartment={pdfApartment}
       floor={floor}
       blockId={blockId}
       bolimNum={bolimNum}
@@ -717,6 +779,8 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
   const [calc, setCalc] = useState({ narxM2: '', boshlangich: '', oylar: '12', muddatStep: 0, focus: 'boshlangich' })
   const [phoneTarget, setPhoneTarget] = useState(null) // null | 'bron' | 'sotish'
   const [sendSms, setSendSms] = useState(false)
+  const [pairPartner, setPairPartner] = useState(null)  // { address, size, status } yoki null
+  const [bookWithPair, setBookWithPair] = useState(false)
   const longPressTimer = useRef(null)
   const longPressFired = useRef(false)
   const calcLoadFromDB = useRef(true)
@@ -765,17 +829,22 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
     }
   }
 
+  // Juft tanlanganda combined size ishlatiladi
+  const effectiveAptSize = bookWithPair && pairPartner
+    ? Number((apartment.size + pairPartner.size).toFixed(2))
+    : apartment.size
+
   // Barcha calc derivatsiyalari — bir marta hisoblanadi, qayta ishlatiladi
   const calcDerived = useMemo(() => {
     const narxVal  = Number(String(calc.narxM2).replace(/\s/g, ''))
     const downVal  = Number(String(calc.boshlangich).replace(/\s/g, ''))
     const months   = parseInt(calc.oylar) || 12
-    const baseTotal = Math.round(narxVal * apartment.size)
+    const baseTotal = Math.round(narxVal * effectiveAptSize)
     const pctOfBase = baseTotal > 0 && downVal > 0 ? Math.floor((downVal / baseTotal) * 100) : 0
     const pctBracket = apartment.is_wc ? null : (CHEGIRMA_BRACKETS.find(p => pctOfBase >= p) ?? null)
     const chegirma  = apartment.is_wc ? 0 : (pctBracket ? CHEGIRMA_TABLE[pctBracket] : 0)
     const yakuniy   = narxVal > 0 ? Math.max(0, narxVal - chegirma) : 0
-    const total     = Math.round(yakuniy * apartment.size)
+    const total     = Math.round(yakuniy * effectiveAptSize)
     const percent   = Math.min(100, pctOfBase)
     const qolgan    = Math.max(0, total - downVal)
     const qolganDisplay = qolgan > 0 ? qolgan : (pctOfBase < 100 ? Math.max(0, baseTotal - downVal) : 0)
@@ -783,7 +852,7 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
     const bonusBracket = BONUS_BRACKETS.find(p => pctOfBase >= p) ?? null
     const bonus     = apartment.is_wc ? null : (bonusBracket ? BONUS_TABLE[bonusBracket] : null)
     return { narxVal, downVal, months, baseTotal, pctOfBase, pctBracket, chegirma, yakuniy, total, percent, qolgan, monthly, bonus }
-  }, [calc.narxM2, calc.boshlangich, calc.oylar, apartment.size, apartment.is_wc])
+  }, [calc.narxM2, calc.boshlangich, calc.oylar, effectiveAptSize, apartment.is_wc])
 
   // Chegirma bracket o'zgarganda confetti + sound
   const { pctBracket: currentBracket } = calcDerived
@@ -826,6 +895,19 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
       if (Array.isArray(list)) setManagers(list)
     }).catch(() => {})
   }, [])
+
+  // Juft do'kon ma'lumotini yuklash
+  useEffect(() => {
+    setPairPartner(null)
+    setBookWithPair(false)
+    if (apartment.is_wc) return
+    apiFetch(`/api/apartments/${apartment.address}/pair`)
+      .then(r => r.json())
+      .then(partner => {
+        if (partner && partner.status === 'EMPTY') setPairPartner(partner)
+      })
+      .catch(() => {})
+  }, [apartment.address, apartment.is_wc])
 
   useEffect(() => {
     const handler = (e) => { if (e.key === 'Escape') onClose() }
@@ -899,6 +981,7 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
           passport_place: form.passport_place || null,
           manzil: form.manzil || null,
           assigned_user_id: assignedUserId ?? null,
+          pair_with: bookWithPair && pairPartner ? pairPartner.address : undefined,
         }),
       })
       if (!res.ok) {
@@ -908,7 +991,15 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
       }
       const booking = await res.json()
       onBooked?.()
-      setBooked({ form, type, bookingId: booking.id, managerName: effectiveManagerName })
+      setBooked({
+        form,
+        type,
+        bookingId: booking.id,
+        managerName: effectiveManagerName,
+        pairApartmentAddress: booking.pair_booking ? pairPartner?.address ?? null : null,
+        pairApartmentSize: booking.pair_booking ? pairPartner?.size ?? null : null,
+        pairBookingId: booking.pair_booking?.id ?? null,
+      })
 
       // Faqat bron uchun SMS yuborish (fire-and-forget) — faqat checkbox yoqilganda
       if (type === 'bron' && form.telefon && sendSms) {
@@ -926,11 +1017,15 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
       // Faqat bron uchun Telegramga PDF yuborish (background)
       if (type === 'bron' && booking.id) {
         const managerName = effectiveManagerName
-        downloadContractPDF({ apartment, floor, blockId, bolimNum, form, type, managerName })
+        const pairApt = booking.pair_booking && pairPartner
+          ? { address: pairPartner.address, size: pairPartner.size }
+          : null
+        downloadContractPDF({ apartment, floor, blockId, bolimNum, form, type, managerName, pairApartment: pairApt })
           .then(blob => {
             const fd = new FormData()
             fd.append('pdf', blob, `shartnoma-${apartment.address}.pdf`)
             fd.append('booking_id', String(booking.id))
+            if (booking.pair_booking?.id) fd.append('pair_booking_id', String(booking.pair_booking.id))
             return apiFetch('/api/bookings/send-pdf', { method: 'POST', body: fd })
           })
           .then(res => res?.ok && console.log('[PDF] Telegramga yuborildi'))
@@ -947,11 +1042,17 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
     setPdfLoading(true)
     try {
       const managerName = booked.managerName ?? getUser()?.name ?? ''
-      const blob = await downloadContractPDF({ apartment, floor, blockId, bolimNum, form: booked.form, type: booked.type, managerName })
+      const pairApt = booked.pairApartmentAddress
+        ? { address: booked.pairApartmentAddress, size: booked.pairApartmentSize }
+        : null
+      const blob = await downloadContractPDF({ apartment, floor, blockId, bolimNum, form: booked.form, type: booked.type, managerName, pairApartment: pairApt })
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `shartnoma-${apartment.address}.pdf`
+      const aptNum = apartment.address.split('-').pop()
+      a.download = pairApt
+        ? `shartnoma-${aptNum}-${pairApt.address.split('-').pop()}.pdf`
+        : `shartnoma-${apartment.address}.pdf`
       a.click()
       URL.revokeObjectURL(url)
     } finally {
@@ -1088,7 +1189,7 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
         {/* Umumiy narx + Boshlang'ich */}
         <div className="flex gap-3">
           <div className={`flex-1 rounded-2xl border-2 px-4 py-3 ${chegirma > 0 ? 'border-emerald-200 bg-emerald-50/60' : 'border-border bg-muted/40'}`}>
-            <p className="text-xs text-muted-foreground mb-1">Umumiy narx <span className="text-muted-foreground/50">({apartment.size} m²)</span></p>
+            <p className="text-xs text-muted-foreground mb-1">Umumiy narx <span className="text-muted-foreground/50">({effectiveAptSize} m²)</span></p>
             {chegirma > 0 && baseTotal > 0 ? (
               <>
                 <div className="flex items-center gap-1.5 mb-0.5">
@@ -1233,9 +1334,9 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
               <div className="w-px bg-amber-200 self-stretch" />
               <div className="text-right">
                 <p className="text-xs text-zinc-400 mb-1">Siz tejaysiz</p>
-                <p className="text-xs text-zinc-500 mb-0.5">{chegirma} $ × {apartment.size} m² =</p>
+                <p className="text-xs text-zinc-500 mb-0.5">{chegirma} $ × {effectiveAptSize} m² =</p>
                 <p className="text-2xl font-bold text-emerald-600 leading-tight">
-                  {(chegirma * apartment.size).toLocaleString('ru-RU')} <span className="text-sm font-normal">$</span>
+                  {(chegirma * effectiveAptSize).toLocaleString('ru-RU')} <span className="text-sm font-normal">$</span>
                 </p>
               </div>
             </div>
@@ -1347,7 +1448,7 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
                     const down     = Number(String(bronForm.boshlangich || '').replace(/\s/g, ''))
                     const narx     = Number(String(bronForm.narx_m2 || '').replace(/\s/g, ''))
                     const aslNarx  = Number(String(bronForm.asl_narx_m2 || '').replace(/\s/g, ''))
-                    const baseT    = aslNarx > 0 ? Math.round(aslNarx * apartment.size) : (narx > 0 ? Math.round(narx * apartment.size) : 0)
+                    const baseT    = aslNarx > 0 ? Math.round(aslNarx * effectiveAptSize) : (narx > 0 ? Math.round(narx * effectiveAptSize) : 0)
                     const pct      = baseT > 0 && down > 0 ? Math.min(100, Math.floor((down / baseT) * 100)) : 0
                     return pct > 0 ? <p className="text-lg font-bold text-amber-600 mt-1">{pct}% <span className="text-xs font-normal">umumiy to'lovdan</span></p> : null
                   })()}
@@ -1413,7 +1514,7 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
                     const down     = Number(String(sotishForm.boshlangich || '').replace(/\s/g, ''))
                     const narx     = Number(String(sotishForm.narx_m2 || '').replace(/\s/g, ''))
                     const aslNarx  = Number(String(sotishForm.asl_narx_m2 || '').replace(/\s/g, ''))
-                    const baseT    = aslNarx > 0 ? Math.round(aslNarx * apartment.size) : (narx > 0 ? Math.round(narx * apartment.size) : 0)
+                    const baseT    = aslNarx > 0 ? Math.round(aslNarx * effectiveAptSize) : (narx > 0 ? Math.round(narx * effectiveAptSize) : 0)
                     const pct      = baseT > 0 && down > 0 ? Math.min(100, Math.floor((down / baseT) * 100)) : 0
                     return pct > 0 ? <p className="text-lg font-bold text-amber-600 mt-1">{pct}% <span className="text-xs font-normal">umumiy to'lovdan</span></p> : null
                   })()}
@@ -1474,7 +1575,12 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
           <CheckCircle size={56} className="text-green-500" />
           <div>
             <p className="text-xl font-bold text-foreground">{booked.type === 'bron' ? 'Bron muvaffaqiyatli!' : 'Sotish rasmiylashtirildi!'}</p>
-            <p className="text-sm text-muted-foreground mt-1">{apartment.address} · {booked.form.ism} {booked.form.familiya}</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              {booked.pairApartmentAddress
+                ? `${apartment.address.split('-').pop()}/${booked.pairApartmentAddress.split('-').pop()}-DO'KON`
+                : apartment.address
+              } · {booked.form.ism} {booked.form.familiya}
+            </p>
           </div>
           {booked.type === 'bron' && (
             <button
@@ -1503,17 +1609,43 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
   const innerContent = (
     <div className={`${embedded ? 'apt-modal-enter' : 'apt-modal-enter'} relative w-full h-full bg-background ${embedded ? '' : 'rounded-2xl shadow-2xl border border-border'} flex flex-col overflow-hidden`}>
         {/* Header */}
-        <div className="flex items-center px-5 border-b border-border shrink-0 h-24">
-          <div className="flex items-center gap-4">
-            <span className="text-3xl font-bold text-foreground">{apartment.address}</span>
+        <div className={`flex items-center px-5 border-b shrink-0 h-24 transition-colors ${bookWithPair && pairPartner ? 'border-violet-100 bg-violet-50/50' : 'border-border'}`}>
+          {/* Address + size — min-w-0 + overflow-hidden siljishni bloklaydi */}
+          <div className="flex items-center gap-3 min-w-0 overflow-hidden mr-4">
+            {(() => {
+              if (bookWithPair && pairPartner) {
+                const parts = apartment.address.split('-')
+                const prefix = parts.slice(0, -1).join('-')
+                const [n1, n2] = [Number(parts[parts.length - 1]), Number(pairPartner.address.split('-').pop())].sort((a, b) => a - b)
+                return <span className="text-3xl font-bold text-violet-700 shrink-0">{prefix}-{n1}/{n2}</span>
+              }
+              return <span className="text-3xl font-bold text-foreground shrink-0">{apartment.address}</span>
+            })()}
             {apartment.size > 0 && (
-              <span className="text-xl text-muted-foreground font-medium">{apartment.size} m²</span>
+              <span className={`text-xl font-medium shrink-0 ${bookWithPair && pairPartner ? 'text-violet-400' : 'text-muted-foreground'}`}>
+                {bookWithPair && pairPartner
+                  ? `${Number((apartment.size + pairPartner.size).toFixed(2))} m²`
+                  : `${apartment.size} m²`}
+              </span>
             )}
             {apartment.notes && (
-              <span className="px-3 py-1 rounded-full bg-amber-100 text-amber-800 text-sm font-semibold border border-amber-200">{apartment.notes}</span>
+              <span className="px-3 py-1 rounded-full bg-amber-100 text-amber-800 text-sm font-semibold border border-amber-200 shrink-0">{apartment.notes}</span>
             )}
           </div>
           <div className="flex-1" />
+          {/* Juft toggle — o'ng tomonda, doim bir joyda, siljimaydi */}
+          {pairPartner && (
+            <>
+              <button type="button" onDoubleClick={() => setBookWithPair(v => !v)}
+                className={`flex items-center gap-2.5 shrink-0 px-4 py-2.5 rounded-xl text-sm font-semibold border-2 transition-all select-none ${bookWithPair ? 'bg-violet-600 border-violet-600 text-white shadow-md shadow-violet-200' : 'bg-background border-border text-foreground hover:bg-violet-50 hover:border-violet-300 hover:text-violet-700'}`}>
+                <span className={`w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 transition-colors ${bookWithPair ? 'bg-white/25 border-white/50' : 'border-muted-foreground'}`}>
+                  {bookWithPair && <svg viewBox="0 0 12 10" className="w-3.5 h-3.5" fill="none"><path d="M1 5l3.5 3.5L11 1" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                </span>
+                {pairPartner.address.split('-').pop()}-DO'KON bilan juft
+              </button>
+              <div className="w-px h-10 bg-border mx-4 shrink-0" />
+            </>
+          )}
           <button
             type="button"
             onPointerDown={calcLongPressStart}

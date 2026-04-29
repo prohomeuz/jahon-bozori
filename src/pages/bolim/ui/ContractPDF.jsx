@@ -296,6 +296,12 @@ export function ContractPDF({
 }) {
   const [, , apt] = (apartment.address ?? '').split('-')
   const aptNum = apt ?? apartment.address
+  // Juft do'kon: address "B-1-140/141" shaklida saqlanadi (pairAddress field orqali)
+  const pairAptNumRaw = apartment.pairAddress ? apartment.pairAddress.split('-').pop() : null
+  // O'sish tartibida sort: kichik raqam birinchi
+  const [sortedAptNum, pairAptNum] = pairAptNumRaw
+    ? [Number(aptNum), Number(pairAptNumRaw)].sort((a, b) => a - b).map(String)
+    : [aptNum, null]
 
   const rawDown = String(form.boshlangich || '').replace(/\s/g, '')
   const rawUmumiy = String(form.umumiy || '').replace(/\s/g, '')
@@ -358,7 +364,8 @@ export function ContractPDF({
           {/* Sarlavha */}
           <View style={s.breadcrumb}>
             <Text style={s.crumbText}>
-              {blockId}-BLOK {'>'} {bolimNum}-BO'LIM {'>'} {floor}-QAVAT {'>'} {aptNum}-
+              {blockId}-BLOK {'>'} {bolimNum}-BO'LIM {'>'} {floor}-QAVAT {'>'}{' '}
+              {pairAptNum ? `${sortedAptNum}/${pairAptNum}` : aptNum}-
               {apartment.is_wc ? 'HOJATXONA' : "DO'KON"}
             </Text>
           </View>

@@ -455,6 +455,7 @@ app.patch('/api/apartments/:id/status', requireAuth, requireAdmin, async (c) => 
   if (!['EMPTY', 'RESERVED', 'SOLD', 'NOT_SALE'].includes(status)) return c.json({ error: "Status: EMPTY | RESERVED | SOLD | NOT_SALE" }, 400)
   if (status === 'NOT_SALE' && !reason?.trim()) return c.json({ error: "NOT_SALE uchun sabab kiritish majburiy" }, 400)
   let tgMsgs = []
+  let pairCancelledAptId = null
   db.exec('BEGIN')
   try {
     if (status === 'NOT_SALE') {
@@ -466,6 +467,19 @@ app.patch('/api/apartments/:id/status', requireAuth, requireAdmin, async (c) => 
         if (activeBooking) {
           tgMsgs = q.tgMsgsByBooking.all(activeBooking.id)
           q.delTgMsgsByBooking.run(activeBooking.id)
+          // Juft bron bo'lsa — juftini ham bekor qilamiz
+          const fullBooking = db.prepare("SELECT pair_group_id FROM bookings WHERE id=?").get(activeBooking.id)
+          if (fullBooking?.pair_group_id) {
+            const partnerBooking = q.pairPartnerBooking.get(fullBooking.pair_group_id, activeBooking.id)
+            if (partnerBooking) {
+              const partnerTgMsgs = q.tgMsgsByBooking.all(partnerBooking.id)
+              tgMsgs = [...tgMsgs, ...partnerTgMsgs]
+              q.delTgMsgsByBooking.run(partnerBooking.id)
+              q.cancelBooking.run({ apartment_id: partnerBooking.apartment_id })
+              q.updateStatus.run({ status: 'EMPTY', id: partnerBooking.apartment_id })
+              pairCancelledAptId = partnerBooking.apartment_id
+            }
+          }
         }
         q.cancelBooking.run({ apartment_id: id })
       }
@@ -489,6 +503,7 @@ app.patch('/api/apartments/:id/status', requireAuth, requireAdmin, async (c) => 
     }
   }
   broadcast('apartment', { id, status, not_sale_reason: status === 'NOT_SALE' ? reason.trim() : null })
+  if (pairCancelledAptId) broadcast('apartment', { id: pairCancelledAptId, status: 'EMPTY', not_sale_reason: null })
   broadcast('booking', { cancelled: true })
   return c.json({ ok: true })
 })
@@ -569,14 +584,108 @@ app.get('/api/shops', requireAuth, (c) => {
 
 // ─── BOOKINGS ─────────────────────────────────────────────────────────────────
 
+// Juft do'kon ma'lumotini qaytaradi (agar mavjud bo'lsa)
+app.get('/api/apartments/:id/pair', requireAuth, (c) => {
+  const id = c.req.param('id')
+  const row = q.pairByApt.get(id, id)
+  if (!row) return c.json(null)
+  const partnerId = row.apartment_id_1 === id ? row.apartment_id_2 : row.apartment_id_1
+  const partner = db.prepare("SELECT id AS address, size, status FROM apartments WHERE id=?").get(partnerId)
+  return c.json(partner ?? null)
+})
+
+// Juft bron guruhidagi barcha bronlarni qaytaradi
+app.get('/api/bookings/pair-group/:group_id', requireAuth, (c) => {
+  const groupId = parseInt(c.req.param('group_id'))
+  if (!groupId) return c.json([])
+  const bookings = q.pairGroupBookings.all(groupId)
+  return c.json(bookings)
+})
+
 app.post('/api/bookings', requireAuth, async (c) => {
   const user = c.get('user')
-  const { apartment_id, type, ism, familiya, boshlangich, oylar, umumiy, passport, manzil, phone, passport_place, narx_m2, chegirma_m2, asl_narx_m2, assigned_user_id } = await c.req.json()
+  const { apartment_id, type, ism, familiya, boshlangich, oylar, umumiy, passport, manzil, phone, passport_place, narx_m2, chegirma_m2, asl_narx_m2, assigned_user_id, pair_with } = await c.req.json()
   if (!apartment_id || !type || !ism || !familiya || !boshlangich || !oylar)
     return c.json({ error: "Majburiy maydonlar to'ldirilmagan" }, 400)
 
   const effective_user_id = assigned_user_id ? parseInt(assigned_user_id) : user.sub
 
+  // ── JUFT BRON ──────────────────────────────────────────────────────────────
+  if (pair_with) {
+    db.exec('BEGIN')
+    try {
+      const apt1 = db.prepare("SELECT block, bolim, floor, status, size FROM apartments WHERE id=?").get(apartment_id)
+      if (!apt1) { db.exec('ROLLBACK'); return c.json({ error: "Do'kon topilmadi" }, 404) }
+      if (apt1.status !== 'EMPTY') { db.exec('ROLLBACK'); return c.json({ error: "Do'kon allaqachon band" }, 409) }
+
+      const apt2 = db.prepare("SELECT block, bolim, floor, status, size FROM apartments WHERE id=?").get(pair_with)
+      if (!apt2) { db.exec('ROLLBACK'); return c.json({ error: "Juft do'kon topilmadi" }, 404) }
+      if (apt2.status !== 'EMPTY') { db.exec('ROLLBACK'); return c.json({ error: "Juft do'kon allaqachon band" }, 409) }
+
+      // Juft ekanligini tekshiramiz
+      const pairRow = q.pairByApt.get(apartment_id, apartment_id)
+      const expectedPartner = pairRow
+        ? (pairRow.apartment_id_1 === apartment_id ? pairRow.apartment_id_2 : pairRow.apartment_id_1)
+        : null
+      if (expectedPartner !== pair_with) { db.exec('ROLLBACK'); return c.json({ error: "Bu do'konlar juft emas" }, 400) }
+
+      const lock = db.prepare("SELECT reason FROM sales_locks WHERE block=? AND bolim=? AND floor=?").get(apt1.block, apt1.bolim, apt1.floor)
+      if (lock) { db.exec('ROLLBACK'); return c.json({ error: `Sotuv to'xtatilgan: ${lock.reason}` }, 403) }
+
+      // Boshlang'ich va umumiyni bo'lamiz: har bir do'kon o'z ulushini oladi
+      const boshlangichNum = Number(String(boshlangich).replace(/\s/g, '')) || 0
+      const half1 = Math.round(boshlangichNum / 2)
+      const half2 = boshlangichNum - half1
+
+      // Umumiy: narx_m2 mavjud bo'lsa har bir do'konning o'z narxi = narx_m2 * size
+      const narxM2Num = Number(String(narx_m2 || '').replace(/\s/g, '')) || 0
+      const chegirmaM2Num = Number(String(chegirma_m2 || '').replace(/\s/g, '')) || 0
+      const yakuniyM2 = narxM2Num > 0 ? Math.max(0, narxM2Num - chegirmaM2Num) : 0
+      let umumiy1, umumiy2
+      if (yakuniyM2 > 0) {
+        umumiy1 = String(Math.round(yakuniyM2 * apt1.size))
+        umumiy2 = String(Math.round(yakuniyM2 * apt2.size))
+      } else if (umumiy) {
+        const umumiyNum = Number(String(umumiy).replace(/\s/g, '')) || 0
+        const u1 = Math.round(umumiyNum / 2)
+        umumiy1 = String(u1)
+        umumiy2 = String(umumiyNum - u1)
+      } else {
+        umumiy1 = null; umumiy2 = null
+      }
+
+      const newStatus = type === 'sotish' ? 'SOLD' : 'RESERVED'
+      const sharedFields = { user_id: effective_user_id, type, ism, familiya, oylar: parseInt(oylar),
+        passport: passport ?? null, manzil: manzil ?? null, phone: phone ?? null,
+        passport_place: passport_place ?? null, narx_m2: narx_m2 ?? null,
+        chegirma_m2: chegirma_m2 ?? null, asl_narx_m2: asl_narx_m2 ?? null }
+
+      q.insertBooking.run({ ...sharedFields, apartment_id, boshlangich: String(half1), umumiy: umumiy1 })
+      const booking1 = q.lastBooking.get()
+      db.prepare("UPDATE bookings SET pair_group_id=? WHERE id=?").run(booking1.id, booking1.id)
+
+      q.insertBooking.run({ ...sharedFields, apartment_id: pair_with, boshlangich: String(half2), umumiy: umumiy2 })
+      const booking2 = q.lastBooking.get()
+      db.prepare("UPDATE bookings SET pair_group_id=? WHERE id=?").run(booking1.id, booking2.id)
+
+      q.updateStatus.run({ status: newStatus, id: apartment_id })
+      q.updateStatus.run({ status: newStatus, id: pair_with })
+
+      db.exec('COMMIT')
+
+      broadcast('apartment', { id: apartment_id, status: newStatus })
+      broadcast('apartment', { id: pair_with, status: newStatus })
+      broadcast('booking', { id: booking1.id, apartment_id, type: type === 'sotish' ? 'Sotish' : 'Bron',
+        ism: booking1.ism, familiya: booking1.familiya, manager: booking1.manager_name ?? '' })
+
+      return c.json({ ...booking1, pair_group_id: booking1.id, pair_booking: { ...booking2, pair_group_id: booking1.id } }, 201)
+    } catch (e) {
+      db.exec('ROLLBACK')
+      return c.json({ error: e.message }, 500)
+    }
+  }
+
+  // ── ODDIY BRON ─────────────────────────────────────────────────────────────
   db.exec('BEGIN')
   try {
     const apt = db.prepare("SELECT block, bolim, floor, status FROM apartments WHERE id=?").get(apartment_id)
@@ -616,14 +725,16 @@ app.get('/api/bookings', requireAuth, (c) => {
   const block     = c.req.query('block')  || ''
   const bolim     = c.req.query('bolim')  || ''
   const floor     = c.req.query('floor')  || ''
-  const dateFrom  = c.req.query('from')   || ''
-  const dateTo    = c.req.query('to')     || ''
+  const dateFrom  = c.req.query('from')      || ''
+  const dateTo    = c.req.query('to')        || ''
+  const managerId = c.req.query('manager')   || ''
 
   const dateField = cancelled ? 'b.cancelled_at' : 'b.created_at'
   const conditions = [cancelled ? 'b.cancelled_at IS NOT NULL' : 'b.cancelled_at IS NULL']
   const params = { limit, offset }
 
   if (user.role !== 'admin') { conditions.push('b.user_id = :user_id'); params.user_id = user.sub }
+  else if (managerId) { conditions.push('b.user_id = :manager_id'); params.manager_id = parseInt(managerId) }
   if (search) {
     conditions.push('(b.apartment_id LIKE :search OR b.ism LIKE :search OR b.familiya LIKE :search OR COALESCE(b.phone,\'\') LIKE :search)')
     params.search = `%${search}%`
@@ -693,6 +804,7 @@ app.post('/api/bookings/send-pdf', requireAuth, async (c) => {
   const formData = await c.req.formData()
   const file = formData.get('pdf')
   const bookingId = parseInt(formData.get('booking_id'))
+  const pairBookingId = parseInt(formData.get('pair_booking_id') || '0') || null
   if (!file || !bookingId) return c.json({ error: 'pdf va booking_id kerak' }, 400)
 
   const booking = q.bookingById.get({ id: bookingId })
@@ -704,17 +816,38 @@ app.post('/api/bookings/send-pdf', requireAuth, async (c) => {
   const aptInfo = db.prepare('SELECT is_wc FROM apartments WHERE id=?').get(booking.apartment_id)
   const unitLabel = aptInfo?.is_wc ? 'Hojatxona' : "Do'kon"
 
+  // Juft bron bo'lsa — juft ID va umumiy boshlang'ich ko'rsatiladi
+  const fmtMoney = (val) => {
+    const n = Number(String(val ?? '').replace(/\s/g, ''))
+    if (!n) return String(val ?? '')
+    return n.toLocaleString('ru-RU').replace(/,/g, ' ') + ' USD'
+  }
+
+  let aptIdLabel = booking.apartment_id
+  let totalBoshlangich = booking.boshlangich
+  if (pairBookingId) {
+    const pairBooking = q.bookingById.get({ id: pairBookingId })
+    if (pairBooking) {
+      const [,,apt1] = booking.apartment_id.split('-')
+      const [,,apt2] = pairBooking.apartment_id.split('-')
+      const [lo, hi] = [Number(apt1), Number(apt2)].sort((a, b) => a - b)
+      aptIdLabel = `${booking.apartment_id.split('-').slice(0,2).join('-')}-${lo}/${hi}`
+      const b1 = Number(String(booking.boshlangich).replace(/\s/g,'')) || 0
+      const b2 = Number(String(pairBooking.boshlangich).replace(/\s/g,'')) || 0
+      totalBoshlangich = String(b1 + b2)
+    }
+  }
+
   const caption = `🟡 <b>Bron</b>\n` +
-    `🏢 <b>${unitLabel}:</b> ${booking.apartment_id}\n` +
+    `🏢 <b>${unitLabel}:</b> ${aptIdLabel}\n` +
     `👤 <b>Mijoz:</b> ${booking.ism} ${booking.familiya}\n` +
     (booking.phone ? `📞 <b>Telefon:</b> ${booking.phone}\n` : '') +
-    `💰 <b>Boshlang'ich:</b> ${booking.boshlangich}\n` +
+    `💰 <b>Boshlang'ich:</b> ${fmtMoney(totalBoshlangich)}\n` +
     `📅 <b>Muddat:</b> ${booking.oylar} oy\n` +
     `🤵 <b>Manager:</b> ${booking.manager_name ?? ''}`
 
   const buffer = Buffer.from(await file.arrayBuffer())
-  // Fayl nomi uzun bo'lsa Telegram bubble kengroq bo'ladi → caption sig'adi
-  const filename = `${booking.ism} ${booking.familiya} - shartnoma-${booking.apartment_id}.pdf`
+  const filename = `${booking.ism} ${booking.familiya} - shartnoma-${aptIdLabel.replace('/', '_')}.pdf`
   async function sendDoc(chatId) {
     const fd = new FormData()
     fd.append('chat_id', String(chatId))
@@ -733,6 +866,10 @@ app.post('/api/bookings/send-pdf', requireAuth, async (c) => {
         console.log('[sendDoc] OK → chatId:', chatId)
         if (json.result?.message_id) {
           try { q.saveTgMsg.run(bookingId, String(chatId), json.result.message_id) } catch {}
+          // Juft bron bo'lsa — ikkinchi booking uchun ham saqlaymiz (bekor qilishda o'chirilsin)
+          if (pairBookingId) {
+            try { q.saveTgMsg.run(pairBookingId, String(chatId), json.result.message_id) } catch {}
+          }
         }
       }
     } catch (e) {
