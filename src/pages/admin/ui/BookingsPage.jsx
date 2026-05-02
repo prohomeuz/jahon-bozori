@@ -1,8 +1,8 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react'
-import { useInfiniteQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query'
+import { useInfiniteQuery, useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import { getUser, apiFetch } from '@/shared/lib/auth'
 import { useRealtimeApts } from '@/shared/hooks/useRealtimeApts'
-import { Search, Download, X, FileText, Eye, SlidersHorizontal } from 'lucide-react'
+import { Search, Download, X, FileText, Eye, SlidersHorizontal, Tag } from 'lucide-react'
 import { ContractPDF } from '@/pages/bolim/ui/ContractPDF'
 const allBlockImgs = import.meta.glob('@/assets/blocks/**/*.{png,jpg,webp}', { eager: true })
 
@@ -328,6 +328,7 @@ async function downloadBookingPDF(b) {
       floorImgSrc={floorImgSrc}
       qrDataUrl={qrDataUrl}
       managerName={b.manager_name || ''}
+      sourceName={b.source_name || ''}
       logoSrc={logoSrc}
       bonusItems={bonusItems}
     />
@@ -360,6 +361,7 @@ function SotishDetailModal({ booking, onClose }) {
   const rows = [
     ['Xaridor', `${booking.ism || ''} ${booking.familiya || ''}`.trim() || '—'],
     ['Telefon', booking.phone || '—'],
+    booking.source_name && ['Manbaa', booking.source_name],
     ['Menejer', booking.manager_name || '—'],
     ['Sana', new Date(booking.created_at).toLocaleString('uz-UZ')],
     fmtMoney(booking.boshlangich) && ["Boshlang'ich to'lov", fmtMoney(booking.boshlangich)],
@@ -398,7 +400,7 @@ function SotishDetailModal({ booking, onClose }) {
   )
 }
 
-function BookingRow({ b, isAdmin, cancelled, onReset, scrolled, pairPosition }) {
+function BookingRow({ b, isAdmin, cancelled, onReset, scrolled, scrolledRight, pairPosition, bulkMode, selected, onSelect }) {
   const [loading, setLoading]         = useState(false)
   const [pdfLoading, setPdfLoading]   = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
@@ -439,6 +441,12 @@ function BookingRow({ b, isAdmin, cancelled, onReset, scrolled, pairPosition }) 
           ${scrolled ? 'shadow-[4px_0_12px_-2px_rgba(0,0,0,0.08)]' : ''}
           ${isPair ? 'border-l-[3px] border-l-violet-400' : ''}`}>
           <div className="flex items-center gap-2">
+            {bulkMode && pairPosition !== 'last' && (
+              <button type="button" onClick={() => onSelect?.(b.id)}
+                className={`w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 transition-colors ${selected ? 'bg-foreground border-foreground' : 'border-border bg-background'}`}>
+                {selected && <svg viewBox="0 0 10 8" className="w-2.5 h-2" fill="none"><path d="M1 4l2.5 2.5L9 1" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+              </button>
+            )}
             <p className="font-mono font-bold text-sm">{b.apartment_id}</p>
             {pairPosition === 'first' && (
               <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-violet-100 text-violet-700 border border-violet-200 leading-none">JUFT</span>
@@ -453,7 +461,7 @@ function BookingRow({ b, isAdmin, cancelled, onReset, scrolled, pairPosition }) 
         </td>
 
         {pairPosition !== 'last' && (
-          <td className="px-4 py-3 align-middle" rowSpan={isPair ? 2 : 1}>
+          <td className="px-4 py-3 align-middle whitespace-nowrap" rowSpan={isPair ? 2 : 1}>
             <p className="text-sm font-medium">{b.ism} {b.familiya}</p>
             <div className="flex items-center gap-2 mt-0.5">
               {b.phone && <p className="text-xs text-muted-foreground">{b.phone}</p>}
@@ -467,6 +475,15 @@ function BookingRow({ b, isAdmin, cancelled, onReset, scrolled, pairPosition }) 
         {isAdmin && pairPosition !== 'last' && (
           <td className="px-4 py-3 text-sm text-muted-foreground whitespace-nowrap align-middle" rowSpan={isPair ? 2 : 1}>
             {b.manager_name || '—'}
+          </td>
+        )}
+
+        {pairPosition !== 'last' && (
+          <td className="px-4 py-3 align-middle" rowSpan={isPair ? 2 : 1}>
+            {b.source_name
+              ? <span className="text-xs font-semibold px-2 py-1 rounded-full bg-blue-50 text-blue-600 border border-blue-200 whitespace-nowrap">{b.source_name}</span>
+              : <span className="text-xs text-muted-foreground">—</span>
+            }
           </td>
         )}
 
@@ -485,7 +502,7 @@ function BookingRow({ b, isAdmin, cancelled, onReset, scrolled, pairPosition }) 
         )}
 
         {pairPosition !== 'last' && (
-          <td className="px-4 py-3 align-middle" rowSpan={isPair ? 2 : 1}>
+          <td className={`px-4 py-3 align-middle sticky right-0 transition-shadow ${isPair && !cancelled ? 'bg-violet-50/60' : cancelled ? 'bg-card opacity-100' : 'bg-card'} ${scrolledRight ? 'shadow-[-4px_0_12px_-2px_rgba(0,0,0,0.08)]' : ''}`} rowSpan={isPair ? 2 : 1}>
             <div className="flex items-center gap-2">
               {b.type === 'bron' ? (
                 <button
@@ -571,8 +588,9 @@ const BOLIMS_BY_BLOCK = {
 }
 const ALL_FLOORS  = [1, 2]
 
-function BookingsTable({ cancelled, isAdmin, onReset, search, typeFilter, dateFrom, dateTo, blockFilter, bolimFilter, floorFilter, managerFilter }) {
-  const [scrolled, setScrolled] = useState(false)
+function BookingsTable({ cancelled, isAdmin, onReset, search, typeFilter, dateFrom, dateTo, blockFilter, bolimFilter, floorFilter, managerFilter, sourceFilter, bulkMode, selectedIds, onSelect }) {
+  const [scrolled,      setScrolled]      = useState(false)
+  const [scrolledRight, setScrolledRight] = useState(false)
   const scrollRef        = useRef(null)
   const hasNextPageRef   = useRef(false)
   const fetchingRef      = useRef(false)
@@ -581,13 +599,17 @@ function BookingsTable({ cancelled, isAdmin, onReset, search, typeFilter, dateFr
   useEffect(() => {
     const el = scrollRef.current
     if (!el) return
-    function onScroll() { setScrolled(el.scrollLeft > 4) }
+    function onScroll() {
+      setScrolled(el.scrollLeft > 4)
+      setScrolledRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 4)
+    }
+    onScroll()
     el.addEventListener('scroll', onScroll, { passive: true })
     return () => el.removeEventListener('scroll', onScroll)
   }, [])
 
   const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading } = useInfiniteQuery({
-    queryKey: ['bookings', cancelled ? 'cancelled' : 'active', search, typeFilter, dateFrom, dateTo, blockFilter, bolimFilter, floorFilter, managerFilter],
+    queryKey: ['bookings', cancelled ? 'cancelled' : 'active', search, typeFilter, dateFrom, dateTo, blockFilter, bolimFilter, floorFilter, managerFilter, sourceFilter],
     queryFn: ({ pageParam = 0 }) => {
       const params = new URLSearchParams({ limit: String(LIMIT), offset: String(pageParam) })
       if (cancelled)              params.set('cancelled', '1')
@@ -599,6 +621,7 @@ function BookingsTable({ cancelled, isAdmin, onReset, search, typeFilter, dateFr
       if (dateFrom)               params.set('from',      dateFrom)
       if (dateTo)                 params.set('to',        dateTo)
       if (managerFilter)          params.set('manager',   managerFilter)
+      if (sourceFilter)           params.set('source',    sourceFilter)
       return apiFetch(`/api/bookings?${params}`).then(r => r.json())
     },
     initialPageParam: 0,
@@ -632,7 +655,7 @@ function BookingsTable({ cancelled, isAdmin, onReset, search, typeFilter, dateFr
     return () => observer.disconnect()
   }, [])
 
-  const colSpan = isAdmin ? 5 : 4
+  const colSpan = isAdmin ? 6 : 5
 
   return (
     <div className="bg-card border border-border rounded-2xl overflow-hidden flex flex-col flex-1 min-h-0">
@@ -652,8 +675,9 @@ function BookingsTable({ cancelled, isAdmin, onReset, search, typeFilter, dateFr
               <th className={`px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide sticky left-0 bg-muted/80 backdrop-blur-sm transition-shadow ${scrolled ? 'shadow-[4px_0_12px_-2px_rgba(0,0,0,0.08)]' : ''}`}>Xonadon</th>
               <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Mijoz</th>
               {isAdmin && <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Manager</th>}
+              <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Manbaa</th>
               <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">{cancelled ? 'Bekor sanasi' : 'Sana'}</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Amallar</th>
+              <th className={`px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide sticky right-0 bg-muted/80 backdrop-blur-sm transition-shadow ${scrolledRight ? 'shadow-[-4px_0_12px_-2px_rgba(0,0,0,0.08)]' : ''}`}>Amallar</th>
             </tr>
           </thead>
           <tbody>
@@ -691,7 +715,11 @@ function BookingsTable({ cancelled, isAdmin, onReset, search, typeFilter, dateFr
                         cancelled={cancelled}
                         onReset={onReset}
                         scrolled={scrolled}
+                        scrolledRight={scrolledRight}
                         pairPosition={pairPosition}
+                        bulkMode={bulkMode}
+                        selected={selectedIds?.has(b.id)}
+                        onSelect={onSelect}
                       />
                     )
                   })
@@ -739,6 +767,16 @@ export default function BookingsPage() {
   const [managerFilter, setManagerFilter] = useState('')
   const [filterOpen,    setFilterOpen]    = useState(false)
   const [managers,      setManagers]      = useState([])
+  const [sourceFilter,  setSourceFilter]  = useState('')
+  const [bulkMode,      setBulkMode]      = useState(false)
+  const [selectedIds,   setSelectedIds]   = useState(new Set())
+  const [bulkSourceId,  setBulkSourceId]  = useState('')
+  const [bulkLoading,   setBulkLoading]   = useState(false)
+
+  const { data: sourcesData = [] } = useQuery({
+    queryKey: ['sources'],
+    queryFn: () => apiFetch('/api/sources').then(r => r.json()),
+  })
 
   const [pendingType,    setPendingType]    = useState('all')
   const [pendingBlock,   setPendingBlock]   = useState('')
@@ -747,6 +785,7 @@ export default function BookingsPage() {
   const [pendingFrom,    setPendingFrom]    = useState('')
   const [pendingTo,      setPendingTo]      = useState('')
   const [pendingManager, setPendingManager] = useState('')
+  const [pendingSource,  setPendingSource]  = useState('')
 
   useEffect(() => {
     if (!isAdmin) return
@@ -759,7 +798,7 @@ export default function BookingsPage() {
     setPendingType(typeFilter); setPendingBlock(blockFilter)
     setPendingBolim(bolimFilter); setPendingFloor(floorFilter)
     setPendingFrom(dateFrom); setPendingTo(dateTo)
-    setPendingManager(managerFilter)
+    setPendingManager(managerFilter); setPendingSource(sourceFilter)
     setFilterOpen(true)
   }
 
@@ -767,21 +806,53 @@ export default function BookingsPage() {
     setTypeFilter(pendingType); setBlockFilter(pendingBlock)
     setBolimFilter(pendingBolim); setFloorFilter(pendingFloor)
     setDateFrom(pendingFrom); setDateTo(pendingTo)
-    setManagerFilter(pendingManager)
+    setManagerFilter(pendingManager); setSourceFilter(pendingSource)
     setFilterOpen(false)
   }
 
   function clearPending() {
     setPendingType('all'); setPendingBlock(''); setPendingBolim('')
-    setPendingFloor(''); setPendingFrom(''); setPendingTo(''); setPendingManager('')
+    setPendingFloor(''); setPendingFrom(''); setPendingTo(''); setPendingManager(''); setPendingSource('')
   }
 
-  const activeFilterCount = [typeFilter !== 'all' ? typeFilter : '', blockFilter, bolimFilter, floorFilter, dateFrom, dateTo, managerFilter].filter(Boolean).length
+  const activeFilterCount = [typeFilter !== 'all' ? typeFilter : '', blockFilter, bolimFilter, floorFilter, dateFrom, dateTo, managerFilter, sourceFilter].filter(Boolean).length
 
   function resetFilters() {
     setSearch(''); setTypeFilter('all')
     setBlockFilter(''); setBolimFilter(''); setFloorFilter('')
-    setDateFrom(''); setDateTo(''); setManagerFilter('')
+    setDateFrom(''); setDateTo(''); setManagerFilter(''); setSourceFilter('')
+  }
+
+  function toggleBulk() {
+    setBulkMode(v => !v)
+    setSelectedIds(new Set())
+    setBulkSourceId('')
+  }
+
+  function handleSelect(id) {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+
+  async function applyBulkSource() {
+    if (!bulkSourceId || selectedIds.size === 0) return
+    setBulkLoading(true)
+    try {
+      await apiFetch('/api/bookings/bulk-source', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: Array.from(selectedIds), source_id: bulkSourceId === 'none' ? null : parseInt(bulkSourceId) }),
+      })
+      queryClient.invalidateQueries({ queryKey: ['bookings'] })
+      setSelectedIds(new Set())
+      setBulkSourceId('')
+      setBulkMode(false)
+    } finally {
+      setBulkLoading(false)
+    }
   }
 
   function onReset() {
@@ -813,9 +884,9 @@ export default function BookingsPage() {
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
           {/* Search */}
-          <div className="relative flex-1 min-w-50 max-w-xs">
+          <div className="relative shrink-0 w-56">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <input
               type="text"
@@ -834,7 +905,7 @@ export default function BookingsPage() {
           {/* Clear filters button */}
           {activeFilterCount > 0 && (
             <button
-              onClick={() => { setTypeFilter('all'); setBlockFilter(''); setBolimFilter(''); setFloorFilter(''); setDateFrom(''); setDateTo(''); setManagerFilter('') }}
+              onClick={() => { setTypeFilter('all'); setBlockFilter(''); setBolimFilter(''); setFloorFilter(''); setDateFrom(''); setDateTo(''); setManagerFilter(''); setSourceFilter('') }}
               className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-border text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0"
             >
               <X size={13} strokeWidth={2.5} />
@@ -860,6 +931,20 @@ export default function BookingsPage() {
             )}
           </button>
 
+          {/* Bulk source assign — faqat admin, active tab */}
+          {isAdmin && tab === 'active' && sourcesData.length > 0 && (
+            <button
+              onClick={toggleBulk}
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl border text-sm font-medium transition-colors shrink-0 ${
+                bulkMode
+                  ? 'border-blue-500 bg-blue-500 text-white'
+                  : 'border-border text-muted-foreground hover:text-foreground hover:bg-muted'
+              }`}
+            >
+              <Tag size={14} />
+              {bulkMode ? 'Bekor' : 'Manbaa biriktirish'}
+            </button>
+          )}
         </div>
       </div>
 
@@ -876,7 +961,36 @@ export default function BookingsPage() {
         dateFrom={dateFrom}
         dateTo={dateTo}
         managerFilter={managerFilter}
+        sourceFilter={sourceFilter}
+        bulkMode={bulkMode}
+        selectedIds={selectedIds}
+        onSelect={handleSelect}
       />
+
+      {/* Bulk source bar */}
+      {bulkMode && selectedIds.size > 0 && (
+        <div className="fixed bottom-0 left-0 right-0 z-40 flex justify-center pb-4 pointer-events-none">
+          <div className="pointer-events-auto flex items-center gap-3 px-5 py-3 bg-background border border-border rounded-2xl shadow-2xl">
+            <span className="text-sm font-semibold text-foreground">{selectedIds.size} ta tanlandi</span>
+            <select
+              value={bulkSourceId}
+              onChange={e => setBulkSourceId(e.target.value)}
+              className="text-sm px-3 py-1.5 rounded-xl border border-border bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+            >
+              <option value="">Manbaa tanlang</option>
+              {sourcesData.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+              <option value="none">— Manbaa yo'q (tozalash)</option>
+            </select>
+            <button
+              onClick={applyBulkSource}
+              disabled={!bulkSourceId || bulkLoading}
+              className="px-4 py-1.5 rounded-xl bg-foreground text-background text-sm font-semibold disabled:opacity-40 transition-opacity hover:opacity-80"
+            >
+              {bulkLoading ? 'Saqlanmoqda...' : 'Biriktirish'}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Filter bottom sheet */}
       {filterOpen && (
@@ -991,6 +1105,28 @@ export default function BookingsPage() {
                     className="flex-1 text-xs px-3 py-2 rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-ring" />
                 </div>
               </div>
+
+              {sourcesData.length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Manbaa</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    <button onClick={() => setPendingSource('')}
+                      className={`px-3 py-2 rounded-lg text-xs font-semibold transition-colors ${!pendingSource ? 'bg-foreground text-background' : 'bg-muted text-muted-foreground'}`}>
+                      Barcha
+                    </button>
+                    {sourcesData.map(s => (
+                      <button key={s.id} onClick={() => setPendingSource(String(s.id))}
+                        className={`px-3 py-2 rounded-lg text-xs font-semibold transition-colors ${pendingSource === String(s.id) ? 'bg-foreground text-background' : 'bg-muted text-muted-foreground'}`}>
+                        {s.name}
+                      </button>
+                    ))}
+                    <button onClick={() => setPendingSource('none')}
+                      className={`px-3 py-2 rounded-lg text-xs font-semibold transition-colors ${pendingSource === 'none' ? 'bg-foreground text-background' : 'bg-muted text-muted-foreground'}`}>
+                      Manbaa yo'q
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
             {/* Footer */}
             <div className="px-5 py-3 border-t border-border flex gap-2 shrink-0">

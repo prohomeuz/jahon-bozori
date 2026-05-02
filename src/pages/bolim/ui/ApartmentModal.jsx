@@ -276,7 +276,7 @@ const PDF_BONUS_TABLE = {
   100: ['Konditsioner', 'TV (43)', 'Muzlatgich'],
 }
 
-async function downloadContractPDF({ apartment, floor, blockId, bolimNum, form, type, managerName, pairApartment = null }) {
+async function downloadContractPDF({ apartment, floor, blockId, bolimNum, form, type, managerName, sourceName = '', pairApartment = null }) {
   const { pdf } = await import('@react-pdf/renderer')
   const qrImg = await import('@/assets/qrcode.png')
   const qrDataUrl = qrImg.default
@@ -345,6 +345,7 @@ async function downloadContractPDF({ apartment, floor, blockId, bolimNum, form, 
       date={date}
       floorImgSrc={floorImgSrc}
       managerName={managerName}
+      sourceName={sourceName}
       qrDataUrl={qrDataUrl}
       logoSrc={logoSrc}
       bonusItems={bonusDataItems}
@@ -758,8 +759,8 @@ function playDiscountSound() {
   } catch {}
 }
 
-const BRON_EMPTY = { ism: '', familiya: '', telefon: '', boshlangich: '', oylar: '12', umumiy: '', narx_m2: '', chegirma_m2: '', asl_narx_m2: '' }
-const SOTISH_EMPTY = { ism: '', familiya: '', telefon: '', boshlangich: '', oylar: '12', umumiy: '', narx_m2: '', passport: '', passport_place: '', manzil: '' }
+const BRON_EMPTY = { ism: '', familiya: '', telefon: '', boshlangich: '', oylar: '12', umumiy: '', narx_m2: '', chegirma_m2: '', asl_narx_m2: '', source_id: null }
+const SOTISH_EMPTY = { ism: '', familiya: '', telefon: '', boshlangich: '', oylar: '12', umumiy: '', narx_m2: '', passport: '', passport_place: '', manzil: '', source_id: null }
 
 export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, onBooked, embedded = false }) {
   const currentUser = getUser()
@@ -781,6 +782,7 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
   const [sendSms, setSendSms] = useState(false)
   const [pairPartner, setPairPartner] = useState(null)  // { address, size, status } yoki null
   const [bookWithPair, setBookWithPair] = useState(false)
+  const [sources, setSources] = useState([])
   const longPressTimer = useRef(null)
   const longPressFired = useRef(false)
   const calcLoadFromDB = useRef(true)
@@ -894,6 +896,9 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
     apiFetch('/api/managers').then(r => r.json()).then(list => {
       if (Array.isArray(list)) setManagers(list)
     }).catch(() => {})
+    apiFetch('/api/sources').then(r => r.json()).then(list => {
+      if (Array.isArray(list)) setSources(list)
+    }).catch(() => {})
   }, [])
 
   // Juft do'kon ma'lumotini yuklash
@@ -936,6 +941,7 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
     if (phoneDigits.length < 9) e.telefon = phoneDigits.length === 0 ? 'Telefon raqam kiritilishi shart' : "Telefon raqam to'liq emas"
     const boshlVal = Number(String(form.boshlangich || '').replace(/\s/g, ''))
     if (!boshlVal) e.boshlangich = boshlVal === 0 && form.boshlangich ? "Summa noldan katta bo'lishi shart" : "Boshlang'ich to'lov kiritilishi shart"
+    if (sources.length > 0 && !form.source_id) e.source_id = "Manbaa tanlanishi shart"
     return e
   }
 
@@ -982,6 +988,7 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
           manzil: form.manzil || null,
           assigned_user_id: assignedUserId ?? null,
           pair_with: bookWithPair && pairPartner ? pairPartner.address : undefined,
+          source_id: form.source_id ?? null,
         }),
       })
       if (!res.ok) {
@@ -991,11 +998,13 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
       }
       const booking = await res.json()
       onBooked?.()
+      const sourceName = sources.find(s => s.id === form.source_id)?.name ?? ''
       setBooked({
         form,
         type,
         bookingId: booking.id,
         managerName: effectiveManagerName,
+        sourceName,
         pairApartmentAddress: booking.pair_booking ? pairPartner?.address ?? null : null,
         pairApartmentSize: booking.pair_booking ? pairPartner?.size ?? null : null,
         pairBookingId: booking.pair_booking?.id ?? null,
@@ -1020,7 +1029,7 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
         const pairApt = booking.pair_booking && pairPartner
           ? { address: pairPartner.address, size: pairPartner.size }
           : null
-        downloadContractPDF({ apartment, floor, blockId, bolimNum, form, type, managerName, pairApartment: pairApt })
+        downloadContractPDF({ apartment, floor, blockId, bolimNum, form, type, managerName, sourceName, pairApartment: pairApt })
           .then(blob => {
             const fd = new FormData()
             fd.append('pdf', blob, `shartnoma-${apartment.address}.pdf`)
@@ -1042,10 +1051,11 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
     setPdfLoading(true)
     try {
       const managerName = booked.managerName ?? getUser()?.name ?? ''
+      const sourceName = booked.sourceName ?? ''
       const pairApt = booked.pairApartmentAddress
         ? { address: booked.pairApartmentAddress, size: booked.pairApartmentSize }
         : null
-      const blob = await downloadContractPDF({ apartment, floor, blockId, bolimNum, form: booked.form, type: booked.type, managerName, pairApartment: pairApt })
+      const blob = await downloadContractPDF({ apartment, floor, blockId, bolimNum, form: booked.form, type: booked.type, managerName, sourceName, pairApartment: pairApt })
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
@@ -1438,6 +1448,36 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
               SMS xabar yuborish (tabriklash)
             </span>
           </button>
+          {sources.length > 0 && (
+            <div className="flex flex-col gap-2">
+              <span className={`block text-sm font-medium ${bronErrors.source_id ? 'text-red-600' : 'text-foreground'}`}>
+                Manbaa
+                {bronErrors.source_id && (
+                  <span className="ml-1.5 font-semibold text-red-500 text-xs">— tanlanishi shart</span>
+                )}
+              </span>
+              <div className={`flex flex-wrap gap-1.5 transition-colors ${bronErrors.source_id ? 'rounded-xl px-3 py-2 border border-red-300 bg-red-50/60' : ''}`}>
+                {sources.map(s => (
+                  <button key={s.id} type="button"
+                    onClick={() => setBronForm(f => ({ ...f, source_id: s.id }))}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+                      bronForm.source_id === s.id
+                        ? 'bg-slate-100 border-slate-400 text-slate-800'
+                        : bronErrors.source_id
+                        ? 'bg-white border-red-200 text-muted-foreground hover:border-slate-300 hover:text-foreground'
+                        : 'bg-background border-border text-muted-foreground hover:border-slate-300 hover:text-foreground'
+                    }`}>
+                    {bronForm.source_id === s.id && (
+                      <svg viewBox="0 0 12 10" className="w-2.5 h-2" fill="none" aria-hidden="true">
+                        <path d="M1 5l3.5 3.5L11 1" stroke="#475569" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    )}
+                    {s.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           {(bronForm.boshlangich || bronForm.narx_m2) ? (
             <div className="flex-1 rounded-2xl border-2 border-amber-200 bg-amber-50 px-5 py-4 flex flex-col justify-between">
               <div className="grid grid-cols-3 gap-4">
@@ -1504,6 +1544,36 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
             onClose={() => setPhoneTarget(null)}
             error={sotishErrors.telefon}
           />
+          {sources.length > 0 && (
+            <div className="flex flex-col gap-2">
+              <span className={`block text-sm font-medium ${sotishErrors.source_id ? 'text-red-600' : 'text-foreground'}`}>
+                Manbaa
+                {sotishErrors.source_id && (
+                  <span className="ml-1.5 font-semibold text-red-500 text-xs">— tanlanishi shart</span>
+                )}
+              </span>
+              <div className={`flex flex-wrap gap-1.5 transition-colors ${sotishErrors.source_id ? 'rounded-xl px-3 py-2 border border-red-300 bg-red-50/60' : ''}`}>
+                {sources.map(s => (
+                  <button key={s.id} type="button"
+                    onClick={() => setSotishForm(f => ({ ...f, source_id: s.id }))}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+                      sotishForm.source_id === s.id
+                        ? 'bg-slate-100 border-slate-400 text-slate-800'
+                        : sotishErrors.source_id
+                        ? 'bg-white border-red-200 text-muted-foreground hover:border-slate-300 hover:text-foreground'
+                        : 'bg-background border-border text-muted-foreground hover:border-slate-300 hover:text-foreground'
+                    }`}>
+                    {sotishForm.source_id === s.id && (
+                      <svg viewBox="0 0 12 10" className="w-2.5 h-2" fill="none" aria-hidden="true">
+                        <path d="M1 5l3.5 3.5L11 1" stroke="#475569" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    )}
+                    {s.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           {(sotishForm.boshlangich || sotishForm.narx_m2) ? (
             <div className="rounded-2xl border-2 border-amber-200 bg-amber-50 px-5 py-4 flex flex-col justify-between">
               <div className="grid grid-cols-3 gap-4">

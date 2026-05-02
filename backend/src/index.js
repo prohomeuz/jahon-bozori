@@ -594,6 +594,74 @@ app.get('/api/apartments/:id/pair', requireAuth, (c) => {
   return c.json(partner ?? null)
 })
 
+// ─── SOURCES ─────────────────────────────────────────────────────────────────
+app.get('/api/sources', requireAuth, (c) => {
+  return c.json(q.allSources.all())
+})
+
+app.post('/api/sources', requireAuth, requireAdmin, async (c) => {
+  const { name } = await c.req.json()
+  if (!name?.trim()) return c.json({ error: 'Nom kiritilishi shart' }, 400)
+  try {
+    q.insertSource.run({ name: name.trim() })
+    return c.json(q.allSources.all())
+  } catch (e) {
+    if (e.message?.includes('UNIQUE')) return c.json({ error: 'Bu nom allaqachon mavjud' }, 409)
+    return c.json({ error: e.message }, 500)
+  }
+})
+
+app.patch('/api/sources/reorder', requireAuth, requireAdmin, async (c) => {
+  const { ids } = await c.req.json()
+  if (!Array.isArray(ids)) return c.json({ error: 'ids array kerak' }, 400)
+  ids.forEach((id, i) => q.updateSourcePos.run({ id, position: i + 1 }))
+  return c.json(q.allSources.all())
+})
+
+app.patch('/api/sources/:id', requireAuth, requireAdmin, async (c) => {
+  const id = parseInt(c.req.param('id'))
+  const { name } = await c.req.json()
+  if (!name?.trim()) return c.json({ error: 'Nom kiritilishi shart' }, 400)
+  try {
+    q.updateSource.run({ id, name: name.trim() })
+    return c.json(q.allSources.all())
+  } catch (e) {
+    if (e.message?.includes('UNIQUE')) return c.json({ error: 'Bu nom allaqachon mavjud' }, 409)
+    return c.json({ error: e.message }, 500)
+  }
+})
+
+app.delete('/api/sources/:id', requireAuth, requireAdmin, (c) => {
+  const id = parseInt(c.req.param('id'))
+  q.deleteSource.run({ id })
+  return c.json(q.allSources.all())
+})
+
+app.get('/api/stats/sources', requireAuth, requireAdmin, (c) => {
+  const from      = c.req.query('from') || ''
+  const to        = c.req.query('to')   || ''
+  const cancelled = c.req.query('cancelled') === '1' ? 1 : 0
+  const rows = q.sourceStats.all({ from, to, cancelled })
+  const nullRow = q.nullSourceCount.get({ from, to, cancelled })
+  return c.json({ rows, noSource: nullRow?.n ?? 0 })
+})
+
+app.patch('/api/bookings/bulk-source', requireAuth, requireAdmin, async (c) => {
+  const { ids, source_id } = await c.req.json()
+  if (!Array.isArray(ids) || ids.length === 0) return c.json({ error: 'ids kerak' }, 400)
+  const sid = source_id ? parseInt(source_id) : null
+  const stmt = db.prepare('UPDATE bookings SET source_id=? WHERE id=?')
+  db.exec('BEGIN')
+  try {
+    for (const id of ids) stmt.run(sid, id)
+    db.exec('COMMIT')
+  } catch (e) {
+    db.exec('ROLLBACK')
+    return c.json({ error: e.message }, 500)
+  }
+  return c.json({ ok: true, updated: ids.length })
+})
+
 // Juft bron guruhidagi barcha bronlarni qaytaradi
 app.get('/api/bookings/pair-group/:group_id', requireAuth, (c) => {
   const groupId = parseInt(c.req.param('group_id'))
@@ -604,7 +672,7 @@ app.get('/api/bookings/pair-group/:group_id', requireAuth, (c) => {
 
 app.post('/api/bookings', requireAuth, async (c) => {
   const user = c.get('user')
-  const { apartment_id, type, ism, familiya, boshlangich, oylar, umumiy, passport, manzil, phone, passport_place, narx_m2, chegirma_m2, asl_narx_m2, assigned_user_id, pair_with } = await c.req.json()
+  const { apartment_id, type, ism, familiya, boshlangich, oylar, umumiy, passport, manzil, phone, passport_place, narx_m2, chegirma_m2, asl_narx_m2, assigned_user_id, pair_with, source_id } = await c.req.json()
   if (!apartment_id || !type || !ism || !familiya || !boshlangich || !oylar)
     return c.json({ error: "Majburiy maydonlar to'ldirilmagan" }, 400)
 
@@ -658,7 +726,8 @@ app.post('/api/bookings', requireAuth, async (c) => {
       const sharedFields = { user_id: effective_user_id, type, ism, familiya, oylar: parseInt(oylar),
         passport: passport ?? null, manzil: manzil ?? null, phone: phone ?? null,
         passport_place: passport_place ?? null, narx_m2: narx_m2 ?? null,
-        chegirma_m2: chegirma_m2 ?? null, asl_narx_m2: asl_narx_m2 ?? null }
+        chegirma_m2: chegirma_m2 ?? null, asl_narx_m2: asl_narx_m2 ?? null,
+        source_id: source_id ? parseInt(source_id) : null }
 
       q.insertBooking.run({ ...sharedFields, apartment_id, boshlangich: String(half1), umumiy: umumiy1 })
       const booking1 = q.lastBooking.get()
@@ -693,7 +762,7 @@ app.post('/api/bookings', requireAuth, async (c) => {
     if (apt.status !== 'EMPTY') { db.exec('ROLLBACK'); return c.json({ error: "Do'kon allaqachon band yoki sotilgan" }, 409) }
     const lock = db.prepare("SELECT reason FROM sales_locks WHERE block=? AND bolim=? AND floor=?").get(apt.block, apt.bolim, apt.floor)
     if (lock) { db.exec('ROLLBACK'); return c.json({ error: `Sotuv to'xtatilgan: ${lock.reason}` }, 403) }
-    q.insertBooking.run({ apartment_id, user_id: effective_user_id, type, ism, familiya, boshlangich, oylar: parseInt(oylar), umumiy: umumiy ?? null, passport: passport ?? null, manzil: manzil ?? null, phone: phone ?? null, passport_place: passport_place ?? null, narx_m2: narx_m2 ?? null, chegirma_m2: chegirma_m2 ?? null, asl_narx_m2: asl_narx_m2 ?? null })
+    q.insertBooking.run({ apartment_id, user_id: effective_user_id, type, ism, familiya, boshlangich, oylar: parseInt(oylar), umumiy: umumiy ?? null, passport: passport ?? null, manzil: manzil ?? null, phone: phone ?? null, passport_place: passport_place ?? null, narx_m2: narx_m2 ?? null, chegirma_m2: chegirma_m2 ?? null, asl_narx_m2: asl_narx_m2 ?? null, source_id: source_id ? parseInt(source_id) : null })
     const newStatus = type === 'sotish' ? 'SOLD' : 'RESERVED'
     q.updateStatus.run({ status: newStatus, id: apartment_id })
     const booking = q.lastBooking.get()
@@ -728,6 +797,7 @@ app.get('/api/bookings', requireAuth, (c) => {
   const dateFrom  = c.req.query('from')      || ''
   const dateTo    = c.req.query('to')        || ''
   const managerId = c.req.query('manager')   || ''
+  const sourceId  = c.req.query('source')    || ''
 
   const dateField = cancelled ? 'b.cancelled_at' : 'b.created_at'
   const conditions = [cancelled ? 'b.cancelled_at IS NOT NULL' : 'b.cancelled_at IS NULL']
@@ -745,6 +815,8 @@ app.get('/api/bookings', requireAuth, (c) => {
   if (floor)    { conditions.push('a.floor = :floor');        params.floor = parseInt(floor) }
   if (dateFrom) { conditions.push(`${dateField} >= :dateFrom`); params.dateFrom = dateFrom }
   if (dateTo)   { conditions.push(`${dateField} <= :dateTo || ' 23:59:59'`); params.dateTo = dateTo }
+  if (sourceId === 'none') { conditions.push('b.source_id IS NULL') }
+  else if (sourceId) { conditions.push('b.source_id = :source_id'); params.source_id = parseInt(sourceId) }
 
   const where = 'WHERE ' + conditions.join(' AND ')
   const { limit: _l, offset: _o, ...countParams } = params
@@ -755,9 +827,10 @@ app.get('/api/bookings', requireAuth, (c) => {
     ${where}
   `).get(countParams)?.n ?? 0
   const rows = db.prepare(`
-    SELECT b.*, u.name AS manager_name, a.block, a.bolim, a.floor
+    SELECT b.*, u.name AS manager_name, s.name AS source_name, a.block, a.bolim, a.floor
     FROM bookings b
     LEFT JOIN users u ON u.id = b.user_id
+    LEFT JOIN sources s ON s.id = b.source_id
     LEFT JOIN apartments a ON a.id = b.apartment_id
     ${where}
     ORDER BY ${dateField} DESC

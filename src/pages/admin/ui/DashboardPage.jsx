@@ -272,10 +272,12 @@ export default function DashboardPage() {
   const user    = getUser()
   const isAdmin = user?.role === 'admin'
 
-  const [detailTab,    setDetailTab]    = useState('bolim')
-  const [blockFilter,  setBlockFilter]  = useState('A')
-  const [dateRange,    setDateRange]    = useState({ from: '', to: '' })
-  const [inventoryTab, setInventoryTab] = useState('all')
+  const [detailTab,       setDetailTab]       = useState('bolim')
+  const [blockFilter,     setBlockFilter]     = useState('A')
+  const [dateRange,       setDateRange]       = useState({ from: '', to: '' })
+  const [inventoryTab,    setInventoryTab]    = useState('all')
+  const [sourceDateRange, setSourceDateRange] = useState({ from: '', to: '' })
+  const [sourceIncludeCancelled, setSourceIncludeCancelled] = useState(false)
 
   const { data: dash, isLoading } = useQuery({
     queryKey: ['dashboard'],
@@ -296,6 +298,18 @@ export default function DashboardPage() {
       if (dateRange.from) p.set('from', dateRange.from)
       if (dateRange.to)   p.set('to',   dateRange.to)
       return apiFetch(`/api/stats/managers?${p}`).then(r => r.json())
+    },
+    enabled: isAdmin,
+  })
+
+  const { data: sourceStats } = useQuery({
+    queryKey: ['source-stats', sourceDateRange, sourceIncludeCancelled],
+    queryFn: () => {
+      const p = new URLSearchParams()
+      if (sourceDateRange.from) p.set('from', sourceDateRange.from)
+      if (sourceDateRange.to)   p.set('to',   sourceDateRange.to)
+      if (sourceIncludeCancelled) p.set('cancelled', '1')
+      return apiFetch(`/api/stats/sources?${p}`).then(r => r.json())
     },
     enabled: isAdmin,
   })
@@ -453,6 +467,69 @@ export default function DashboardPage() {
               }
             </div>
           </div>
+        </section>
+      )}
+
+      {/* Source stats */}
+      {isAdmin && (
+        <section className="flex flex-col gap-4">
+          <div className="flex items-center gap-2">
+            <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Mijoz manbalari</h2>
+          </div>
+
+          <DateRangeFilter value={sourceDateRange} onChange={setSourceDateRange} />
+
+          <label className="flex items-center gap-2.5 cursor-pointer w-fit">
+            <span className={`w-5 h-5 rounded flex items-center justify-center border-2 shrink-0 transition-colors ${sourceIncludeCancelled ? 'bg-foreground border-foreground' : 'border-border bg-background'}`}>
+              {sourceIncludeCancelled && (
+                <svg viewBox="0 0 12 10" className="w-3 h-2" fill="none">
+                  <path d="M1 5l2.5 3L11 1" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              )}
+            </span>
+            <input type="checkbox" className="sr-only" checked={sourceIncludeCancelled} onChange={e => setSourceIncludeCancelled(e.target.checked)} />
+            <span className="text-sm text-muted-foreground">Bekor qilinganlarni ham kiriting</span>
+          </label>
+
+          {(() => {
+            const rows = sourceStats?.rows ?? []
+            const noSource = sourceStats?.noSource ?? 0
+            const allRows = noSource > 0 ? [...rows, { id: null, name: "Noma'lum", n: noSource }] : rows
+            const total = allRows.reduce((s, r) => s + r.n, 0)
+            if (total === 0) return (
+              <div className="bg-card border border-border rounded-2xl p-10 text-center text-muted-foreground text-sm">
+                {sourceDateRange.from || sourceDateRange.to ? "Bu davrda bitim yo'q" : "Hali bitim yo'q"}
+              </div>
+            )
+            const palette = ['#3b82f6','#f59e0b','#10b981','#8b5cf6','#ef4444','#06b6d4','#f97316','#84cc16','#ec4899','#6b7280']
+            const segs = allRows.map((r, i) => ({ value: r.n, color: palette[i % palette.length] }))
+            return (
+              <div className="bg-card border border-border rounded-2xl p-5 flex flex-col gap-5">
+                <div className="flex items-center gap-8">
+                  <div className="relative shrink-0">
+                    <DonutChart segments={segs} size={130} stroke={20} />
+                    <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                      <span className="text-xl font-bold leading-none">{total}</span>
+                      <span className="text-[10px] text-muted-foreground">jami</span>
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-2.5 flex-1 min-w-0">
+                    {allRows.map((r, i) => {
+                      const pct = total > 0 ? Math.round(r.n / total * 100) : 0
+                      return (
+                        <div key={r.id ?? 'none'} className="flex items-center gap-2">
+                          <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: palette[i % palette.length] }} />
+                          <span className="text-xs text-muted-foreground flex-1 truncate">{r.name}</span>
+                          <span className="text-xs font-bold tabular-nums" style={{ color: palette[i % palette.length] }}>{r.n}</span>
+                          <span className="text-xs text-muted-foreground w-8 text-right tabular-nums">{pct}%</span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              </div>
+            )
+          })()}
         </section>
       )}
 
