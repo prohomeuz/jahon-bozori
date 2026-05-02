@@ -1019,6 +1019,7 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
             phone: '998' + getRawDigits(form.telefon),
             firstName: form.ism,
             block: apartment.address,
+            type: apartment.is_wc ? 'WS' : 'SHOP',
           }),
         }).catch(() => {})
       }

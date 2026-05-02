@@ -8,12 +8,13 @@ const REVEAL_MS = 800
 export default function LoginPage() {
   const navigate = useNavigate()
   const location = useLocation()
-  const from = location.state?.from ?? '/admin'
+  const from = location.state?.from
   const [digits, setDigits] = useState([])
   const [revealIdx, setRevealIdx] = useState(-1)
   const reason = new URLSearchParams(location.search).get('reason')
+  const isLocalhost = ['localhost', '127.0.0.1'].includes(window.location.hostname)
   const [error, setError] = useState(() => {
-    if (location.state?.outsideHours || reason === 'outside_hours')
+    if (!isLocalhost && (location.state?.outsideHours || reason === 'outside_hours'))
       return "Ish vaqti tugadi. Tizim faqat 08:00–20:00 orasida ishlaydi."
     return ''
   })
@@ -63,7 +64,8 @@ export default function LoginPage() {
       }
       setToken(data.token)
       if (data.refreshToken) setRefreshToken(data.refreshToken)
-      navigate(from, { replace: true })
+      const defaultDest = data.user?.role === 'salesmanager' ? '/admin/bookings' : '/admin'
+      navigate(from ?? defaultDest, { replace: true })
     } finally {
       setLoading(false)
     }

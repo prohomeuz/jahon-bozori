@@ -522,7 +522,7 @@ function BookingRow({ b, isAdmin, cancelled, onReset, scrolled, scrolledRight, p
                   Ko'rish
                 </button>
               )}
-              {isAdmin && !cancelled && (
+              {!cancelled && (
                 <button
                   onClick={() => setShowConfirm(true)}
                   disabled={loading}

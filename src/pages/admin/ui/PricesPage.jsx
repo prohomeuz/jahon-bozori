@@ -83,6 +83,7 @@ function BlockStep({ blockId, onSwitchBlock, grouped, groupedWc, mode, onModeCha
   const saveRef = useRef(null)
   const buildings = BLOCK_BUILDINGS[blockId] ?? []
   const viewBox = BLOCK_VIEW_BOX[blockId] ?? '0 0 1539 672'
+  const vbScale = parseInt(viewBox.split(' ')[2]) / 1376
   const qc = useQueryClient()
 
   // Mode'ga ko'ra narx manbasi
@@ -197,7 +198,7 @@ function BlockStep({ blockId, onSwitchBlock, grouped, groupedWc, mode, onModeCha
               const p1 = isSelected && activeFloor === floorNums[0] && !isNaN(editNum) ? editNum : p1Raw
               const p2 = isSelected && hasTwo && activeFloor === floorNums[1] && !isNaN(editNum) ? editNum : p2Raw
               // badge dimensions
-              const bw = 124, bh = hasTwo ? 60 : 40, br = 10
+              const bw = 124 * vbScale, bh = (hasTwo ? 60 : 40) * vbScale, br = 10 * vbScale
               const bx = b.textX - bw / 2, by = b.textY - bh / 2
               const priceColor = isSelected ? '#1a0f00' : isDisabled ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.95)'
               const bgFill   = isSelected ? 'rgba(251,191,36,0.97)' : isDisabled ? 'rgba(0,0,0,0.35)' : 'rgba(0,0,0,0.78)'
@@ -215,7 +216,7 @@ function BlockStep({ blockId, onSwitchBlock, grouped, groupedWc, mode, onModeCha
                   <polygon points={b.points}
                     fill={isSelected ? 'rgba(251,191,36,0.35)' : isHovered ? 'rgba(255,255,255,0.08)' : 'black'}
                     stroke={isSelected ? 'rgba(251,191,36,0.9)' : 'rgba(0,0,0,0.75)'}
-                    strokeWidth={isSelected ? 3 : 1}
+                    strokeWidth={isSelected ? 3 * vbScale : vbScale}
                     strokeLinejoin="round"
                     className={!isSelected && !isHovered && !isDisabled ? 'block-pulse' : ''}
                     style={{ cursor: isDisabled ? 'default' : 'pointer', animationDelay: b.delay }}
@@ -226,45 +227,45 @@ function BlockStep({ blockId, onSwitchBlock, grouped, groupedWc, mode, onModeCha
                   {/* White border */}
                   <polygon points={b.points} fill="none"
                     stroke={isSelected ? 'rgba(251,191,36,0.6)' : 'rgba(255,255,255,0.3)'}
-                    strokeWidth={isSelected ? 4 : 3} strokeLinejoin="round" pointerEvents="none"
+                    strokeWidth={isSelected ? 4 * vbScale : 3 * vbScale} strokeLinejoin="round" pointerEvents="none"
                   />
 
                   {/* Price badge */}
                   <g pointerEvents="none">
                     <rect x={bx} y={by} width={bw} height={bh} rx={br}
-                      fill={bgFill} stroke={bgStroke} strokeWidth={1.5}
+                      fill={bgFill} stroke={bgStroke} strokeWidth={1.5 * vbScale}
                     />
                     {hasTwo ? (
                       <>
                         {/* divider */}
-                        <line x1={bx + 10} y1={b.textY} x2={bx + bw - 10} y2={b.textY}
-                          stroke={isSelected ? 'rgba(180,130,0,0.25)' : 'rgba(255,255,255,0.12)'} strokeWidth={1} />
+                        <line x1={bx + 10 * vbScale} y1={b.textY} x2={bx + bw - 10 * vbScale} y2={b.textY}
+                          stroke={isSelected ? 'rgba(180,130,0,0.25)' : 'rgba(255,255,255,0.12)'} strokeWidth={vbScale} />
                         {/* floor 1 */}
-                        <rect x={bx + 7} y={by + 7} width={20} height={16} rx={4}
+                        <rect x={bx + 7 * vbScale} y={by + 7 * vbScale} width={20 * vbScale} height={16 * vbScale} rx={4 * vbScale}
                           fill={isSelected ? 'rgba(120,80,0,0.18)' : 'rgba(255,255,255,0.15)'} />
-                        <text x={bx + 17} y={by + 15} textAnchor="middle" dominantBaseline="middle"
-                          fontSize={11} fontWeight="800" fontFamily="ui-sans-serif,sans-serif" fill={isSelected ? '#92400e' : 'rgba(255,255,255,0.7)'}>
+                        <text x={bx + 17 * vbScale} y={by + 15 * vbScale} textAnchor="middle" dominantBaseline="middle"
+                          fontSize={11 * vbScale} fontWeight="800" fontFamily="ui-sans-serif,sans-serif" fill={isSelected ? '#92400e' : 'rgba(255,255,255,0.7)'}>
                           {floorNums[0]}
                         </text>
-                        <text x={bx + bw - 8} y={by + 15} textAnchor="end" dominantBaseline="middle"
-                          fontSize={18} fontWeight="bold" fontFamily="ui-monospace,monospace" fill={priceColor}>
+                        <text x={bx + bw - 8 * vbScale} y={by + 15 * vbScale} textAnchor="end" dominantBaseline="middle"
+                          fontSize={18 * vbScale} fontWeight="bold" fontFamily="ui-monospace,monospace" fill={priceColor}>
                           ${p1.toLocaleString('ru-RU')}
                         </text>
                         {/* floor 2 */}
-                        <rect x={bx + 7} y={by + bh - 23} width={20} height={16} rx={4}
+                        <rect x={bx + 7 * vbScale} y={by + bh - 23 * vbScale} width={20 * vbScale} height={16 * vbScale} rx={4 * vbScale}
                           fill={isSelected ? 'rgba(120,80,0,0.18)' : 'rgba(255,255,255,0.15)'} />
-                        <text x={bx + 17} y={by + bh - 15} textAnchor="middle" dominantBaseline="middle"
-                          fontSize={11} fontWeight="800" fontFamily="ui-sans-serif,sans-serif" fill={isSelected ? '#92400e' : 'rgba(255,255,255,0.7)'}>
+                        <text x={bx + 17 * vbScale} y={by + bh - 15 * vbScale} textAnchor="middle" dominantBaseline="middle"
+                          fontSize={11 * vbScale} fontWeight="800" fontFamily="ui-sans-serif,sans-serif" fill={isSelected ? '#92400e' : 'rgba(255,255,255,0.7)'}>
                           {floorNums[1]}
                         </text>
-                        <text x={bx + bw - 8} y={by + bh - 15} textAnchor="end" dominantBaseline="middle"
-                          fontSize={18} fontWeight="bold" fontFamily="ui-monospace,monospace" fill={priceColor}>
+                        <text x={bx + bw - 8 * vbScale} y={by + bh - 15 * vbScale} textAnchor="end" dominantBaseline="middle"
+                          fontSize={18 * vbScale} fontWeight="bold" fontFamily="ui-monospace,monospace" fill={priceColor}>
                           ${p2.toLocaleString('ru-RU')}
                         </text>
                       </>
                     ) : (
                       <text x={b.textX} y={b.textY} textAnchor="middle" dominantBaseline="middle"
-                        fontSize={22} fontWeight="bold" fontFamily="ui-monospace,monospace" fill={priceColor}>
+                        fontSize={22 * vbScale} fontWeight="bold" fontFamily="ui-monospace,monospace" fill={priceColor}>
                         ${p1.toLocaleString('ru-RU')}
                       </text>
                     )}
