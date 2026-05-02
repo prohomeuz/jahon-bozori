@@ -121,6 +121,16 @@ try { db.exec(`CREATE TABLE IF NOT EXISTS apartment_pairs (
 )`) } catch {}
 // pair_group_id on bookings — birgalikda bron qilingan do'konlarni birlashtiradi
 try { db.exec(`ALTER TABLE bookings ADD COLUMN pair_group_id INTEGER`) } catch {}
+// Sources — mijoz qayerdan kelganini belgilaydi
+try { db.exec(`CREATE TABLE IF NOT EXISTS sources (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL UNIQUE,
+  created_at TEXT NOT NULL DEFAULT (datetime('now', '+5 hours'))
+)`) } catch {}
+try { db.exec(`ALTER TABLE sources ADD COLUMN position INTEGER`) } catch {}
+try { db.exec(`UPDATE sources SET position = id WHERE position IS NULL`) } catch {}
+// source_id on bookings
+try { db.exec(`ALTER TABLE bookings ADD COLUMN source_id INTEGER REFERENCES sources(id)`) } catch {}
 // Seed juft do'konlar (B va C bloklar, 1 va 2 qavatlar)
 try { db.exec(`INSERT OR IGNORE INTO apartment_pairs (apartment_id_1, apartment_id_2) VALUES
 ('B-1-101','B-1-102'),('B-1-103','B-1-104'),('B-1-107','B-1-108'),('B-1-109','B-1-110'),('B-1-111','B-1-112'),
@@ -416,8 +426,31 @@ export const q = {
   updateStatusReason: db.prepare('UPDATE apartments SET status=:status, not_sale_reason=:reason WHERE id=:id'),
   count:              db.prepare('SELECT COUNT(*) AS n FROM apartments'),
 
+  // sources
+  allSources:       db.prepare("SELECT id, name, position, created_at FROM sources ORDER BY COALESCE(position, id) ASC"),
+  insertSource:     db.prepare("INSERT INTO sources (name, position) VALUES (:name, (SELECT COALESCE(MAX(position), 0) + 1 FROM sources))"),
+  updateSource:     db.prepare("UPDATE sources SET name=:name WHERE id=:id"),
+  updateSourcePos:  db.prepare("UPDATE sources SET position=:position WHERE id=:id"),
+  deleteSource:     db.prepare("DELETE FROM sources WHERE id=:id"),
+  sourceStats:   db.prepare(`
+    SELECT s.id, s.name, COUNT(b.id) AS n
+    FROM sources s
+    LEFT JOIN bookings b ON b.source_id = s.id
+      AND (:cancelled = 1 OR b.cancelled_at IS NULL)
+      AND (:from = '' OR b.created_at >= :from)
+      AND (:to   = '' OR b.created_at <= :to || ' 23:59:59')
+    GROUP BY s.id ORDER BY n DESC
+  `),
+  nullSourceCount: db.prepare(`
+    SELECT COUNT(*) AS n FROM bookings b
+    WHERE b.source_id IS NULL
+      AND (:cancelled = 1 OR b.cancelled_at IS NULL)
+      AND (:from = '' OR b.created_at >= :from)
+      AND (:to   = '' OR b.created_at <= :to || ' 23:59:59')
+  `),
+
   // bookings
-  insertBooking:  db.prepare("INSERT INTO bookings (apartment_id,user_id,type,ism,familiya,boshlangich,oylar,umumiy,passport,manzil,phone,passport_place,narx_m2,chegirma_m2,asl_narx_m2,created_at) VALUES (:apartment_id,:user_id,:type,:ism,:familiya,:boshlangich,:oylar,:umumiy,:passport,:manzil,:phone,:passport_place,:narx_m2,:chegirma_m2,:asl_narx_m2,datetime('now', '+5 hours'))"),
+  insertBooking:  db.prepare("INSERT INTO bookings (apartment_id,user_id,type,ism,familiya,boshlangich,oylar,umumiy,passport,manzil,phone,passport_place,narx_m2,chegirma_m2,asl_narx_m2,source_id,created_at) VALUES (:apartment_id,:user_id,:type,:ism,:familiya,:boshlangich,:oylar,:umumiy,:passport,:manzil,:phone,:passport_place,:narx_m2,:chegirma_m2,:asl_narx_m2,:source_id,datetime('now', '+5 hours'))"),
   lastBooking:    db.prepare('SELECT b.*, u.name AS manager_name FROM bookings b LEFT JOIN users u ON b.user_id=u.id WHERE b.id=last_insert_rowid()'),
   bookingById:    db.prepare('SELECT b.*, u.telegram_id AS manager_tg_id, u.name AS manager_name FROM bookings b LEFT JOIN users u ON b.user_id=u.id WHERE b.id=:id'),
   allBookings:    db.prepare('SELECT b.*, u.name AS manager_name FROM bookings b LEFT JOIN users u ON b.user_id=u.id WHERE b.cancelled_at IS NULL ORDER BY b.created_at DESC LIMIT :limit OFFSET :offset'),

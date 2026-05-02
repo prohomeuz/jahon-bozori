@@ -290,6 +290,7 @@ export function ContractPDF({
   form,
   floorImgSrc,
   managerName,
+  sourceName,
   qrDataUrl,
   logoSrc,
   bonusItems = [],
@@ -542,6 +543,22 @@ export function ContractPDF({
                 </Text>
                 <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 9, color: P.fg }}>
                   {managerName}
+                </Text>
+              </View>
+            </>
+          ) : null}
+
+          {sourceName ? (
+            <>
+              <View style={s.divider} />
+              <View style={s.section}>
+                <Text
+                  style={{ fontSize: 6.5, color: P.mutedLt, marginBottom: 2, letterSpacing: 0.5 }}
+                >
+                  MANBAA
+                </Text>
+                <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 9, color: P.fg }}>
+                  {sourceName}
                 </Text>
               </View>
             </>
