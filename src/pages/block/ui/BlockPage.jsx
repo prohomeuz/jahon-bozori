@@ -28,6 +28,7 @@ export default function BlockPage() {
   const [hovered, setHovered] = useState(null)
   const buildings = BLOCK_BUILDINGS[blockId] ?? []
   const viewBox = BLOCK_VIEW_BOX[blockId] ?? '0 0 1597 672'
+  const vbScale = parseInt(viewBox.split(' ')[2]) / 1376
 
   const isBlocked = useBlockedState()
   const { scale } = useGlobalZoom(containerRef)
@@ -79,7 +80,7 @@ export default function BlockPage() {
                   points={b.points}
                   fill="none"
                   stroke="rgba(255,255,255,0.45)"
-                  strokeWidth={4}
+                  strokeWidth={4 * vbScale}
                   strokeLinejoin="round"
                   pointerEvents="none"
                 />
@@ -100,10 +101,10 @@ export default function BlockPage() {
                 <circle
                   cx={b.textX}
                   cy={b.textY}
-                  r={22}
+                  r={Math.round(22 * vbScale)}
                   fill="rgba(0,0,0,0.55)"
                   stroke="rgba(255,255,255,0.25)"
-                  strokeWidth={1.5}
+                  strokeWidth={1.5 * vbScale}
                   pointerEvents="none"
                 />
                 <text
@@ -111,7 +112,7 @@ export default function BlockPage() {
                   y={b.textY}
                   textAnchor="middle"
                   dominantBaseline="middle"
-                  fontSize={20}
+                  fontSize={Math.round(20 * vbScale)}
                   fontWeight="bold"
                   fontFamily="ui-monospace, monospace"
                   fill="white"

@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from '@/shared/lib/auth'
-import { UserPlus, Pencil, Trash2, Eye, EyeOff, Copy, Check, RefreshCw } from 'lucide-react'
+import { UserPlus, Pencil, Trash2, Eye, EyeOff, Copy, Check, RefreshCw, Search, X } from 'lucide-react'
 
 const PAD = ['1','2','3','4','5','6','7','8','9','','0','⌫']
 const REVEAL_MS = 800
@@ -297,75 +297,111 @@ function ActiveToggle({ user, onDone }) {
 export default function ManagersPage() {
   const queryClient = useQueryClient()
   const [modal, setModal] = useState(null)
+  const [search, setSearch] = useState('')
 
   const { data, isLoading } = useQuery({
     queryKey: ['users'],
     queryFn: () => apiFetch('/api/users').then(r => r.json()),
   })
   const users = Array.isArray(data) ? data : []
+  const filtered = search.trim()
+    ? users.filter(u => u.name.toLowerCase().includes(search.trim().toLowerCase()))
+    : users
 
   const refresh = () => queryClient.invalidateQueries({ queryKey: ['users'] })
 
   return (
-    <div className="p-8 flex flex-col gap-6">
-      <div className="flex items-center gap-4">
+    <div className="p-4 md:p-6 flex flex-col gap-3 h-full min-h-0 overflow-hidden">
+      {/* Toolbar */}
+      <div className="flex items-center gap-3 shrink-0">
         <h1 className="text-2xl font-bold">Salesmanagerlar</h1>
+        <div className="relative ml-auto shrink-0 w-56">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+          <input
+            type="text"
+            placeholder="Ism bo'yicha..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="w-full pl-9 pr-8 py-2 text-sm rounded-xl border border-border bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+          />
+          {search && (
+            <button onClick={() => setSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+              <X size={13} />
+            </button>
+          )}
+        </div>
         <button onClick={() => setModal({ type: 'create' })}
-          className="ml-auto flex items-center gap-2 px-4 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold transition-opacity hover:opacity-90">
+          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-foreground text-background text-sm font-semibold shrink-0 hover:opacity-80 transition-opacity">
           <UserPlus size={15} />
           Qo'shish
         </button>
       </div>
 
-      <div className="bg-card border border-border rounded-2xl overflow-hidden">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-border bg-muted/40">
-              <th className="px-4 py-3 text-left font-semibold text-muted-foreground">Ism-familiya</th>
-              <th className="px-4 py-3 text-left font-semibold text-muted-foreground">Parol</th>
-              <th className="px-4 py-3 text-left font-semibold text-muted-foreground">Qo'shilgan</th>
-              <th className="px-4 py-3 text-left font-semibold text-muted-foreground">Holat</th>
-              <th className="px-4 py-3" />
-            </tr>
-          </thead>
-          <tbody>
-            {users.map(u => (
-              <tr key={u.id} className="border-t border-border hover:bg-muted/40 transition-colors">
-                <td className="px-4 py-3.5 font-medium">{u.name}</td>
-                <td className="px-4 py-3.5"><PasswordCell password={u.plain_password} /></td>
-                <td className="px-4 py-3.5 text-muted-foreground">
-                  <div>{new Date(u.created_at).toLocaleDateString('uz-UZ')}</div>
-                  <div className="text-xs">{new Date(u.created_at).toLocaleTimeString('uz-UZ')}</div>
-                </td>
-                <td className="px-4 py-3.5">
-                  <div className="flex items-center gap-2">
-                    <ActiveToggle user={u} onDone={refresh} />
-                    <span className={`text-xs font-medium w-16 ${u.is_active ? 'text-emerald-600' : 'text-muted-foreground'}`}>
-                      {u.is_active ? 'Aktiv' : 'Bloklangan'}
-                    </span>
-                  </div>
-                </td>
-                <td className="px-4 py-3.5">
-                  <div className="flex items-center justify-end gap-1">
-                    <button onClick={() => setModal({ type: 'edit', user: u })}
-                      className="p-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">
-                      <Pencil size={15} />
-                    </button>
-                    <button onClick={() => setModal({ type: 'delete', user: u })}
-                      className="p-2 rounded-lg hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors">
-                      <Trash2 size={15} />
-                    </button>
-                  </div>
-                </td>
+      {/* Table */}
+      <div className="bg-card border border-border rounded-2xl overflow-hidden flex flex-col flex-1 min-h-0">
+        <div className="overflow-x-auto overflow-y-auto flex-1 min-h-0 no-scrollbar">
+          <table className="w-full text-sm">
+            <thead className="sticky top-0 z-20">
+              <tr className="bg-muted/80 backdrop-blur-sm border-b border-border">
+                <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Ism-familiya</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Parol</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Qo'shilgan</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Holat</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Amallar</th>
               </tr>
-            ))}
-            {!isLoading && users.length === 0 && (
-              <tr>
-                <td colSpan={5} className="px-4 py-10 text-center text-muted-foreground">Hech kim yo'q</td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {isLoading && users.length === 0 ? (
+                Array.from({ length: 4 }).map((_, i) => (
+                  <tr key={i}>
+                    {Array.from({ length: 5 }).map((__, j) => (
+                      <td key={j} className="px-4 py-3.5">
+                        <div className="h-4 bg-muted/40 rounded animate-pulse" style={{ width: j === 0 ? '140px' : j === 1 ? '110px' : j === 2 ? '90px' : '60px' }} />
+                      </td>
+                    ))}
+                  </tr>
+                ))
+              ) : filtered.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="px-4 py-12 text-center text-sm text-muted-foreground">
+                    {search ? "Qidiruv bo'yicha natija topilmadi" : "Hech kim yo'q"}
+                  </td>
+                </tr>
+              ) : (
+                filtered.map(u => (
+                  <tr key={u.id} className="hover:bg-muted/30 transition-colors">
+                    <td className="px-4 py-3.5 font-medium whitespace-nowrap">{u.name}</td>
+                    <td className="px-4 py-3.5"><PasswordCell password={u.plain_password} /></td>
+                    <td className="px-4 py-3.5 whitespace-nowrap">
+                      <div className="text-sm text-foreground">{new Date(u.created_at).toLocaleDateString('uz-UZ')}</div>
+                      <div className="text-xs text-muted-foreground">{new Date(u.created_at).toLocaleTimeString('uz-UZ')}</div>
+                    </td>
+                    <td className="px-4 py-3.5">
+                      <div className="flex items-center gap-2">
+                        <ActiveToggle user={u} onDone={refresh} />
+                        <span className={`text-xs font-medium ${u.is_active ? 'text-emerald-600' : 'text-muted-foreground'}`}>
+                          {u.is_active ? 'Aktiv' : 'Bloklangan'}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3.5">
+                      <div className="flex items-center gap-1">
+                        <button onClick={() => setModal({ type: 'edit', user: u })}
+                          className="p-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">
+                          <Pencil size={15} />
+                        </button>
+                        <button onClick={() => setModal({ type: 'delete', user: u })}
+                          className="p-2 rounded-lg hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors">
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {modal?.type === 'create' && <UserModal onClose={() => setModal(null)} onDone={refresh} />}

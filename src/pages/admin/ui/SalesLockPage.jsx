@@ -105,6 +105,7 @@ function BlockStep({ blockId, onSwitchBlock, locks }) {
 
   const buildings = BLOCK_BUILDINGS[blockId] ?? []
   const viewBox = BLOCK_VIEW_BOX[blockId] ?? '0 0 1539 672'
+  const vbScale = parseInt(viewBox.split(' ')[2]) / 1376
 
   useEffect(() => {
     setSelected(null)
@@ -167,21 +168,21 @@ function BlockStep({ blockId, onSwitchBlock, locks }) {
             const lock1 = getLock(num, 1)
             const lock2 = getLock(num, 2)
             const hasAnyLock = !!(lock1 || lock2)
-            const bw = 110, bh = 52, br = 10
+            const bw = 110 * vbScale, bh = 52 * vbScale, br = 10 * vbScale
             const bx = b.textX - bw / 2, by = b.textY - bh / 2
             const bgFill   = isSelected ? 'rgba(251,191,36,0.97)' : hasAnyLock ? 'rgba(220,38,38,0.88)' : 'rgba(0,0,0,0.78)'
             const bgStroke = isSelected ? 'rgba(180,130,0,0.6)' : hasAnyLock ? 'rgba(239,68,68,0.5)' : 'rgba(255,255,255,0.18)'
             const txtColor = isSelected ? '#1a0f00' : 'rgba(255,255,255,0.95)'
             const divY = b.textY
-            const row1Y = by + 14, row2Y = by + bh - 14
-            const numX  = bx + 16, iconX = bx + bw - 14
+            const row1Y = by + 14 * vbScale, row2Y = by + bh - 14 * vbScale
+            const numX  = bx + 16 * vbScale, iconX = bx + bw - 14 * vbScale
 
             return (
               <g key={b.id}>
                 <polygon points={b.points}
                   fill={isSelected ? 'rgba(251,191,36,0.35)' : isHovered ? 'rgba(255,255,255,0.08)' : hasAnyLock ? 'rgba(220,38,38,0.15)' : 'black'}
                   stroke={isSelected ? 'rgba(251,191,36,0.9)' : hasAnyLock ? 'rgba(220,38,38,0.7)' : 'rgba(0,0,0,0.75)'}
-                  strokeWidth={isSelected ? 3 : hasAnyLock ? 2 : 1}
+                  strokeWidth={isSelected ? 3 * vbScale : hasAnyLock ? 2 * vbScale : vbScale}
                   strokeLinejoin="round"
                   className={!isSelected && !isHovered && !hasAnyLock ? 'block-pulse' : ''}
                   style={{ cursor: 'pointer', animationDelay: b.delay }}
@@ -191,25 +192,25 @@ function BlockStep({ blockId, onSwitchBlock, locks }) {
                 />
                 <polygon points={b.points} fill="none"
                   stroke={isSelected ? 'rgba(251,191,36,0.6)' : hasAnyLock ? 'rgba(239,68,68,0.4)' : 'rgba(255,255,255,0.3)'}
-                  strokeWidth={isSelected ? 4 : 3} strokeLinejoin="round" pointerEvents="none"
+                  strokeWidth={isSelected ? 4 * vbScale : 3 * vbScale} strokeLinejoin="round" pointerEvents="none"
                 />
                 <g pointerEvents="none">
-                  <rect x={bx} y={by} width={bw} height={bh} rx={br} fill={bgFill} stroke={bgStroke} strokeWidth={1.5} />
-                  <line x1={bx + 8} y1={divY} x2={bx + bw - 8} y2={divY}
-                    stroke={isSelected ? 'rgba(180,130,0,0.25)' : 'rgba(255,255,255,0.15)'} strokeWidth={1} />
+                  <rect x={bx} y={by} width={bw} height={bh} rx={br} fill={bgFill} stroke={bgStroke} strokeWidth={1.5 * vbScale} />
+                  <line x1={bx + 8 * vbScale} y1={divY} x2={bx + bw - 8 * vbScale} y2={divY}
+                    stroke={isSelected ? 'rgba(180,130,0,0.25)' : 'rgba(255,255,255,0.15)'} strokeWidth={vbScale} />
                   {/* floor 1 */}
                   <text x={numX} y={row1Y} textAnchor="middle" dominantBaseline="middle"
-                    fontSize={10} fontWeight="800" fontFamily="ui-sans-serif,sans-serif" fill={txtColor} opacity={0.7}>1</text>
+                    fontSize={10 * vbScale} fontWeight="800" fontFamily="ui-sans-serif,sans-serif" fill={txtColor} opacity={0.7}>1</text>
                   {lock1
-                    ? <SvgLockIcon cx={iconX} cy={row1Y} s={11} color={isSelected ? '#92400e' : 'rgba(255,255,255,0.95)'} />
-                    : <SvgCheckIcon cx={iconX} cy={row1Y} s={11} color={isSelected ? '#92400e' : 'rgba(255,255,255,0.75)'} />
+                    ? <SvgLockIcon cx={iconX} cy={row1Y} s={11 * vbScale} color={isSelected ? '#92400e' : 'rgba(255,255,255,0.95)'} />
+                    : <SvgCheckIcon cx={iconX} cy={row1Y} s={11 * vbScale} color={isSelected ? '#92400e' : 'rgba(255,255,255,0.75)'} />
                   }
                   {/* floor 2 */}
                   <text x={numX} y={row2Y} textAnchor="middle" dominantBaseline="middle"
-                    fontSize={10} fontWeight="800" fontFamily="ui-sans-serif,sans-serif" fill={txtColor} opacity={0.7}>2</text>
+                    fontSize={10 * vbScale} fontWeight="800" fontFamily="ui-sans-serif,sans-serif" fill={txtColor} opacity={0.7}>2</text>
                   {lock2
-                    ? <SvgLockIcon cx={iconX} cy={row2Y} s={11} color={isSelected ? '#92400e' : 'rgba(255,255,255,0.95)'} />
-                    : <SvgCheckIcon cx={iconX} cy={row2Y} s={11} color={isSelected ? '#92400e' : 'rgba(255,255,255,0.75)'} />
+                    ? <SvgLockIcon cx={iconX} cy={row2Y} s={11 * vbScale} color={isSelected ? '#92400e' : 'rgba(255,255,255,0.95)'} />
+                    : <SvgCheckIcon cx={iconX} cy={row2Y} s={11 * vbScale} color={isSelected ? '#92400e' : 'rgba(255,255,255,0.75)'} />
                   }
                 </g>
               </g>
