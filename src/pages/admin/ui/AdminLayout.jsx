@@ -192,14 +192,16 @@ function tashkentHour() {
   return new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Tashkent' })).getHours()
 }
 function isOutside() { const h = tashkentHour(); return h < 8 || h >= 20 }
+function isLocalhost() {
+  const h = window.location.hostname
+  return h === 'localhost' || h === '127.0.0.1'
+}
 
 function useWorkingHours(isAdmin) {
-  const [outsideHours, setOutsideHours] = useState(() => !isAdmin && isOutside())
+  const [outsideHours, setOutsideHours] = useState(() => !isAdmin && !isLocalhost() && isOutside())
 
   useEffect(() => {
-    if (isAdmin) return
-    // Hozir ish vaqtida bo'lsak — aniq 20:00 gacha bir martalik timer
-    // Tashqarida bo'lsak — darhol ko'rsatilgan, qo'shimcha timer kerak emas
+    if (isAdmin || isLocalhost()) return
     if (isOutside()) return
     const now    = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Tashkent' }))
     const target = new Date(now)
@@ -298,6 +300,7 @@ export default function AdminLayout() {
               }
             }
             if (event === 'working_hours_ended') {
+              if (isLocalhost()) continue
               removeToken()
               window.location.href = '/admin/login?reason=outside_hours'
               return

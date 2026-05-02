@@ -26,6 +26,11 @@ app.use('/api/*', cors({
   credentials: false,
 }))
 
+function isLocalhost(c) {
+  const host = c.req.header('host') ?? ''
+  return host.startsWith('localhost') || host.startsWith('127.0.0.1')
+}
+
 // ─── TELEGRAM WEBHOOK ────────────────────────────────────────────────────────
 app.post('/api/telegram/webhook', async (c) => {
   const body = await c.req.json().catch(() => ({}))
@@ -231,8 +236,8 @@ app.post('/api/auth/login', async (c) => {
   const user = q.userByPlainPassword.get({ plain_password: password })
   if (!user) return c.json({ error: "Parol noto'g'ri" }, 401)
 
-  // salesmanager faqat ish vaqtida tizimga kira oladi
-  if (user.role === 'salesmanager' && !isWorkingHours()) {
+  // salesmanager faqat ish vaqtida tizimga kira oladi (localhost bundan mustasno)
+  if (user.role === 'salesmanager' && !isWorkingHours() && !isLocalhost(c)) {
     return c.json({ error: 'OUTSIDE_HOURS', message: "Tizim faqat 08:00–20:00 orasida ishlaydi" }, 403)
   }
 
@@ -248,8 +253,8 @@ app.post('/api/auth/refresh', async (c) => {
   if (!refreshToken) return c.json({ error: 'Unauthorized' }, 401)
   try {
     const payload = await verifyRefresh(refreshToken)
-    // salesmanager uchun ish vaqti tekshiruvi
-    if (payload.role === 'salesmanager' && !isWorkingHours()) {
+    // salesmanager uchun ish vaqti tekshiruvi (localhost bundan mustasno)
+    if (payload.role === 'salesmanager' && !isWorkingHours() && !isLocalhost(c)) {
       return c.json({ error: 'OUTSIDE_HOURS', message: "Tizim faqat 08:00–20:00 orasida ishlaydi" }, 403)
     }
     const user = q.userById.get({ id: payload.sub })
@@ -449,11 +454,18 @@ app.delete('/api/sales-locks', requireAuth, requireAdmin, async (c) => {
   return c.json({ ok: true })
 })
 
-app.patch('/api/apartments/:id/status', requireAuth, requireAdmin, async (c) => {
+app.patch('/api/apartments/:id/status', requireAuth, async (c) => {
+  const { sub: userId, role } = c.get('user')
   const id = c.req.param('id')
   const { status, reason } = await c.req.json()
   if (!['EMPTY', 'RESERVED', 'SOLD', 'NOT_SALE'].includes(status)) return c.json({ error: "Status: EMPTY | RESERVED | SOLD | NOT_SALE" }, 400)
   if (status === 'NOT_SALE' && !reason?.trim()) return c.json({ error: "NOT_SALE uchun sabab kiritish majburiy" }, 400)
+  // Salesmanager faqat o'z bitimini bekor qila oladi
+  if (role !== 'admin') {
+    if (status !== 'EMPTY') return c.json({ error: "Ruxsat yo'q" }, 403)
+    const booking = db.prepare("SELECT user_id FROM bookings WHERE apartment_id=? AND cancelled_at IS NULL").get(id)
+    if (!booking || booking.user_id !== userId) return c.json({ error: "Ruxsat yo'q" }, 403)
+  }
   let tgMsgs = []
   let pairCancelledAptId = null
   db.exec('BEGIN')

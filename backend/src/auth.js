@@ -66,6 +66,11 @@ export async function verifyRefresh(token) {
   return verify(token, REFRESH_SECRET, 'HS256')
 }
 
+function isLocalhostReq(c) {
+  const host = c.req.header('host') ?? ''
+  return host.startsWith('localhost') || host.startsWith('127.0.0.1')
+}
+
 export async function requireAuth(c, next) {
   const auth = c.req.header('Authorization')
   if (!auth?.startsWith('Bearer ')) return c.json({ error: 'Unauthorized' }, 401)
@@ -82,7 +87,7 @@ export async function requireAuth(c, next) {
         return c.json({ error: 'BLOCKED' }, 403)
       }
 
-      if (!isWorkingHours()) {
+      if (!isWorkingHours() && !isLocalhostReq(c)) {
         return c.json({ error: 'OUTSIDE_HOURS', message: "Tizim faqat 08:00–20:00 orasida ishlaydi" }, 403)
       }
     }
