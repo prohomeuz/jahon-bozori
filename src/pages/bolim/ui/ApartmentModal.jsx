@@ -61,7 +61,8 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
   const [managers, setManagers]         = useState([])
   const [assignedUserId, setAssignedUserId] = useState(null)
   const [confirmPending, setConfirmPending] = useState(null)
-  const [showErrors, setShowErrors]     = useState(false)
+  const [bronShowErrors, setBronShowErrors]   = useState(false)
+  const [sotishShowErrors, setSotishShowErrors] = useState(false)
   const [showCalc, setShowCalc]         = useState(false)
   const [bonusPreview, setBonusPreview] = useState(null)
   const [calc, setCalc]                 = useState({ narxM2: '', boshlangich: '', oylar: '12', muddatStep: 0, focus: 'boshlangich' })
@@ -254,8 +255,8 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
     return e
   }
 
-  const bronErrors   = showErrors ? getErrors(bronForm)   : {}
-  const sotishErrors = showErrors ? getErrors(sotishForm) : {}
+  const bronErrors   = bronShowErrors   ? getErrors(bronForm)   : {}
+  const sotishErrors = sotishShowErrors ? getErrors(sotishForm) : {}
   const activeErrors = tab === 'bron' ? bronErrors : sotishErrors
   const hasErrors    = Object.keys(activeErrors).length > 0
 
@@ -764,13 +765,11 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
                 : apartment.address} · {booked.form.ism} {booked.form.familiya}
             </p>
           </div>
-          {booked.type === 'bron' && (
-            <button onClick={handleDownloadPDF} disabled={pdfLoading}
-              className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl bg-primary text-primary-foreground font-semibold text-sm hover:bg-primary/90 transition-colors active:scale-[0.98] disabled:opacity-60">
-              {pdfLoading ? <Loader2 size={16} className="animate-spin" /> : <FileText size={16} />}
-              {pdfLoading ? 'Tayyorlanmoqda...' : 'Shartnoma PDF'}
-            </button>
-          )}
+          <button onClick={handleDownloadPDF} disabled={pdfLoading}
+            className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl bg-primary text-primary-foreground font-semibold text-sm hover:bg-primary/90 transition-colors active:scale-[0.98] disabled:opacity-60">
+            {pdfLoading ? <Loader2 size={16} className="animate-spin" /> : <FileText size={16} />}
+            {pdfLoading ? 'Tayyorlanmoqda...' : 'Shartnoma PDF'}
+          </button>
           <button onClick={onClose} className="w-full py-3 rounded-xl border border-border text-sm font-medium text-muted-foreground hover:bg-muted transition-colors">Yopish</button>
         </div>
       </div>
@@ -820,7 +819,7 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
         <div className="w-px h-10 bg-border mx-1 shrink-0" />
         <button onClick={() => {
           if (showCalc) { setCalc({ narxM2: '', boshlangich: '', oylar: '12', muddatStep: 0, focus: 'boshlangich' }); fetchCalcPrice() }
-          else { setBronForm(BRON_EMPTY); setSotishForm(SOTISH_EMPTY) }
+          else { setBronForm(BRON_EMPTY); setSotishForm(SOTISH_EMPTY); setSendSms(false) }
         }} className="w-14 h-14 rounded-full flex items-center justify-center text-muted-foreground hover:bg-accent hover:text-foreground transition-colors shrink-0" title="Formani tozalash">
           <RotateCcw size={22} />
         </button>
@@ -861,11 +860,11 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
 
       <div className="flex flex-col flex-1 min-h-0">
         {tab === 'bron' ? (
-          <form id="bron-form" onSubmit={e => { e.preventDefault(); const errs = getErrors(bronForm); if (Object.keys(errs).length > 0) { setShowErrors(true); return }; setConfirmPending('bron') }} className="flex flex-col flex-1 min-h-0">
+          <form id="bron-form" onSubmit={e => { e.preventDefault(); const errs = getErrors(bronForm); if (Object.keys(errs).length > 0) { setBronShowErrors(true); return }; setConfirmPending('bron') }} className="flex flex-col flex-1 min-h-0">
             {bronFields}
           </form>
         ) : (
-          <form id="sotish-form" onSubmit={e => { e.preventDefault(); const errs = getErrors(sotishForm); if (Object.keys(errs).length > 0) { setShowErrors(true); return }; setConfirmPending('sotish') }} className="flex flex-col flex-1 min-h-0">
+          <form id="sotish-form" onSubmit={e => { e.preventDefault(); const errs = getErrors(sotishForm); if (Object.keys(errs).length > 0) { setSotishShowErrors(true); return }; setConfirmPending('sotish') }} className="flex flex-col flex-1 min-h-0">
             {sotishFields}
           </form>
         )}
@@ -883,20 +882,20 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
             <div className="flex items-stretch gap-3">
               <div className="flex p-1 bg-muted rounded-xl gap-1 min-w-72">
                 {[['bron', 'Bron qilish'], ['sotish', 'Sotish']].map(([key, label]) => (
-                  <button key={key} type="button" onClick={() => { setTab(key); setSubmitError(null); setShowErrors(false) }}
+                  <button key={key} type="button" onClick={() => { setTab(key); setSubmitError(null) }}
                     className={`flex-1 px-4 py-3 rounded-lg text-sm font-semibold transition-colors ${tab === key ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
                     {label}
                   </button>
                 ))}
               </div>
               {tab === 'bron' ? (
-                <button type="submit" form="bron-form" disabled={submitting || (showErrors && hasErrors)}
+                <button type="submit" form="bron-form" disabled={submitting || (bronShowErrors && hasErrors)}
                   className="flex-1 py-4 rounded-xl text-white font-semibold text-base active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed bg-amber-500 hover:bg-amber-600">
                   {submitting && <Loader2 size={18} className="animate-spin" />}
                   {submitting ? 'Saqlanmoqda...' : 'Bron qilish'}
                 </button>
               ) : (
-                <button type="submit" form="sotish-form" disabled={submitting || (showErrors && hasErrors)}
+                <button type="submit" form="sotish-form" disabled={submitting || (sotishShowErrors && hasErrors)}
                   className="flex-1 py-4 rounded-xl text-white font-semibold text-base active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed bg-green-600 hover:bg-green-700">
                   {submitting && <Loader2 size={18} className="animate-spin" />}
                   {submitting ? 'Saqlanmoqda...' : 'Sotish'}
