@@ -376,10 +376,10 @@ export default function ManagersPage() {
                       <div className="text-sm text-foreground">{new Date(u.created_at).toLocaleDateString('uz-UZ')}</div>
                       <div className="text-xs text-muted-foreground">{new Date(u.created_at).toLocaleTimeString('uz-UZ')}</div>
                     </td>
-                    <td className="px-4 py-3.5">
+                    <td className="px-4 py-3.5 whitespace-nowrap">
                       <div className="flex items-center gap-2">
                         <ActiveToggle user={u} onDone={refresh} />
-                        <span className={`text-xs font-medium ${u.is_active ? 'text-emerald-600' : 'text-muted-foreground'}`}>
+                        <span className={`text-xs font-medium inline-block w-16 ${u.is_active ? 'text-emerald-600' : 'text-muted-foreground'}`}>
                           {u.is_active ? 'Aktiv' : 'Bloklangan'}
                         </span>
                       </div>
