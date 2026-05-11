@@ -69,6 +69,7 @@ try { db.exec(`ALTER TABLE bookings ADD COLUMN narx_m2 TEXT`) } catch {}
 // Add chegirma_m2 and asl_narx_m2 to bookings if missing (migration)
 try { db.exec(`ALTER TABLE bookings ADD COLUMN chegirma_m2 TEXT`) } catch {}
 try { db.exec(`ALTER TABLE bookings ADD COLUMN asl_narx_m2 TEXT`) } catch {}
+try { db.exec(`ALTER TABLE bookings ADD COLUMN bonus_enabled INTEGER NOT NULL DEFAULT 1`) } catch {}
 // Add not_sale_reason to apartments if missing (migration)
 try { db.exec(`ALTER TABLE apartments ADD COLUMN not_sale_reason TEXT`) } catch {}
 // Add is_active to users if missing (migration)
@@ -104,6 +105,12 @@ try { db.exec(`CREATE TABLE IF NOT EXISTS telegram_subscribers (chat_id TEXT PRI
 try { db.exec(`CREATE TABLE IF NOT EXISTS backup_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)`) } catch {}
 // Sales locks — block/bolim/floor darajasida sotuv to'xtatish
 try { db.exec(`CREATE TABLE IF NOT EXISTS sales_locks (block TEXT NOT NULL, bolim INTEGER NOT NULL, floor INTEGER NOT NULL, reason TEXT NOT NULL, locked_at TEXT NOT NULL, locked_by TEXT NOT NULL, PRIMARY KEY (block, bolim, floor))`) } catch {}
+// Global settings — chegirma_enabled, bonus_enabled va boshqa tizim sozlamalari
+try {
+  db.exec(`CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)`)
+  db.exec(`INSERT OR IGNORE INTO settings (key, value) VALUES ('chegirma_enabled', '1')`)
+  db.exec(`INSERT OR IGNORE INTO settings (key, value) VALUES ('bonus_enabled', '1')`)
+} catch {}
 
 // Telegram yuborilgan xabarlar — bekor qilinganda o'chirish uchun
 try { db.exec(`CREATE TABLE IF NOT EXISTS telegram_messages (
@@ -450,7 +457,7 @@ export const q = {
   `),
 
   // bookings
-  insertBooking:  db.prepare("INSERT INTO bookings (apartment_id,user_id,type,ism,familiya,boshlangich,oylar,umumiy,passport,manzil,phone,passport_place,narx_m2,chegirma_m2,asl_narx_m2,source_id,created_at) VALUES (:apartment_id,:user_id,:type,:ism,:familiya,:boshlangich,:oylar,:umumiy,:passport,:manzil,:phone,:passport_place,:narx_m2,:chegirma_m2,:asl_narx_m2,:source_id,datetime('now', '+5 hours'))"),
+  insertBooking:  db.prepare("INSERT INTO bookings (apartment_id,user_id,type,ism,familiya,boshlangich,oylar,umumiy,passport,manzil,phone,passport_place,narx_m2,chegirma_m2,asl_narx_m2,bonus_enabled,source_id,created_at) VALUES (:apartment_id,:user_id,:type,:ism,:familiya,:boshlangich,:oylar,:umumiy,:passport,:manzil,:phone,:passport_place,:narx_m2,:chegirma_m2,:asl_narx_m2,:bonus_enabled,:source_id,datetime('now', '+5 hours'))"),
   lastBooking:    db.prepare('SELECT b.*, u.name AS manager_name FROM bookings b LEFT JOIN users u ON b.user_id=u.id WHERE b.id=last_insert_rowid()'),
   bookingById:    db.prepare('SELECT b.*, u.telegram_id AS manager_tg_id, u.name AS manager_name FROM bookings b LEFT JOIN users u ON b.user_id=u.id WHERE b.id=:id'),
   allBookings:    db.prepare('SELECT b.*, u.name AS manager_name FROM bookings b LEFT JOIN users u ON b.user_id=u.id WHERE b.cancelled_at IS NULL ORDER BY b.created_at DESC LIMIT :limit OFFSET :offset'),
@@ -505,6 +512,11 @@ export const q = {
   allLocks:    db.prepare("SELECT block, bolim, floor, reason, locked_at, locked_by FROM sales_locks"),
   upsertLock:  db.prepare("INSERT OR REPLACE INTO sales_locks (block, bolim, floor, reason, locked_at, locked_by) VALUES (:block, :bolim, :floor, :reason, :locked_at, :locked_by)"),
   deleteLock:  db.prepare("DELETE FROM sales_locks WHERE block=:block AND bolim=:bolim AND floor=:floor"),
+
+  // settings
+  allSettings:  db.prepare("SELECT key, value FROM settings"),
+  getSetting:   db.prepare("SELECT value FROM settings WHERE key=:key"),
+  upsertSetting: db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES (:key, :value)"),
 
   // prices (do'konlar)
   getPrice:        db.prepare("SELECT price FROM prices WHERE block=:block AND bolim=:bolim AND floor=:floor"),

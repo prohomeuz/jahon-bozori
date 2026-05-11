@@ -81,6 +81,11 @@ app.post('/', requireAuth, async (c) => {
   if (!apartment_id || !type || !ism || !familiya || !boshlangich || !oylar)
     return c.json({ error: "Majburiy maydonlar to'ldirilmagan" }, 400)
 
+  const chegirmaEnabled = q.getSetting.get({ key: 'chegirma_enabled' })?.value === '1'
+  const bonusEnabledNow = q.getSetting.get({ key: 'bonus_enabled' })?.value === '1'
+  const safe_chegirma_m2   = chegirmaEnabled ? (chegirma_m2   ?? null) : null
+  const safe_asl_narx_m2   = chegirmaEnabled ? (asl_narx_m2   ?? null) : null
+
   const effective_user_id = assigned_user_id ? parseInt(assigned_user_id) : user.sub
 
   if (pair_with) {
@@ -108,7 +113,7 @@ app.post('/', requireAuth, async (c) => {
       const half2 = boshlangichNum - half1
 
       const narxM2Num    = Number(String(narx_m2   || '').replace(/\s/g, '')) || 0
-      const chegirmaM2Num = Number(String(chegirma_m2 || '').replace(/\s/g, '')) || 0
+      const chegirmaM2Num = Number(String(safe_chegirma_m2 || '').replace(/\s/g, '')) || 0
       const yakuniyM2    = narxM2Num > 0 ? Math.max(0, narxM2Num - chegirmaM2Num) : 0
       let umumiy1, umumiy2
       if (yakuniyM2 > 0) {
@@ -128,7 +133,8 @@ app.post('/', requireAuth, async (c) => {
         user_id: effective_user_id, type, ism, familiya, oylar: parseInt(oylar),
         passport: passport ?? null, manzil: manzil ?? null, phone: phone ?? null,
         passport_place: passport_place ?? null, narx_m2: narx_m2 ?? null,
-        chegirma_m2: chegirma_m2 ?? null, asl_narx_m2: asl_narx_m2 ?? null,
+        chegirma_m2: safe_chegirma_m2, asl_narx_m2: safe_asl_narx_m2,
+        bonus_enabled: bonusEnabledNow ? 1 : 0,
         source_id: source_id ? parseInt(source_id) : null,
       }
 
@@ -171,7 +177,8 @@ app.post('/', requireAuth, async (c) => {
       boshlangich, oylar: parseInt(oylar), umumiy: umumiy ?? null,
       passport: passport ?? null, manzil: manzil ?? null, phone: phone ?? null,
       passport_place: passport_place ?? null, narx_m2: narx_m2 ?? null,
-      chegirma_m2: chegirma_m2 ?? null, asl_narx_m2: asl_narx_m2 ?? null,
+      chegirma_m2: safe_chegirma_m2, asl_narx_m2: safe_asl_narx_m2,
+      bonus_enabled: bonusEnabledNow ? 1 : 0,
       source_id: source_id ? parseInt(source_id) : null,
     })
     const newStatus = type === 'sotish' ? 'SOLD' : 'RESERVED'

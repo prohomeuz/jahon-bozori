@@ -1,6 +1,7 @@
 import { Loader2, RotateCcw, FileText, CheckCircle, X, ChevronDown, Calculator } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { apiFetch, getUser } from '@/shared/lib/auth'
+import { useSettings } from '@/shared/hooks/useSettings'
 import { StatusCard } from './StatusCard'
 import { Field, PhoneField, PassportField, FullPhoneNumpad, LABEL, getRawDigits } from './FormFields'
 import { downloadContractPDF, downloadShartnomaPDF } from '../lib/pdfExport.jsx'
@@ -72,6 +73,8 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
   const [bookWithPair, setBookWithPair] = useState(false)
   const [sources, setSources]           = useState([])
 
+  const { chegirmaEnabled, bonusEnabled } = useSettings()
+
   const longPressTimer       = useRef(null)
   const longPressFired       = useRef(false)
   const calcLoadFromDB       = useRef(true)
@@ -129,7 +132,7 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
     const baseTotal = Math.round(narxVal * effectiveAptSize)
     const pctOfBase = baseTotal > 0 && downVal > 0 ? Math.floor((downVal / baseTotal) * 100) : 0
     const pctBracket = apartment.is_wc ? null : (CHEGIRMA_BRACKETS.find(p => pctOfBase >= p) ?? null)
-    const chegirma  = apartment.is_wc ? 0 : (pctBracket ? CHEGIRMA_TABLE[pctBracket] : 0)
+    const chegirma  = (apartment.is_wc || !chegirmaEnabled) ? 0 : (pctBracket ? CHEGIRMA_TABLE[pctBracket] : 0)
     const yakuniy   = narxVal > 0 ? Math.max(0, narxVal - chegirma) : 0
     const total     = Math.round(yakuniy * effectiveAptSize)
     const percent   = Math.min(100, pctOfBase)
@@ -137,20 +140,20 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
     const qolganDisplay = qolgan > 0 ? qolgan : (pctOfBase < 100 ? Math.max(0, baseTotal - downVal) : 0)
     const monthly   = qolganDisplay > 0 && months > 0 ? Math.round(qolganDisplay / months) : 0
     const bonusBracket = BONUS_BRACKETS.find(p => pctOfBase >= p) ?? null
-    const bonus     = apartment.is_wc ? null : (bonusBracket ? BONUS_TABLE[bonusBracket] : null)
+    const bonus     = (apartment.is_wc || !bonusEnabled) ? null : (bonusBracket ? BONUS_TABLE[bonusBracket] : null)
     return { narxVal, downVal, months, baseTotal, pctOfBase, pctBracket, chegirma, yakuniy, total, percent, qolgan, monthly, bonus }
-  }, [calc.narxM2, calc.boshlangich, calc.oylar, effectiveAptSize, apartment.is_wc])
+  }, [calc.narxM2, calc.boshlangich, calc.oylar, effectiveAptSize, apartment.is_wc, chegirmaEnabled, bonusEnabled])
 
   const { pctBracket: currentBracket } = calcDerived
   useEffect(() => {
     if (!showCalc || !currentBracket) return
-    if (currentBracket !== prevPctBracket.current) {
+    if (currentBracket !== prevPctBracket.current && chegirmaEnabled) {
       playDiscountSound()
       triggerConfetti()
       if (navigator.vibrate) navigator.vibrate([80, 40, 120, 40, 200])
     }
     prevPctBracket.current = currentBracket
-  }, [showCalc, currentBracket, triggerConfetti])
+  }, [showCalc, currentBracket, triggerConfetti, chegirmaEnabled])
 
   useEffect(() => {
     if (!showCalc || !calcLoadFromDB.current) return
@@ -299,6 +302,10 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
       const sourceName = sources.find(s => s.id === form.source_id)?.name ?? ''
       setBooked({
         form, type, bookingId: booking.id, managerName: effectiveManagerName, sourceName,
+        bonusEnabled: booking.bonus_enabled != null
+          ? (booking.bonus_enabled === 1 || booking.bonus_enabled === true)
+          : bonusEnabled,
+        createdAt: booking.created_at ?? null,
         pairApartmentAddress: booking.pair_booking ? pairPartner?.address ?? null : null,
         pairApartmentSize:    booking.pair_booking ? pairPartner?.size ?? null : null,
         pairBookingId:        booking.pair_booking?.id ?? null,
@@ -317,7 +324,7 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
           ? { address: pairPartner.address, size: pairPartner.size } : null
         const pdfPromise = type === 'sotish'
           ? downloadShartnomaPDF({ apartment, floor, blockId, bolimNum, form, bookingId: booking.id, pairApartment: pairApt })
-          : downloadContractPDF({ apartment, floor, blockId, bolimNum, form, type, managerName: effectiveManagerName, sourceName, pairApartment: pairApt })
+          : downloadContractPDF({ apartment, floor, blockId, bolimNum, form, type, managerName: effectiveManagerName, sourceName, pairApartment: pairApt, bonusEnabled })
         pdfPromise
           .then(blob => {
             const fd = new FormData()
@@ -343,7 +350,7 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
         ? { address: booked.pairApartmentAddress, size: booked.pairApartmentSize } : null
       const blob = booked.type === 'sotish'
         ? await downloadShartnomaPDF({ apartment, floor, blockId, bolimNum, form: booked.form, bookingId: booked.bookingId, pairApartment: pairApt })
-        : await downloadContractPDF({ apartment, floor, blockId, bolimNum, form: booked.form, type: booked.type, managerName: booked.managerName ?? getUser()?.name ?? '', sourceName: booked.sourceName ?? '', pairApartment: pairApt })
+        : await downloadContractPDF({ apartment, floor, blockId, bolimNum, form: booked.form, type: booked.type, managerName: booked.managerName ?? getUser()?.name ?? '', sourceName: booked.sourceName ?? '', pairApartment: pairApt, bonusEnabled: booked.bonusEnabled ?? false, contractDate: booked.createdAt ?? null })
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
@@ -476,7 +483,7 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
             </button>
           </div>
 
-          {!apartment.is_wc && (
+          {!apartment.is_wc && chegirmaEnabled && (
             <div className="rounded-2xl border border-border bg-background overflow-hidden shrink-0">
               <div className="px-3 py-1.5 border-b border-border bg-muted/40">
                 <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Chegirma darajalari</p>
@@ -501,7 +508,7 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
             </div>
           )}
 
-          {!apartment.is_wc && (() => {
+          {!apartment.is_wc && bonusEnabled && (() => {
             const MILESTONES = [
               { pct: 30,  items: [{ img: imgKonditsioner, name: 'Konditsioner' }] },
               { pct: 50,  items: [{ img: imgKonditsioner, name: 'Konditsioner' }, { img: imgTV, name: 'TV (43)' }] },

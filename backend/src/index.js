@@ -14,6 +14,7 @@ import bookingRoutes   from './routes/bookings.js'
 import sourceRoutes    from './routes/sources.js'
 import statsRoutes     from './routes/stats.js'
 import telegramRoutes  from './routes/telegram.js'
+import settingsRoutes  from './routes/settings.js'
 
 const app = new Hono()
 
@@ -31,6 +32,7 @@ app.route('/api/bookings',  bookingRoutes)
 app.route('/api/sources',   sourceRoutes)
 app.route('/api',           statsRoutes)
 app.route('/api',           telegramRoutes)
+app.route('/api/settings',  settingsRoutes)
 
 // Legacy endpoint — manager dropdown uses /api/managers, not /api/users/managers
 app.get('/api/managers', requireAuth, (c) => c.json(q.allUsers.all()))

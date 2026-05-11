@@ -1,5 +1,6 @@
 import { apiFetch } from '@/shared/lib/auth'
 import { getBolimViewBox, getAptRect, drawHighlight, drawWcHighlight, drawPairHighlight, imgToDataUrl } from '@/shared/lib/canvasHighlight'
+import { BONUS_MAP } from '@/shared/config/bonusConfig'
 
 const allBlockImgs = import.meta.glob('@/assets/blocks/**/*.{png,jpg,webp}', { eager: true })
 
@@ -13,15 +14,6 @@ function loadImg(blockId, floor, bolimNum) {
     return name === filename && floorDir === String(floor) && blockDir === blockId
   })
   return entry?.[1]?.default ?? null
-}
-
-const PDF_BONUS_MAP = {
-  30:  ['Konditsioner'],
-  40:  ['Konditsioner'],
-  50:  ['Konditsioner', 'TV (43)'],
-  60:  ['Konditsioner', 'TV (43)'],
-  70:  ['Konditsioner', 'Muzlatgich'],
-  100: ['Konditsioner', 'TV (43)', 'Muzlatgich'],
 }
 
 export async function downloadBookingPDF(b) {
@@ -107,17 +99,26 @@ export async function downloadBookingPDF(b) {
     ).toBlob()
   } else {
     let bonusItems = []
-    const chegirmaM2 = Number(String(b.chegirma_m2 || '').replace(/\s/g, '')) || 0
-    const aslNarxM2  = Number(String(b.asl_narx_m2 || '').replace(/\s/g, '')) || 0
-    if (chegirmaM2 > 0 && aslNarxM2 > 0 && effectiveSize > 0) {
-      const baseTotal = Math.round(aslNarxM2 * effectiveSize)
-      const downVal   = Number(String(b.boshlangich || '').replace(/\s/g, '')) || 0
-      const umumiyNum = Number(String(b.umumiy || '').replace(/\s/g, '')) || 0
-      const pctOfBase = baseTotal > 0 && downVal > 0
-        ? (umumiyNum > 0 && downVal >= umumiyNum ? 100 : Math.floor((downVal / baseTotal) * 100))
-        : 0
-      const bracket = [100, 70, 60, 50, 40, 30].find(p => pctOfBase >= p) ?? null
-      bonusItems = bracket ? (PDF_BONUS_MAP[bracket] ?? []).map(name => ({ name })) : []
+    const bonusWasEnabled = b.bonus_enabled === 1 || b.bonus_enabled === '1' || b.bonus_enabled === true
+    if (bonusWasEnabled && effectiveSize > 0) {
+      const chegirmaM2 = Number(String(b.chegirma_m2 || '').replace(/\s/g, '')) || 0
+      const aslNarxM2  = Number(String(b.asl_narx_m2 || '').replace(/\s/g, '')) || 0
+      const baseM2     = chegirmaM2 > 0 && aslNarxM2 > 0
+        ? aslNarxM2
+        : Number(String(b.narx_m2 || '').replace(/\s/g, '')) || 0
+      if (baseM2 > 0) {
+        // Juft bron: boshlangich va umumiy DB da yarmicha saqlanadi → ikkalasini yig'amiz
+        const pBoshlangich = partnerBooking ? Number(String(partnerBooking.boshlangich || '').replace(/\s/g, '')) || 0 : 0
+        const pUmumiy      = partnerBooking ? Number(String(partnerBooking.umumiy      || '').replace(/\s/g, '')) || 0 : 0
+        const downVal   = (Number(String(b.boshlangich || '').replace(/\s/g, '')) || 0) + pBoshlangich
+        const umumiyNum = (Number(String(b.umumiy      || '').replace(/\s/g, '')) || 0) + pUmumiy
+        const baseTotal = Math.round(baseM2 * effectiveSize)
+        const pctOfBase = baseTotal > 0 && downVal > 0
+          ? (umumiyNum > 0 && downVal >= umumiyNum ? 100 : Math.floor((downVal / baseTotal) * 100))
+          : 0
+        const bracket   = [100, 70, 60, 50, 40, 30].find(p => pctOfBase >= p) ?? null
+        bonusItems      = bracket ? (BONUS_MAP[bracket] ?? []).map(name => ({ name })) : []
+      }
     }
     const [{ ContractPDF }, qrImg, logoSrc] = await Promise.all([
       import('@/pages/bolim/ui/ContractPDF'),
