@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Loader2, X } from 'lucide-react'
 import { apiFetch, getUser } from '@/shared/lib/auth'
 import { LABEL, Field, PassportField } from './FormFields'
+import { downloadShartnomaPDF } from '../lib/pdfExport.jsx'
 
 export function StatusCard({ apartment, isReserved, onClose, onBooked }) {
   const currentUser = getUser()
@@ -57,6 +58,25 @@ export function StatusCard({ apartment, isReserved, onClose, onBooked }) {
         setConvertError(data.error || 'Xatolik yuz berdi')
         return
       }
+      const [blockId, bolimStr, aptStr] = apartment.address.split('-')
+      const bolimNum = parseInt(bolimStr)
+      const floor    = aptStr ? parseInt(aptStr[0]) : 1
+      const pdfForm  = {
+        ism: booking.ism, familiya: booking.familiya, telefon: booking.phone || '',
+        boshlangich: booking.boshlangich, oylar: String(booking.oylar), umumiy: booking.umumiy || '',
+        narx_m2: booking.narx_m2 || '', chegirma_m2: booking.chegirma_m2 || '', asl_narx_m2: booking.asl_narx_m2 || '',
+        passport: form.passport || booking.passport || '',
+        passport_place: form.passport_place || booking.passport_place || '',
+        manzil: form.manzil || booking.manzil || '',
+      }
+      downloadShartnomaPDF({ apartment, floor, blockId, bolimNum, form: pdfForm, bookingId: booking.id, contractDate: new Date(booking.created_at) })
+        .then(blob => {
+          const fd = new FormData()
+          fd.append('pdf', blob, `shartnoma-${apartment.address}.pdf`)
+          fd.append('booking_id', String(booking.id))
+          return apiFetch('/api/bookings/send-pdf', { method: 'POST', body: fd })
+        })
+        .catch(() => {})
       onBooked?.()
       onClose()
     } catch {

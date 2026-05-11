@@ -203,11 +203,13 @@ app.patch('/:id/convert', requireAuth, async (c) => {
   if (lock) return c.json({ error: `Sotuv to'xtatilgan: ${lock.reason}` }, 403)
 
   const { passport, passport_place, manzil } = await c.req.json().catch(() => ({}))
+  const oldTgMsgs = q.tgMsgsByBooking.all(id)
   db.exec('BEGIN')
   try {
     db.prepare('UPDATE bookings SET type=?, passport=COALESCE(?,passport), passport_place=COALESCE(?,passport_place), manzil=COALESCE(?,manzil) WHERE id=?')
       .run('sotish', passport || null, passport_place || null, manzil || null, id)
     db.prepare("UPDATE apartments SET status='SOLD' WHERE id=?").run(booking.apartment_id)
+    if (oldTgMsgs.length > 0) q.delTgMsgsByBooking.run(id)
     db.exec('COMMIT')
   } catch (e) {
     db.exec('ROLLBACK')
@@ -215,6 +217,16 @@ app.patch('/:id/convert', requireAuth, async (c) => {
   }
   broadcast('apartment', { id: booking.apartment_id, status: 'SOLD' })
   broadcast('booking', { updated: true })
+  const token = process.env.TELEGRAM_BOT_TOKEN
+  if (token && oldTgMsgs.length > 0) {
+    Promise.all(oldTgMsgs.map(({ chat_id, message_id }) =>
+      proxiedFetch(`https://api.telegram.org/bot${token}/deleteMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id, message_id }),
+      }).catch(() => {})
+    )).catch(() => {})
+  }
   return c.json({ ok: true })
 })
 
@@ -271,7 +283,7 @@ app.post('/send-pdf', requireAuth, async (c) => {
     }
   }
 
-  const caption = `🟡 <b>Bron</b>\n` +
+  const caption = (booking.type === 'sotish' ? `🟢 <b>Sotish</b>` : `🟡 <b>Bron</b>`) + `\n` +
     `🏢 <b>${unitLabel}:</b> ${aptIdLabel}\n` +
     `👤 <b>Mijoz:</b> ${booking.ism} ${booking.familiya}\n` +
     (booking.phone ? `📞 <b>Telefon:</b> ${booking.phone}\n` : '') +

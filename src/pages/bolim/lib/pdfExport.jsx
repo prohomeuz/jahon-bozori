@@ -26,6 +26,29 @@ const PDF_BONUS_TABLE = {
 }
 const CHEGIRMA_BRACKETS = [100, 70, 60, 50, 40, 30]
 
+export async function downloadShartnomaPDF({ apartment, floor, blockId, bolimNum, form, bookingId, pairApartment = null, contractDate = null }) {
+  const { pdf } = await import('@react-pdf/renderer')
+  const { ShartnomaPDF } = await import('../ui/ShartnomaPDF.jsx')
+
+  const cd = contractDate instanceof Date ? contractDate : (contractDate ? new Date(contractDate) : new Date())
+  const apt = pairApartment
+    ? { ...apartment, size: Number((apartment.size + pairApartment.size).toFixed(2)) }
+    : apartment
+
+  const blob = await pdf(
+    <ShartnomaPDF
+      apartment={apt}
+      floor={floor}
+      blockId={blockId}
+      bolimNum={bolimNum}
+      form={form}
+      contractDate={cd}
+      bookingId={bookingId}
+    />
+  ).toBlob()
+  return blob
+}
+
 export async function downloadContractPDF({ apartment, floor, blockId, bolimNum, form, type, managerName, sourceName = '', pairApartment = null }) {
   const { pdf } = await import('@react-pdf/renderer')
   const { ContractPDF } = await import('../ui/ContractPDF')

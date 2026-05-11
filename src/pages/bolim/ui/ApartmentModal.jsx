@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { apiFetch, getUser } from '@/shared/lib/auth'
 import { StatusCard } from './StatusCard'
 import { Field, PhoneField, PassportField, FullPhoneNumpad, LABEL, getRawDigits } from './FormFields'
-import { downloadContractPDF } from '../lib/pdfExport.jsx'
+import { downloadContractPDF, downloadShartnomaPDF } from '../lib/pdfExport.jsx'
 
 import imgKonditsioner from '@/assets/bonus/konditsioner.webp'
 import imgTV from '@/assets/bonus/tv.webp'
@@ -312,10 +312,13 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
         }).catch(() => {})
       }
 
-      if (type === 'bron' && booking.id) {
+      if (booking.id) {
         const pairApt = booking.pair_booking && pairPartner
           ? { address: pairPartner.address, size: pairPartner.size } : null
-        downloadContractPDF({ apartment, floor, blockId, bolimNum, form, type, managerName: effectiveManagerName, sourceName, pairApartment: pairApt })
+        const pdfPromise = type === 'sotish'
+          ? downloadShartnomaPDF({ apartment, floor, blockId, bolimNum, form, bookingId: booking.id, pairApartment: pairApt })
+          : downloadContractPDF({ apartment, floor, blockId, bolimNum, form, type, managerName: effectiveManagerName, sourceName, pairApartment: pairApt })
+        pdfPromise
           .then(blob => {
             const fd = new FormData()
             fd.append('pdf', blob, `shartnoma-${apartment.address}.pdf`)
@@ -338,7 +341,9 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
     try {
       const pairApt = booked.pairApartmentAddress
         ? { address: booked.pairApartmentAddress, size: booked.pairApartmentSize } : null
-      const blob = await downloadContractPDF({ apartment, floor, blockId, bolimNum, form: booked.form, type: booked.type, managerName: booked.managerName ?? getUser()?.name ?? '', sourceName: booked.sourceName ?? '', pairApartment: pairApt })
+      const blob = booked.type === 'sotish'
+        ? await downloadShartnomaPDF({ apartment, floor, blockId, bolimNum, form: booked.form, bookingId: booked.bookingId, pairApartment: pairApt })
+        : await downloadContractPDF({ apartment, floor, blockId, bolimNum, form: booked.form, type: booked.type, managerName: booked.managerName ?? getUser()?.name ?? '', sourceName: booked.sourceName ?? '', pairApartment: pairApt })
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
@@ -346,6 +351,9 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
       a.download = pairApt ? `shartnoma-${aptNum}-${pairApt.address.split('-').pop()}.pdf` : `shartnoma-${apartment.address}.pdf`
       a.click()
       URL.revokeObjectURL(url)
+    } catch (err) {
+      console.error('[PDF] xato:', err)
+      alert('PDF xatosi: ' + (err?.message ?? String(err)))
     } finally {
       setPdfLoading(false)
     }
