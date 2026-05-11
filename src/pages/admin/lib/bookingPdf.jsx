@@ -37,13 +37,10 @@ export async function downloadBookingPDF(b) {
     } catch { partnerBooking = null }
   }
 
-  const [{ pdf }, aptRes, qrImg] = await Promise.all([
+  const [{ pdf }, aptRes] = await Promise.all([
     import('@react-pdf/renderer'),
     apiFetch(`/api/apartments?block=${blockId}&bolim=${bolimNum}&floor=${floor}`).then(r => r.json()),
-    import('@/assets/qrcode.png'),
   ])
-  const qrDataUrl = qrImg.default
-  const { ContractPDF } = await import('@/pages/bolim/ui/ContractPDF')
 
   const aptData  = Array.isArray(aptRes) ? aptRes.find(a => a.address === b.apartment_id) : null
   const apartment = aptData ?? { address: b.apartment_id, size: 0, status: b.type === 'sotish' ? 'SOLD' : 'RESERVED' }
@@ -98,34 +95,46 @@ export async function downloadBookingPDF(b) {
     passport: b.passport || '', passport_place: b.passport_place || '', manzil: b.manzil || '',
   }
 
-  let bonusItems = []
-  const chegirmaM2 = Number(String(b.chegirma_m2 || '').replace(/\s/g, '')) || 0
-  const aslNarxM2  = Number(String(b.asl_narx_m2 || '').replace(/\s/g, '')) || 0
-  if (chegirmaM2 > 0 && aslNarxM2 > 0 && effectiveSize > 0) {
-    const baseTotal = Math.round(aslNarxM2 * effectiveSize)
-    const downVal   = Number(String(b.boshlangich || '').replace(/\s/g, '')) || 0
-    const umumiyNum = Number(String(b.umumiy || '').replace(/\s/g, '')) || 0
-    const pctOfBase = baseTotal > 0 && downVal > 0
-      ? (umumiyNum > 0 && downVal >= umumiyNum ? 100 : Math.floor((downVal / baseTotal) * 100))
-      : 0
-    const bracket = [100, 70, 60, 50, 40, 30].find(p => pctOfBase >= p) ?? null
-    bonusItems = bracket ? (PDF_BONUS_MAP[bracket] ?? []).map(name => ({ name })) : []
+  let blob
+  if (b.type === 'sotish') {
+    const { ShartnomaPDF } = await import('@/pages/bolim/ui/ShartnomaPDF')
+    const pdfApt = partnerApt ? { ...apartment, size: effectiveSize } : apartment
+    blob = await pdf(
+      <ShartnomaPDF
+        apartment={pdfApt} floor={floor} blockId={blockId} bolimNum={bolimNum}
+        form={form} contractDate={new Date(b.created_at)} bookingId={b.id}
+      />
+    ).toBlob()
+  } else {
+    let bonusItems = []
+    const chegirmaM2 = Number(String(b.chegirma_m2 || '').replace(/\s/g, '')) || 0
+    const aslNarxM2  = Number(String(b.asl_narx_m2 || '').replace(/\s/g, '')) || 0
+    if (chegirmaM2 > 0 && aslNarxM2 > 0 && effectiveSize > 0) {
+      const baseTotal = Math.round(aslNarxM2 * effectiveSize)
+      const downVal   = Number(String(b.boshlangich || '').replace(/\s/g, '')) || 0
+      const umumiyNum = Number(String(b.umumiy || '').replace(/\s/g, '')) || 0
+      const pctOfBase = baseTotal > 0 && downVal > 0
+        ? (umumiyNum > 0 && downVal >= umumiyNum ? 100 : Math.floor((downVal / baseTotal) * 100))
+        : 0
+      const bracket = [100, 70, 60, 50, 40, 30].find(p => pctOfBase >= p) ?? null
+      bonusItems = bracket ? (PDF_BONUS_MAP[bracket] ?? []).map(name => ({ name })) : []
+    }
+    const [{ ContractPDF }, qrImg, logoSrc] = await Promise.all([
+      import('@/pages/bolim/ui/ContractPDF'),
+      import('@/assets/qrcode.png'),
+      imgToDataUrl('/logo.png'),
+    ])
+    const pdfApartment = partnerApt ? { ...apartment, size: effectiveSize, pairAddress: partnerApt.address } : apartment
+    const date = new Date(b.created_at).toLocaleDateString('uz-UZ', { year: 'numeric', month: 'long', day: 'numeric' })
+    blob = await pdf(
+      <ContractPDF
+        apartment={pdfApartment} floor={floor} blockId={blockId} bolimNum={bolimNum}
+        form={form} type={b.type} date={date} floorImgSrc={floorImgSrc}
+        qrDataUrl={qrImg.default} managerName={b.manager_name || ''} sourceName={b.source_name || ''}
+        logoSrc={logoSrc} bonusItems={bonusItems}
+      />
+    ).toBlob()
   }
-
-  const logoSrc = await imgToDataUrl('/logo.png')
-  const pdfApartment = partnerApt
-    ? { ...apartment, size: effectiveSize, pairAddress: partnerApt.address }
-    : apartment
-
-  const date = new Date(b.created_at).toLocaleDateString('uz-UZ', { year: 'numeric', month: 'long', day: 'numeric' })
-  const blob = await pdf(
-    <ContractPDF
-      apartment={pdfApartment} floor={floor} blockId={blockId} bolimNum={bolimNum}
-      form={form} type={b.type} date={date} floorImgSrc={floorImgSrc}
-      qrDataUrl={qrDataUrl} managerName={b.manager_name || ''} sourceName={b.source_name || ''}
-      logoSrc={logoSrc} bonusItems={bonusItems}
-    />
-  ).toBlob()
 
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
