@@ -18,8 +18,8 @@ Font.register({
 const BD = '#d1d5db'
 const s = StyleSheet.create({
   page:    { padding: '22 28', fontFamily: 'Roboto', fontSize: 7, color: '#111827', lineHeight: 1.45 },
-  zh:      { fontFamily: 'NotoSC', fontSize: 6.5, color: '#374151', lineHeight: 1.4 },
-  zhB:     { fontFamily: 'NotoSC', fontWeight: 700, fontSize: 6.5, color: '#374151', lineHeight: 1.4 },
+  zh:      { fontFamily: 'NotoSC', fontSize: 6.5, color: '#111827', lineHeight: 1.4, wordBreak: 'break-all' },
+  zhB:     { fontFamily: 'NotoSC', fontWeight: 700, fontSize: 6.5, color: '#111827', lineHeight: 1.4, wordBreak: 'break-all' },
   uz:      { fontFamily: 'Roboto', fontSize: 7, color: '#111827', lineHeight: 1.45 },
   uzB:     { fontFamily: 'Roboto', fontWeight: 700, fontSize: 7, color: '#111827' },
   title:   { fontFamily: 'NotoSC', fontWeight: 700, fontSize: 9.5, textAlign: 'center', marginBottom: 1 },
