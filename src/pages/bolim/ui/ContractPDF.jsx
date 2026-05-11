@@ -461,14 +461,17 @@ export function ContractPDF({
             )}
           </View>
 
-          {/* Floor plan */}
-          <View style={[s.imgBox, { height: apartment.is_wc ? 242 : 220 }]}>
-            {floorImgSrc ? (
-              <Image src={floorImgSrc} style={[s.img, { height: apartment.is_wc ? 242 : 220 }]} />
-            ) : (
-              <Text style={s.imgPlaceholder}>Reja rasmi mavjud emas</Text>
-            )}
-          </View>
+          {/* Floor plan — chegirma qatori bo'lsa balandlikni kamaytirish */}
+          {(() => {
+            const imgH = apartment.is_wc ? 242 : (hasChegirma ? 178 : 220)
+            return (
+              <View style={[s.imgBox, { height: imgH }]}>
+                {floorImgSrc
+                  ? <Image src={floorImgSrc} style={[s.img, { height: imgH }]} />
+                  : <Text style={s.imgPlaceholder}>Reja rasmi mavjud emas</Text>}
+              </View>
+            )
+          })()}
 
           {/* WC marketing block */}
           {apartment.is_wc && (
