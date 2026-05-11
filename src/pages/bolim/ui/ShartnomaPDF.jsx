@@ -32,10 +32,10 @@ const s = StyleSheet.create({
   ptbl:    { borderWidth: 0.5, borderColor: BD, flexDirection: 'row', marginTop: 10 },
   pcol:    { flex: 1, borderRightWidth: 0.5, borderRightColor: BD },
   pcolR:   { flex: 1 },
-  phd:     { padding: '3 5', fontFamily: 'Roboto', fontWeight: 700, fontSize: 7,
+  phd:     { padding: '3 5', fontFamily: 'NotoSC', fontWeight: 700, fontSize: 7,
              backgroundColor: '#f3f4f6', borderBottomWidth: 0.5, borderBottomColor: BD, textAlign: 'center' },
   prow:    { flexDirection: 'row', borderBottomWidth: 0.5, borderBottomColor: '#f0f0f0', minHeight: 14 },
-  plbl:    { width: 72, padding: '2 5', fontSize: 6, color: '#6b7280',
+  plbl:    { width: 72, padding: '2 5', fontSize: 6, color: '#6b7280', fontFamily: 'NotoSC',
              borderRightWidth: 0.5, borderRightColor: '#f0f0f0' },
   pval:    { flex: 1, padding: '2 5', fontSize: 7 },
   signRow: { flexDirection: 'row', marginTop: 14, gap: 20 },
@@ -45,18 +45,18 @@ const s = StyleSheet.create({
   // annex 2
   sumRow:  { flexDirection: 'row', gap: 4, marginBottom: 6 },
   sumCell: { flex: 1, borderWidth: 0.5, borderColor: BD, padding: '3 4', borderRadius: 2 },
-  sumLbl:  { fontSize: 5.5, color: '#6b7280', marginBottom: 1, fontFamily: 'Roboto' },
+  sumLbl:  { fontSize: 5.5, color: '#6b7280', marginBottom: 1, fontFamily: 'NotoSC' },
   sumVal:  { fontFamily: 'Roboto', fontWeight: 700, fontSize: 7 },
   tbl:     { borderWidth: 0.5, borderColor: BD },
   thd:     { flexDirection: 'row', backgroundColor: '#f3f4f6', borderBottomWidth: 0.5, borderBottomColor: BD },
   trow:    { flexDirection: 'row', borderBottomWidth: 0.5, borderBottomColor: '#f0f0f0' },
   trowA:   { flexDirection: 'row', borderBottomWidth: 0.5, borderBottomColor: '#f0f0f0', backgroundColor: '#fafafa' },
-  th:      { padding: '2.5 3', fontFamily: 'Roboto', fontWeight: 700, fontSize: 6, textAlign: 'center',
+  th:      { padding: '2.5 3', fontFamily: 'NotoSC', fontWeight: 700, fontSize: 6, textAlign: 'center',
              borderRightWidth: 0.5, borderRightColor: BD },
-  thL:     { padding: '2.5 3', fontFamily: 'Roboto', fontWeight: 700, fontSize: 6, textAlign: 'center' },
+  thL:     { padding: '2.5 3', fontFamily: 'NotoSC', fontWeight: 700, fontSize: 6, textAlign: 'center' },
   td:      { padding: '2 3', fontSize: 6.5, textAlign: 'center', borderRightWidth: 0.5, borderRightColor: '#f0f0f0' },
   tdL:     { padding: '2 3', fontSize: 6.5, textAlign: 'center' },
-  note:    { fontSize: 5.5, color: '#6b7280', marginTop: 5, lineHeight: 1.5, fontFamily: 'Roboto' },
+  note:    { fontSize: 5.5, color: '#6b7280', marginTop: 5, lineHeight: 1.5, fontFamily: 'NotoSC' },
 })
 
 function fmtD(date) {
@@ -459,12 +459,10 @@ export function ShartnomaPDF({ apartment, floor, blockId, bolimNum, form, contra
             ))}
           </View>
 
-          <Text style={s.note}>
-            若交款时，客户采用苏姆支付，按交款当天汇率折成苏姆后支付。{'\n'}
-            Agar mijoz to'lovni so'mda amalga oshirsa, to'lov kuni amaldagi valyuta kursi bo'yicha so'mga aylantirilib to'lanadi.{'\n'}
-            银行 Bank: TOSHKENT SH., "UZSANOATKURILISHBANKI" ATB BOS OFISI  ·  纳税人 STIR: 312256591  ·  MFO: 00440{'\n'}
-            账号 H/r (USD): 20208840907268122001  ·  账号 H/r (so'm): 20208000807268122001
-          </Text>
+          <Text style={s.note}>若交款时，客户采用苏姆支付，按交款当天汇率折成苏姆后支付。</Text>
+          <Text style={[s.note, { fontFamily: 'Roboto' }]}>Agar mijoz to'lovni so'mda amalga oshirsa, to'lov kuni amaldagi valyuta kursi bo'yicha so'mga aylantirilib to'lanadi.</Text>
+          <Text style={s.note}>银行 Bank: TOSHKENT SH., "UZSANOATKURILISHBANKI" ATB BOS OFISI  ·  纳税人 STIR: 312256591  ·  MFO: 00440</Text>
+          <Text style={s.note}>账号 H/r (USD): 20208840907268122001  ·  账号 H/r (so'm): 20208000807268122001</Text>
         </View>
       </Page>
     </Document>
