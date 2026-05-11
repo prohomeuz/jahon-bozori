@@ -65,6 +65,7 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
   const [bronShowErrors, setBronShowErrors]   = useState(false)
   const [sotishShowErrors, setSotishShowErrors] = useState(false)
   const [showCalc, setShowCalc]         = useState(false)
+  const [narxIsLocked, setNarxIsLocked] = useState(false)
   const [bonusPreview, setBonusPreview] = useState(null)
   const [calc, setCalc]                 = useState({ narxM2: '', boshlangich: '', oylar: '12', muddatStep: 0, focus: 'boshlangich' })
   const [phoneTarget, setPhoneTarget]   = useState(null)
@@ -107,6 +108,7 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
       longPressFired.current = true
       if (navigator.vibrate) navigator.vibrate(40)
       calcLoadFromDB.current = false
+      setNarxIsLocked(false)
       setCalc({ narxM2: '', boshlangich: '', oylar: '12', muddatStep: 0, focus: 'boshlangich' })
       setShowCalc(true)
     }, 1000)
@@ -163,7 +165,10 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
     apiFetch(`/api/prices?block=${block}&bolim=${parseInt(bolimStr)}&floor=${floor}${isWc}`)
       .then(r => r.json())
       .then(({ price }) => {
-        if (!cancelled && price) setCalc(f => ({ ...f, narxM2: f.narxM2 === '' ? String(price) : f.narxM2 }))
+        if (!cancelled && price) {
+          setCalc(f => ({ ...f, narxM2: f.narxM2 === '' ? String(price) : f.narxM2 }))
+          setNarxIsLocked(true)
+        }
       })
       .catch(() => {})
     return () => { cancelled = true }
@@ -174,7 +179,13 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
     const isWc = apartment.is_wc ? '&is_wc=1' : ''
     apiFetch(`/api/prices?block=${block}&bolim=${parseInt(bolimStr)}&floor=${floor}${isWc}`)
       .then(r => r.json())
-      .then(({ price }) => { if (price) setCalc(f => ({ ...f, narxM2: String(price) })) })
+      .then(({ price }) => {
+        if (price) {
+          calcLoadFromDB.current = true
+          setNarxIsLocked(true)
+          setCalc(f => ({ ...f, narxM2: String(price) }))
+        }
+      })
       .catch(() => {})
   }
 
@@ -214,6 +225,7 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
         e.preventDefault(); flashKey(e.key)
         setCalc(f => {
           if (f.focus === 'oylar') return f
+          if (f.focus === 'narxM2' && narxIsLocked) return f
           const raw = String(f[f.focus]).replace(/\s/g, '')
           if (raw.length >= 12) return f
           const num = Number(raw + e.key)
@@ -223,19 +235,20 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
         e.preventDefault(); flashKey('⌫')
         setCalc(f => {
           if (f.focus === 'oylar') return f
+          if (f.focus === 'narxM2' && narxIsLocked) return f
           const raw = String(f[f.focus]).replace(/\s/g, '').slice(0, -1)
           return { ...f, [f.focus]: raw ? Number(raw).toLocaleString('ru-RU').replace(/,/g, ' ') : '' }
         })
       } else if (e.key === 'Delete') {
         e.preventDefault(); flashKey('C')
-        setCalc(f => f.focus === 'oylar' ? f : { ...f, [f.focus]: '', focus: 'boshlangich' })
+        setCalc(f => (f.focus === 'oylar' || (f.focus === 'narxM2' && narxIsLocked)) ? f : { ...f, [f.focus]: '', focus: 'boshlangich' })
       } else if (e.key === 'Escape') {
         e.preventDefault(); setShowCalc(false)
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [showCalc])
+  }, [showCalc, narxIsLocked])
 
   if (!apartment) return null
 
@@ -373,6 +386,7 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
       flashKey(key)
       setCalc(f => {
         if (f.focus === 'oylar') return f
+        if (f.focus === 'narxM2' && narxIsLocked) return f
         const raw = String(f[f.focus]).replace(/\s/g, '')
         let next = raw
         if (key === '⌫') next = raw.slice(0, -1)
@@ -385,11 +399,20 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
     return (
       <div ref={keypadRef} className="flex flex-col gap-3 px-4 py-5 w-full h-full">
         <button type="button"
-          onClick={() => setCalc(f => ({ ...f, focus: 'narxM2' }))}
-          className={`w-full rounded-2xl border-2 text-left px-4 py-4 transition-colors shrink-0 ${calc.focus === 'narxM2' ? 'border-amber-400 bg-amber-50' : 'border-border bg-background hover:border-amber-200'}`}
+          onClick={narxIsLocked ? undefined : () => setCalc(f => ({ ...f, focus: 'narxM2' }))}
+          className={`w-full rounded-2xl border-2 text-left px-4 py-4 transition-colors shrink-0 ${
+            narxIsLocked
+              ? 'border-slate-200 bg-slate-50 cursor-default'
+              : calc.focus === 'narxM2'
+                ? 'border-amber-400 bg-amber-50'
+                : 'border-border bg-background hover:border-amber-200'
+          }`}
         >
-          <p className="text-xs text-muted-foreground mb-1">Narx/m²</p>
-          <p className={`text-4xl font-bold ${calc.narxM2 ? 'text-foreground' : 'text-muted-foreground/30'}`}>
+          <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
+            Narx/m²
+            {narxIsLocked && <span className="text-[10px] font-semibold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">tizim narxi</span>}
+          </p>
+          <p className={`text-4xl font-bold ${calc.narxM2 ? (narxIsLocked ? 'text-slate-500' : 'text-foreground') : 'text-muted-foreground/30'}`}>
             {calc.narxM2 ? Number(String(calc.narxM2).replace(/\s/g, '')).toLocaleString('ru-RU') : '0'}
             <span className="text-sm font-normal text-muted-foreground ml-1">USD</span>
           </p>
