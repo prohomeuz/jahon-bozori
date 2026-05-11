@@ -100,7 +100,8 @@ export async function downloadContractPDF({ apartment, floor, blockId, bolimNum,
     : apartment
 
   const dateObj = contractDate instanceof Date ? contractDate : (contractDate ? new Date(contractDate) : new Date())
-  const date = dateObj.toLocaleDateString('uz-UZ', { year: 'numeric', month: 'long', day: 'numeric' })
+  const _months = ['yanvar','fevral','mart','aprel','may','iyun','iyul','avgust','sentabr','oktabr','noyabr','dekabr']
+  const date = `${dateObj.getDate()}-${_months[dateObj.getMonth()]}, ${dateObj.getFullYear()}-yil`
   const blob = await pdf(
     <ContractPDF
       apartment={pdfApartment}

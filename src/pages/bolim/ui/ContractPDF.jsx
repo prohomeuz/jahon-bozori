@@ -527,7 +527,7 @@ export function ContractPDF({
               <View style={{ flex: 1 }} />
               <SignBox label="MIJOZ" name={`${form.ism} ${form.familiya}`} />
               <View style={{ width: 18 }} />
-              <SignBox label="KOMPANIYA EGASI" name="" />
+              <SignBox label="HENGTAI" name="" />
             </View>
           </View>
         </View>

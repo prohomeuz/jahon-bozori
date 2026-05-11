@@ -126,7 +126,9 @@ export async function downloadBookingPDF(b) {
       imgToDataUrl('/logo.png'),
     ])
     const pdfApartment = partnerApt ? { ...apartment, size: effectiveSize, pairAddress: partnerApt.address } : apartment
-    const date = new Date(b.created_at).toLocaleDateString('uz-UZ', { year: 'numeric', month: 'long', day: 'numeric' })
+    const _d = new Date(b.created_at)
+    const _months = ['yanvar','fevral','mart','aprel','may','iyun','iyul','avgust','sentabr','oktabr','noyabr','dekabr']
+    const date = `${_d.getDate()}-${_months[_d.getMonth()]}, ${_d.getFullYear()}-yil`
     blob = await pdf(
       <ContractPDF
         apartment={pdfApartment} floor={floor} blockId={blockId} bolimNum={bolimNum}
