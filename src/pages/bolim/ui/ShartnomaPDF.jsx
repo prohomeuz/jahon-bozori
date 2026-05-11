@@ -1,4 +1,4 @@
-import { Document, Font, Page, StyleSheet, Text, View } from '@react-pdf/renderer'
+import { Circle, Document, Font, Page, StyleSheet, Svg, Text, View } from '@react-pdf/renderer'
 
 Font.register({
   family: 'Roboto',
@@ -15,48 +15,59 @@ Font.register({
   ],
 })
 
+// Split every CJK character into a separate syllable so textkit K-P algorithm
+// can break lines between any two characters (no visible hyphens are added).
+const cjkHyphen = word =>
+  /[一-鿿　-〿＀-￯]/.test(word) ? word.split('') : [word]
+
+Font.registerHyphenationCallback(cjkHyphen)
+
 const BD = '#d1d5db'
 const s = StyleSheet.create({
-  page:    { padding: '22 28', fontFamily: 'Roboto', fontSize: 7, color: '#111827', lineHeight: 1.45 },
-  zh:      { fontFamily: 'NotoSC', fontSize: 6.5, color: '#111827', lineHeight: 1.4, wordBreak: 'break-all' },
-  zhB:     { fontFamily: 'NotoSC', fontWeight: 700, fontSize: 6.5, color: '#111827', lineHeight: 1.4, wordBreak: 'break-all' },
-  uz:      { fontFamily: 'Roboto', fontSize: 7, color: '#111827', lineHeight: 1.45 },
-  uzB:     { fontFamily: 'Roboto', fontWeight: 700, fontSize: 7, color: '#111827' },
-  title:   { fontFamily: 'NotoSC', fontWeight: 700, fontSize: 9.5, textAlign: 'center', marginBottom: 1 },
-  titleUz: { fontFamily: 'Roboto', fontWeight: 700, fontSize: 9.5, textAlign: 'center', marginBottom: 8 },
-  secZh:   { fontFamily: 'NotoSC', fontWeight: 700, fontSize: 7, marginTop: 7, marginBottom: 1,
-             paddingBottom: 1.5, borderBottomWidth: 0.5, borderBottomColor: BD },
-  secUz:   { fontFamily: 'Roboto', fontWeight: 700, fontSize: 7, marginBottom: 4 },
-  block:   { marginBottom: 3.5 },
+  page:    { padding: '40 48', fontFamily: 'Roboto', fontSize: 10, color: '#000000', lineHeight: 1.45 },
+  zh:      { fontFamily: 'NotoSC', fontSize: 9.5, color: '#000000', lineHeight: 1.4 },
+  zhB:     { fontFamily: 'NotoSC', fontWeight: 700, fontSize: 9.5, color: '#000000', lineHeight: 1.4 },
+  uz:      { fontFamily: 'Roboto', fontSize: 10, color: '#000000', lineHeight: 1.45 },
+  uzB:     { fontFamily: 'Roboto', fontWeight: 700, fontSize: 10, color: '#000000' },
+  title:   { fontFamily: 'NotoSC', fontWeight: 700, fontSize: 14, textAlign: 'center', marginBottom: 2 },
+  titleUz: { fontFamily: 'Roboto', fontWeight: 700, fontSize: 14, textAlign: 'center', marginBottom: 12 },
+  secZh:   { fontFamily: 'NotoSC', fontWeight: 700, fontSize: 10, marginTop: 10, marginBottom: 2,
+             paddingBottom: 2, borderBottomWidth: 0.5, borderBottomColor: BD },
+  secUz:   { fontFamily: 'Roboto', fontWeight: 700, fontSize: 10, marginBottom: 5 },
+  block:   { marginBottom: 5 },
   // party table
-  ptbl:    { borderWidth: 0.5, borderColor: BD, flexDirection: 'row', marginTop: 10 },
+  ptbl:    { borderWidth: 0.5, borderColor: BD, flexDirection: 'row', marginTop: 14 },
   pcol:    { flex: 1, borderRightWidth: 0.5, borderRightColor: BD },
   pcolR:   { flex: 1 },
-  phd:     { padding: '3 5', fontFamily: 'NotoSC', fontWeight: 700, fontSize: 7,
+  phd:     { padding: '4 6', fontFamily: 'NotoSC', fontWeight: 700, fontSize: 10,
              backgroundColor: '#f3f4f6', borderBottomWidth: 0.5, borderBottomColor: BD, textAlign: 'center' },
-  prow:    { flexDirection: 'row', borderBottomWidth: 0.5, borderBottomColor: '#f0f0f0', minHeight: 14 },
-  plbl:    { width: 72, padding: '2 5', fontSize: 6, color: '#6b7280', fontFamily: 'NotoSC',
+  prow:    { flexDirection: 'row', borderBottomWidth: 0.5, borderBottomColor: '#f0f0f0', minHeight: 20 },
+  plbl:    { width: 108, padding: '3 6', fontSize: 9, color: '#6b7280', fontFamily: 'NotoSC',
              borderRightWidth: 0.5, borderRightColor: '#f0f0f0' },
-  pval:    { flex: 1, padding: '2 5', fontSize: 7 },
-  signRow: { flexDirection: 'row', marginTop: 14, gap: 20 },
-  signCol: { flex: 1 },
-  signLn:  { borderBottomWidth: 0.5, borderBottomColor: '#374151', marginTop: 16, marginBottom: 2 },
-  signHt:  { fontSize: 6, color: '#9ca3af' },
-  // annex 2
-  sumRow:  { flexDirection: 'row', gap: 4, marginBottom: 6 },
-  sumCell: { flex: 1, borderWidth: 0.5, borderColor: BD, padding: '3 4', borderRadius: 2 },
-  sumLbl:  { fontSize: 5.5, color: '#6b7280', marginBottom: 1, fontFamily: 'NotoSC' },
-  sumVal:  { fontFamily: 'Roboto', fontWeight: 700, fontSize: 7 },
+  pval:    { flex: 1, padding: '3 6', fontSize: 10 },
+  // signature / fingerprint
+  signRow: { flexDirection: 'row', marginTop: 20, gap: 28 },
+  signCol: { flex: 1, alignItems: 'center' },
+  signLbl: { fontFamily: 'NotoSC', fontWeight: 700, fontSize: 9, color: '#000000', marginBottom: 6, textAlign: 'center' },
+  signFp:  { width: 48, height: 48, marginBottom: 6 },
+  signLn:  { width: '100%', borderBottomWidth: 0.5, borderBottomColor: '#374151', marginBottom: 3 },
+  signHt:  { fontSize: 9, color: '#9ca3af', textAlign: 'center' },
+  // annex 2 summary
+  sumRow:  { flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginBottom: 8 },
+  sumCell: { width: '31%', borderWidth: 0.5, borderColor: BD, padding: '4 5', borderRadius: 2 },
+  sumLbl:  { fontSize: 8, color: '#6b7280', marginBottom: 2, fontFamily: 'NotoSC' },
+  sumVal:  { fontFamily: 'Roboto', fontWeight: 700, fontSize: 10 },
+  // payment table
   tbl:     { borderWidth: 0.5, borderColor: BD },
   thd:     { flexDirection: 'row', backgroundColor: '#f3f4f6', borderBottomWidth: 0.5, borderBottomColor: BD },
   trow:    { flexDirection: 'row', borderBottomWidth: 0.5, borderBottomColor: '#f0f0f0' },
   trowA:   { flexDirection: 'row', borderBottomWidth: 0.5, borderBottomColor: '#f0f0f0', backgroundColor: '#fafafa' },
-  th:      { padding: '2.5 3', fontFamily: 'NotoSC', fontWeight: 700, fontSize: 6, textAlign: 'center',
+  th:      { padding: '3 4', fontFamily: 'NotoSC', fontWeight: 700, fontSize: 9, textAlign: 'center',
              borderRightWidth: 0.5, borderRightColor: BD },
-  thL:     { padding: '2.5 3', fontFamily: 'NotoSC', fontWeight: 700, fontSize: 6, textAlign: 'center' },
-  td:      { padding: '2 3', fontSize: 6.5, textAlign: 'center', borderRightWidth: 0.5, borderRightColor: '#f0f0f0' },
-  tdL:     { padding: '2 3', fontSize: 6.5, textAlign: 'center' },
-  note:    { fontSize: 5.5, color: '#6b7280', marginTop: 5, lineHeight: 1.5, fontFamily: 'NotoSC' },
+  thL:     { padding: '3 4', fontFamily: 'NotoSC', fontWeight: 700, fontSize: 9, textAlign: 'center' },
+  td:      { padding: '3 4', fontSize: 9.5, textAlign: 'center', borderRightWidth: 0.5, borderRightColor: '#f0f0f0' },
+  tdL:     { padding: '3 4', fontSize: 9.5, textAlign: 'center' },
+  note:    { fontSize: 8, color: '#6b7280', marginTop: 6, lineHeight: 1.5, fontFamily: 'NotoSC' },
 })
 
 function fmtD(date) {
@@ -88,15 +99,35 @@ function calcSchedule(total, down, months, startDate) {
 function ZhRow({ zh, uz, bold }) {
   return (
     <View style={s.block}>
-      <Text style={bold ? s.zhB : s.zh}>{zh}</Text>
-      <Text style={bold ? [s.uzB, { marginTop: 0.5 }] : [s.uz, { marginTop: 0.5 }]}>{uz}</Text>
+      <Text style={bold ? s.zhB : s.zh} hyphenationCallback={cjkHyphen}>{zh}</Text>
+      <Text style={bold ? [s.uzB, { marginTop: 1 }] : [s.uz, { marginTop: 1 }]}>{uz}</Text>
     </View>
   )
 }
+
 function U({ children }) { return <Text style={{ textDecoration: 'underline' }}>{children}</Text> }
 
+function SignBox({ label, name }) {
+  return (
+    <View style={s.signCol}>
+      <Text style={s.signLbl}>{label}</Text>
+      <Svg viewBox="0 0 48 48" style={s.signFp}>
+        <Circle cx="24" cy="24" r="21" fill="#f9fafb" stroke="#c4c4c4" strokeWidth={1} strokeDasharray="2 1.5" />
+        <Circle cx="24" cy="24" r="14" fill="none" stroke="#ececec" strokeWidth={0.5} />
+        <Circle cx="24" cy="24" r="8"  fill="none" stroke="#ececec" strokeWidth={0.5} />
+        <Circle cx="24" cy="24" r="3"  fill="none" stroke="#ececec" strokeWidth={0.5} />
+      </Svg>
+      <View style={s.signLn} />
+      {name ? <Text style={s.signHt}>{name}</Text> : <Text style={s.signHt}> </Text>}
+    </View>
+  )
+}
+
 export function ShartnomaPDF({ apartment, floor, blockId, bolimNum, form, contractDate, bookingId, contractNumber }) {
-  const aptNum  = (apartment.address ?? '').split('-').pop()
+  const aptNum     = (apartment.address ?? '').split('-').pop()
+  const pairAptNum = apartment.pairAddress ? apartment.pairAddress.split('-').pop() : null
+  const aptLabel   = pairAptNum ? `${aptNum}-${pairAptNum}` : aptNum
+
   const total   = n(form.umumiy) || (n(form.narx_m2) > 0 && apartment.size > 0 ? Math.round(n(form.narx_m2) * apartment.size) : 0)
   const boshl   = n(form.boshlangich)
   const oylar   = parseInt(form.oylar) || 12
@@ -116,23 +147,19 @@ export function ShartnomaPDF({ apartment, floor, blockId, bolimNum, form, contra
     <Document>
       <Page size="A4" style={s.page}>
         {/* TITLE */}
-        <Text style={s.title}>关于共同参与投资及商贸中心项目建设的合同</Text>
+        <Text style={s.title} hyphenationCallback={cjkHyphen}>关于共同参与投资及商贸中心项目建设的合同</Text>
         <Text style={s.titleUz}>Investitsiya va savdo markazini qurish bo'yicha hamkorlik shartnomasi</Text>
-        <Text style={[s.zh, { textAlign: 'center', marginBottom: 1 }]}>
+        <Text style={[s.zh, { textAlign: 'center', marginBottom: 2 }]} hyphenationCallback={cjkHyphen}>
           合同号 {contractNum}  ·  {fmtD(cd)}  ·  费尔干纳市
         </Text>
-        <Text style={[s.uz, { textAlign: 'center', marginBottom: 9, color: '#6b7280' }]}>
+        <Text style={[s.uz, { textAlign: 'center', marginBottom: 12, color: '#6b7280' }]}>
           Shartnoma № {contractNum}  ·  {cdStr}  ·  Farg'ona shahri
         </Text>
 
         {/* PARTIES */}
-        <View style={[s.block, { marginBottom: 7 }]}>
-          <Text style={s.zh}>
-            «HENG TAI» MCHJ XK（下称"建设方"），依据章程开展活动，由 ZHANG XIAOLI 代表，作为一方；{'\n'}
-            自然人：{investorName}，护照号/身份证号：{form.passport || '__________'}（下称"投资方"），作为另一方；{'\n'}
-            双方就以下内容签订本合同：
-          </Text>
-          <Text style={[s.uz, { marginTop: 1.5 }]}>
+        <View style={[s.block, { marginBottom: 9 }]}>
+          <Text style={s.zh} hyphenationCallback={cjkHyphen}>{`«HENG TAI» MCHJ XK（下称"建设方"），依据章程开展活动，由 ZHANG XIAOLI 代表，作为一方；\n自然人：${investorName}，护照号/身份证号：${form.passport || '__________'}（下称"投资方"），作为另一方；\n双方就以下内容签订本合同：`}</Text>
+          <Text style={[s.uz, { marginTop: 2 }]}>
             «HENG TAI» MCHJ XK (keyingi o'rinlarda «Quruvchi» deb yuritiladi), Nizom asosida faoliyat yurituvchi ZHANG XIAOLI nomidan, bir tomondan;{'\n'}
             Jismoniy shaxs: <U>{investorName}</U>, Pasport / ID raqami: <U>{form.passport || '__________'}</U> (keyingi o'rinlarda «Investor» deb yuritiladi), ikkinchi tomondan;{'\n'}
             Tomonlar quyidagilar to'g'risida mazkur Shartnomani tuzdilar:
@@ -140,8 +167,8 @@ export function ShartnomaPDF({ apartment, floor, blockId, bolimNum, form, contra
         </View>
 
         {/* 1 */}
-        <Text style={s.secZh}>1. 合同标的 | SHARTNOMA PREDMETI</Text>
-        <Text style={[s.secUz, { marginBottom: 3 }]}>1. SHARTNOMA PREDMETI</Text>
+        <Text style={s.secZh} hyphenationCallback={cjkHyphen}>1. 合同标的 | SHARTNOMA PREDMETI</Text>
+        <Text style={[s.secUz, { marginBottom: 4 }]}>1. SHARTNOMA PREDMETI</Text>
 
         <ZhRow
           zh="1.1 本合同标的为：双方共同在 Farg'ona viloyati, Farg'ona tumani, Cheksho'ra MFY, 148号地块 建设的亚欧国际商贸中心项目。"
@@ -152,20 +179,15 @@ export function ShartnomaPDF({ apartment, floor, blockId, bolimNum, form, contra
           uz="1.2 Ushbu investitsiya loyihasini amalga oshirish uchun Quruvchi o'z vakolatlari doirasida tegishli qurilish tashkilotlarini jalb qiladi; Investor yuqoridagi birgalikda qurilayotgan loyihaga pul mablag'larini kiritishni va ushbu Shartnomada belgilangan shartlar va muddatlarda ko'chmas mulkka egalik huquqini olishni o'z zimmasiga oladi."
         />
         <View style={s.block}>
-          <Text style={s.zh}>
-            1.3 项目房源：Farg'ona viloyati, Farg'ona tumani, Cheksho'ra MFY, 148号地块建设的亚欧国际商贸中心项目，
-            {blockId}-区 {bolimNum}-栋 {floor}-层 {aptNum}-号商铺，面积 {apartment.size} 平方米。
-          </Text>
-          <Text style={[s.uz, { marginTop: 0.5 }]}>
+          <Text style={s.zh} hyphenationCallback={cjkHyphen}>{`1.3 项目房源：Farg'ona viloyati, Farg'ona tumani, Cheksho'ra MFY, 148号地块建设的亚欧国际商贸中心项目，${blockId}-区 ${bolimNum}-栋 ${floor}-层 ${aptLabel}-号商铺，面积 ${apartment.size} 平方米。`}</Text>
+          <Text style={[s.uz, { marginTop: 1 }]}>
             1.3 Loyihadagi ko'chmas mulk: Farg'ona viloyati, Farg'ona tumani, Cheksho'ra MFY, 148-uchastkada quriladigan «Yevro-Osiyo xalqaro savdo markazi» loyihasidagi{' '}
-            <U>{blockId}-maydon</U>, <U>{bolimNum}-bino</U>, <U>{floor}-qavat</U>, <U>{aptNum}-do'kon</U>, maydoni <U>{apartment.size}</U> kv.m.
+            <U>{blockId}-maydon</U>, <U>{bolimNum}-bino</U>, <U>{floor}-qavat</U>, <U>{aptLabel}-do'kon</U>, maydoni <U>{apartment.size}</U> kv.m.
           </Text>
         </View>
         <View style={s.block}>
-          <Text style={s.zh}>
-            1.4 合同总金额：{usd(total)} 美元（含增值税），投资方最终取得该房屋完整所有权。
-          </Text>
-          <Text style={[s.uz, { marginTop: 0.5 }]}>
+          <Text style={s.zh} hyphenationCallback={cjkHyphen}>{`1.4 合同总金额：${usd(total)} 美元（含增值税），投资方最终取得该房屋完整所有权。`}</Text>
+          <Text style={[s.uz, { marginTop: 1 }]}>
             1.4 Shartnomaning umumiy summasi: <U>{usd(total)} AQSH dollari</U> (QQS bilan birga), Investor yakuniy natijada ushbu ko'chmas mulkka to'liq egalik huquqini oladi.
           </Text>
         </View>
@@ -191,14 +213,12 @@ export function ShartnomaPDF({ apartment, floor, blockId, bolimNum, form, contra
         />
 
         {/* 2 */}
-        <Text style={s.secZh}>2. 双方权利与义务 | TARAFLARNING HUQUQ VA MAJBURIYATLARI</Text>
-        <Text style={[s.secUz, { marginBottom: 3 }]}>2. TARAFLARNING HUQUQ VA MAJBURIYATLARI</Text>
+        <Text style={s.secZh} hyphenationCallback={cjkHyphen}>2. 双方权利与义务 | TARAFLARNING HUQUQ VA MAJBURIYATLARI</Text>
+        <Text style={[s.secUz, { marginBottom: 4 }]}>2. TARAFLARNING HUQUQ VA MAJBURIYATLARI</Text>
         <ZhRow zh="2.1 投资方义务与权利" uz="2.1 Investorning majburiyatlari va huquqlari" bold />
         <View style={s.block}>
-          <Text style={s.zh}>
-            2.1.1 投资方应按建设方提供的银行账户，支付首期款：{usd(boshl)} 美元，投资总额在合同有效期内保持不变，期限：{fmtD(cd)} — {lastDate}。
-          </Text>
-          <Text style={[s.uz, { marginTop: 0.5 }]}>
+          <Text style={s.zh} hyphenationCallback={cjkHyphen}>{`2.1.1 投资方应按建设方提供的银行账户，支付首期款：${usd(boshl)} 美元，投资总额在合同有效期内保持不变，期限：${fmtD(cd)} — ${lastDate}。`}</Text>
+          <Text style={[s.uz, { marginTop: 1 }]}>
             2.1.1 Investor Quruvchi tomonidan taqdim etilgan bank hisob raqamiga birinchi to'lovni <U>{usd(boshl)} AQSH dollari</U> miqdorida to'laydi, investitsiyaning umumiy miqdori shartnoma amal qilish muddati davomida o'zgarmaydi, muddat: <U>{cdStr}</U> — <U>{endStr}</U>.
           </Text>
         </View>
@@ -241,8 +261,8 @@ export function ShartnomaPDF({ apartment, floor, blockId, bolimNum, form, contra
         />
 
         {/* 3 */}
-        <Text style={s.secZh}>3. 房屋质量保证 | KO'CHMAS MULK SIFATI KAFOLATI</Text>
-        <Text style={[s.secUz, { marginBottom: 3 }]}>3. KO'CHMAS MULK SIFATI KAFOLATI</Text>
+        <Text style={s.secZh} hyphenationCallback={cjkHyphen}>3. 房屋质量保证 | KO'CHMAS MULK SIFATI KAFOLATI</Text>
+        <Text style={[s.secUz, { marginBottom: 4 }]}>3. KO'CHMAS MULK SIFATI KAFOLATI</Text>
         <ZhRow
           zh="3.1 建设方对房屋建设质量负责，保证：严格按设计预算施工；遵守乌兹别克斯坦建筑规范标准；按期交付房屋；房屋符合规划与设计要求。"
           uz="3.1 Quruvchi ko'chmas mulk qurilish sifati uchun javobgar bo'lib, quyidagilarni kafolatlaydi: loyiha smetasiga qat'iy rioya qilgan holda qurilish; O'zbekiston qurilish normalari va standartlariga rioya qilish; ko'chmas mulkni belgilangan muddatda topshirish; ko'chmas mulkning rejalashtirish va loyiha talablariga mos kelishi."
@@ -253,8 +273,8 @@ export function ShartnomaPDF({ apartment, floor, blockId, bolimNum, form, contra
         />
 
         {/* 4 */}
-        <Text style={s.secZh}>4. 违约责任 | TARAFLARNING JAVOBGARLIGI</Text>
-        <Text style={[s.secUz, { marginBottom: 3 }]}>4. TARAFLARNING JAVOBGARLIGI</Text>
+        <Text style={s.secZh} hyphenationCallback={cjkHyphen}>4. 违约责任 | TARAFLARNING JAVOBGARLIGI</Text>
+        <Text style={[s.secUz, { marginBottom: 4 }]}>4. TARAFLARNING JAVOBGARLIGI</Text>
         <ZhRow zh="4.1 投资方逾期付款的责任" uz="4.1 Investorning to'lovlarini kechiktirish uchun javobgarligi" bold />
         <ZhRow
           zh="4.1.1 每个自然年度内，投资方享有一次逾期付款的豁免权限，豁免期限最长不超过60个日历日。投资方应在豁免期限届满前一次性补足全部逾期款项。"
@@ -287,22 +307,23 @@ export function ShartnomaPDF({ apartment, floor, blockId, bolimNum, form, contra
         />
 
         {/* 5 */}
-        <Text style={s.secZh}>5. 不可抗力 | FORS-MAJOR</Text>
-        <Text style={[s.secUz, { marginBottom: 3 }]}>5. FORS-MAJOR</Text>
+        <Text style={s.secZh} hyphenationCallback={cjkHyphen}>5. 不可抗力 | FORS-MAJOR</Text>
+        <Text style={[s.secUz, { marginBottom: 4 }]}>5. FORS-MAJOR</Text>
         <ZhRow
           zh="因战争、自然灾害、疫情、政府行为等不可抗力导致无法履约，双方免责，义务暂停；可提前10日书面通知终止合同并据实结算。"
           uz="Urush, tabiiy ofatlar, epidemiya, hukumat harakatlari kabi fors-major holatlari tufayli shartnomani bajarish imkoni bo'lmasa, tomonlar javobgar bo'lmaydi, majburiyatlar to'xtatiladi; 10 kun oldin yozma xabarnoma yuborib, shartnomani bekor qilish va haqiqiy xarajatlar asosida hisob-kitob qilish mumkin."
         />
 
         {/* 6 */}
-        <Text style={s.secZh}>6. 争议解决 | NIZOLARNI HAL QILISH</Text>
-        <Text style={[s.secUz, { marginBottom: 3 }]}>6. NIZOLARNI HAL QILISH</Text>
+        <Text style={s.secZh} hyphenationCallback={cjkHyphen}>6. 争议解决 | NIZOLARNI HAL QILISH</Text>
+        <Text style={[s.secUz, { marginBottom: 4 }]}>6. NIZOLARNI HAL QILISH</Text>
         <ZhRow zh="6.1 所有争议优先通过协商解决。" uz="6.1 Barcha nizolar birinchi navbatda muzokaralar yo'li bilan hal qilinadi." />
         <ZhRow zh="6.2 协商不成，提交费尔干纳市有管辖权法院审理。" uz="6.2 Muzokaralar natija bermasa, ish Farg'ona shahrining vakolatli sudiga ko'rib chiqish uchun topshiriladi." />
 
         {/* 7 */}
-        <Text style={s.secZh}>最终条款 | YAKUNLOVCHI QOIDALAR</Text>
-        <Text style={[s.secUz, { marginBottom: 3 }]}>7. YAKUNLOVCHI QOIDALAR</Text>
+        <View break>
+        <Text style={s.secZh} hyphenationCallback={cjkHyphen}>最终条款 | YAKUNLOVCHI QOIDALAR</Text>
+        <Text style={[s.secUz, { marginBottom: 4 }]}>7. YAKUNLOVCHI QOIDALAR</Text>
         <ZhRow
           zh="7.1 本合同可经双方书面协议解除；单方解除按合同约定条件执行。"
           uz="7.1 Ushbu Shartnoma tomonlarning yozma kelishuvi bilan bekor qilinishi mumkin; bir tomonlama bekor qilish shartnomada belgilangan shartlarga muvofiq amalga oshiriladi."
@@ -320,10 +341,11 @@ export function ShartnomaPDF({ apartment, floor, blockId, bolimNum, form, contra
           uz="7.4 Ushbu Shartnoma ikki nusxada tuzilgan bo'lib, har bir tomonda bittadan nusxa saqlanadi va ikkala nusxa ham teng yuridik kuchga ega."
         />
 
+        </View>
         {/* PARTY TABLE */}
         <View style={s.ptbl}>
           <View style={s.pcol}>
-            <Text style={s.phd}>建设方 | Quruvchi</Text>
+            <Text style={s.phd} hyphenationCallback={cjkHyphen}>建设方 | Quruvchi</Text>
             {[
               ['名称 | Nomi', 'HENG TAI MCHJ XK'],
               ['地址 | Manzil', 'Farg\'ona viloyati, Farg\'ona tumani'],
@@ -340,13 +362,12 @@ export function ShartnomaPDF({ apartment, floor, blockId, bolimNum, form, contra
                 <Text style={s.pval}>{v}</Text>
               </View>
             ))}
-            <View style={[s.prow, { marginTop: 14, borderTopWidth: 0.5, borderTopColor: '#e5e7eb' }]}>
-              <Text style={s.plbl}>签名 | Imzo:</Text>
-              <Text style={[s.pval, { borderBottomWidth: 0.5, borderBottomColor: '#374151' }]}> </Text>
+            <View style={[s.signRow, { marginTop: 16 }]}>
+              <SignBox label="建设方签名 | Quruvchi imzosi" name={null} />
             </View>
           </View>
           <View style={s.pcolR}>
-            <Text style={s.phd}>投资方 | Investor</Text>
+            <Text style={s.phd} hyphenationCallback={cjkHyphen}>投资方 | Investor</Text>
             {[
               ['姓名 | F.I.O.', investorName],
               ['地址 | Manzil', form.manzil || ''],
@@ -359,71 +380,56 @@ export function ShartnomaPDF({ apartment, floor, blockId, bolimNum, form, contra
                 <Text style={s.pval}>{v}</Text>
               </View>
             ))}
-            <View style={[s.prow, { marginTop: 14, borderTopWidth: 0.5, borderTopColor: '#e5e7eb' }]}>
-              <Text style={s.plbl}>签名 | Imzo:</Text>
-              <Text style={[s.pval, { borderBottomWidth: 0.5, borderBottomColor: '#374151' }]}> </Text>
+            <View style={[s.signRow, { marginTop: 16 }]}>
+              <SignBox label="投资方签名 | Investor imzosi" name={investorName} />
             </View>
           </View>
         </View>
 
         {/* ── ANNEX 1 ── */}
         <View break>
-          <Text style={[s.zh, { textAlign: 'center', fontWeight: 700, fontFamily: 'NotoSC', fontSize: 9 }]}>附件一：投资确认书</Text>
-          <Text style={[s.uzB, { textAlign: 'center', fontSize: 9, marginBottom: 2 }]}>1-ILOVA: INVESTITSIYA TASDIQNOMASI</Text>
-          <Text style={[s.zh, { textAlign: 'center', marginBottom: 8 }]}>合同号 {contractNum}  ·  {fmtD(cd)}</Text>
+          <Text style={[s.zh, { textAlign: 'center', fontWeight: 700, fontFamily: 'NotoSC', fontSize: 13 }]} hyphenationCallback={cjkHyphen}>附件一：投资确认书</Text>
+          <Text style={[s.uzB, { textAlign: 'center', fontSize: 13, marginBottom: 3 }]}>1-ILOVA: INVESTITSIYA TASDIQNOMASI</Text>
+          <Text style={[s.zh, { textAlign: 'center', marginBottom: 10 }]} hyphenationCallback={cjkHyphen}>合同号 {contractNum}  ·  {fmtD(cd)}</Text>
 
           <View style={s.block}>
-            <Text style={s.zh}>
-              本人 {investorName} 确认如下：{'\n'}
-              依据{fmtD(cd)}第{contractNum}号《投资协议》，费尔干纳地区费尔干纳区 Cheksho'ra MFY 的 148号地块上建设的"亚欧国际商贸中心"项目中的{' '}
-              {blockId}-区 {bolimNum}-栋 {floor}-层 {aptNum}-号商铺，面积 {apartment.size} 平方米，已由本人认购，本人将按协议约定支付全部投资款。
-            </Text>
-            <Text style={[s.uz, { marginTop: 2 }]}>
+            <Text style={s.zh} hyphenationCallback={cjkHyphen}>{`本人 ${investorName} 确认如下：\n依据${fmtD(cd)}第${contractNum}号《投资协议》，费尔干纳地区费尔干纳区 Cheksho'ra MFY 的 148号地块上建设的"亚欧国际商贸中心"项目中的 ${blockId}-区 ${bolimNum}-栋 ${floor}-层 ${aptLabel}-号商铺，面积 ${apartment.size} 平方米，已由本人认购，本人将按协议约定支付全部投资款。`}</Text>
+            <Text style={[s.uz, { marginTop: 3 }]}>
               Men, <U>{investorName}</U>, quyidagilarni tasdiqlayman:{'\n'}
               {cdStr}-{contractNum}-sonli "Investitsiya shartnomasi"ga asosan, Farg'ona viloyati, Farg'ona tumani, Cheksho'ra MFY, 148-uchastkada qurilayotgan «Yevro-Osiyo xalqaro savdo markazi» loyihasidagi{' '}
-              <U>{blockId}-maydon</U>, <U>{bolimNum}-bino</U>, <U>{floor}-qavat</U>, <U>{aptNum}-do'kon</U>, maydoni <U>{apartment.size}</U> kv.m, men tomonimdan sotib olingan va men ushbu Shartnomaga muvofiq barcha investitsiya to'lovlarini to'liq to'lash majburiyatini o'z zimmasiga olaman.
+              <U>{blockId}-maydon</U>, <U>{bolimNum}-bino</U>, <U>{floor}-qavat</U>, <U>{aptLabel}-do'kon</U>, maydoni <U>{apartment.size}</U> kv.m, men tomonimdan sotib olingan va men ushbu Shartnomaga muvofiq barcha investitsiya to'lovlarini to'liq to'lash majburiyatini o'z zimmasiga olaman.
             </Text>
           </View>
 
           <View style={s.block}>
-            <Text style={s.zh}>
-              本人已完全知悉并同意本合同全部条款，承诺严格按照附件二约定的付款计划，于每月按期足额付款，绝不违约。
-            </Text>
-            <Text style={[s.uz, { marginTop: 1 }]}>
+            <Text style={s.zh} hyphenationCallback={cjkHyphen}>本人已完全知悉并同意本合同全部条款，承诺严格按照附件二约定的付款计划，于每月按期足额付款，绝不违约。</Text>
+            <Text style={[s.uz, { marginTop: 2 }]}>
               Men ushbu Shartnomaning barcha shartlarini to'liq bilaman va roziman. 2-ilovada belgilangan to'lov jadvaliga qat'iy rioya qilgan holda, har oyda o'z vaqtida va to'liq hajmda to'lovlarni amalga oshirishni, hech qachon shartnomani buzmaslikni va'da qilaman.
             </Text>
           </View>
 
           <View style={s.block}>
-            <Text style={s.zh}>
-              若本人逾期付款超过60个日历日，本人同意建设方按本合同第4.1条约定单方解除合同。合同解除后，建设方有权在重新就本合同项下商铺与新的投资方签订正式投资协议之日起180个银行工作日内，向本人退还已支付的全部款项，但建设方有权扣除以下费用：（1）合同解除前已发生的建设成本；（2）中介佣金，不超过合同总金额的5%；（3）银行手续费及其他有书面凭证的合理支出。上述各项扣除金额合计不超过本人已付总金额的10%。
-            </Text>
-            <Text style={[s.uz, { marginTop: 1 }]}>
+            <Text style={s.zh} hyphenationCallback={cjkHyphen}>若本人逾期付款超过60个日历日，本人同意建设方按本合同第4.1条约定单方解除合同。合同解除后，建设方有权在重新就本合同项下商铺与新的投资方签订正式投资协议之日起180个银行工作日内，向本人退还已支付的全部款项，但建设方有权扣除以下费用：（1）合同解除前已发生的建设成本；（2）中介佣金，不超过合同总金额的5%；（3）银行手续费及其他有书面凭证的合理支出。上述各项扣除金额合计不超过本人已付总金额的10%。</Text>
+            <Text style={[s.uz, { marginTop: 2 }]}>
               Agar to'lovim 60 kalendar kundan ortiq muddatga kechiktirilsa, Quruvchining ushbu Shartnomaning 4.1-bandiga muvofiq shartnomani bir tomonlama bekor qilishiga roziman. Shartnoma bekor qilingandan so'ng, Quruvchi yangi investor bilan rasmiy investitsiya shartnomasi tuzilgan kundan boshlab 180 bank ish kuni ichida menga to'lagan barcha mablag'larimni qaytaradi, biroq quyidagilarni ushlab qolish huquqiga ega: (1) qurilish xarajatlari; (2) vositachilik komissiyasi — umumiy summaning 5% dan oshmasligi; (3) bank xizmatlari xarajatlari. Ushlab qolingan xarajatlar yig'indisi men to'lagan umumiy summaning 10% dan oshmasligi kerak.
             </Text>
           </View>
 
           <View style={s.signRow}>
-            <View style={s.signCol}>
-              <Text style={[s.zh, { fontWeight: 700, fontFamily: 'NotoSC' }]}>姓名 | F.I.O.:</Text>
-              <View style={s.signLn} /><Text style={s.signHt}>{investorName}</Text>
-            </View>
-            <View style={s.signCol}>
-              <Text style={[s.zh, { fontWeight: 700, fontFamily: 'NotoSC' }]}>签名 | Imzo:</Text>
-              <View style={s.signLn} /><Text style={s.signHt}> </Text>
-            </View>
+            <SignBox label="姓名 | F.I.O." name={investorName} />
+            <SignBox label="签名 | Imzo" name={null} />
           </View>
         </View>
 
         {/* ── ANNEX 2 ── */}
         <View break>
-          <Text style={[s.zh, { textAlign: 'center', fontWeight: 700, fontFamily: 'NotoSC', fontSize: 9 }]}>
+          <Text style={[s.zh, { textAlign: 'center', fontWeight: 700, fontFamily: 'NotoSC', fontSize: 13 }]} hyphenationCallback={cjkHyphen}>
             附件二：投资及建房付款计划表
           </Text>
-          <Text style={[s.uzB, { textAlign: 'center', fontSize: 9, marginBottom: 2 }]}>
+          <Text style={[s.uzB, { textAlign: 'center', fontSize: 13, marginBottom: 3 }]}>
             2-ILOVA: INVESTITSIYA VA QURILISH TO'LOVLARI JADVALI
           </Text>
-          <Text style={[s.zh, { textAlign: 'center', marginBottom: 6 }]}>合同号 {contractNum}  ·  {fmtD(cd)}</Text>
+          <Text style={[s.zh, { textAlign: 'center', marginBottom: 8 }]} hyphenationCallback={cjkHyphen}>合同号 {contractNum}  ·  {fmtD(cd)}</Text>
 
           <View style={s.sumRow}>
             {[
@@ -444,25 +450,25 @@ export function ShartnomaPDF({ apartment, floor, blockId, bolimNum, form, contra
 
           <View style={s.tbl}>
             <View style={s.thd}>
-              <Text style={[s.th, { width: 22 }]}>№</Text>
-              <Text style={[s.th, { width: 72 }]}>分期付款时间{'\n'}Toʻlov vaqti</Text>
+              <Text style={[s.th, { width: 28 }]}>№</Text>
+              <Text style={[s.th, { width: 90 }]}>分期付款时间{'\n'}Toʻlov vaqti</Text>
               <Text style={[s.th, { flex: 1 }]}>分期金额{'\n'}Toʻlov summasi (USD)</Text>
               <Text style={[s.thL, { flex: 1 }]}>剩余款项{'\n'}Qolgan summa (USD)</Text>
             </View>
             {schedule.map((row, i) => (
               <View key={row.num} style={i % 2 === 0 ? s.trow : s.trowA}>
-                <Text style={[s.td, { width: 22 }]}>{row.num}</Text>
-                <Text style={[s.td, { width: 72 }]}>{row.date}</Text>
+                <Text style={[s.td, { width: 28 }]}>{row.num}</Text>
+                <Text style={[s.td, { width: 90 }]}>{row.date}</Text>
                 <Text style={[s.td, { flex: 1 }]}>{usd(row.amount)}</Text>
                 <Text style={[s.tdL, { flex: 1 }]}>{usd(row.remaining)}</Text>
               </View>
             ))}
           </View>
 
-          <Text style={s.note}>若交款时，客户采用苏姆支付，按交款当天汇率折成苏姆后支付。</Text>
+          <Text style={s.note} hyphenationCallback={cjkHyphen}>若交款时，客户采用苏姆支付，按交款当天汇率折成苏姆后支付。</Text>
           <Text style={[s.note, { fontFamily: 'Roboto' }]}>Agar mijoz to'lovni so'mda amalga oshirsa, to'lov kuni amaldagi valyuta kursi bo'yicha so'mga aylantirilib to'lanadi.</Text>
-          <Text style={s.note}>银行 Bank: TOSHKENT SH., "UZSANOATKURILISHBANKI" ATB BOS OFISI  ·  纳税人 STIR: 312256591  ·  MFO: 00440</Text>
-          <Text style={s.note}>账号 H/r (USD): 20208840907268122001  ·  账号 H/r (so'm): 20208000807268122001</Text>
+          <Text style={s.note} hyphenationCallback={cjkHyphen}>银行 Bank: TOSHKENT SH., "UZSANOATKURILISHBANKI" ATB BOS OFISI  ·  纳税人 STIR: 312256591  ·  MFO: 00440</Text>
+          <Text style={s.note} hyphenationCallback={cjkHyphen}>账号 H/r (USD): 20208840907268122001  ·  账号 H/r (so'm): 20208000807268122001</Text>
         </View>
       </Page>
     </Document>

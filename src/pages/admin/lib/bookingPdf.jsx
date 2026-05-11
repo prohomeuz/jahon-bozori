@@ -95,7 +95,7 @@ export async function downloadBookingPDF(b) {
       contractNumber = cnRes.contract_number ?? null
     } catch { contractNumber = null }
     const { ShartnomaPDF } = await import('@/pages/bolim/ui/ShartnomaPDF')
-    const pdfApt = partnerApt ? { ...apartment, size: effectiveSize } : apartment
+    const pdfApt = partnerApt ? { ...apartment, size: effectiveSize, pairAddress: partnerApt.address } : apartment
     blob = await pdf(
       <ShartnomaPDF
         apartment={pdfApt} floor={floor} blockId={blockId} bolimNum={bolimNum}

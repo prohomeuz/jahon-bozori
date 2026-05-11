@@ -229,46 +229,6 @@ app.post('/', requireAuth, async (c) => {
   }
 })
 
-app.patch('/:id/convert', requireAuth, async (c) => {
-  const { sub: userId, role } = c.get('user')
-  const id = parseInt(c.req.param('id'))
-  const booking = db.prepare(
-    'SELECT b.*, a.block, a.bolim, a.floor FROM bookings b JOIN apartments a ON a.id=b.apartment_id WHERE b.id=? AND b.cancelled_at IS NULL'
-  ).get(id)
-  if (!booking) return c.json({ error: 'Topilmadi' }, 404)
-  if (booking.type !== 'bron') return c.json({ error: "Faqat bron qilingan do'konni sotishga o'tkazish mumkin" }, 400)
-  if (booking.user_id !== userId && role !== 'admin') return c.json({ error: "Ruxsat yo'q" }, 403)
-  const lock = db.prepare("SELECT reason FROM sales_locks WHERE block=? AND bolim=? AND floor=?").get(booking.block, booking.bolim, booking.floor)
-  if (lock) return c.json({ error: `Sotuv to'xtatilgan: ${lock.reason}` }, 403)
-
-  const { passport, passport_place, manzil } = await c.req.json().catch(() => ({}))
-  const oldTgMsgs = q.tgMsgsByBooking.all(id)
-  db.exec('BEGIN')
-  try {
-    db.prepare('UPDATE bookings SET type=?, passport=COALESCE(?,passport), passport_place=COALESCE(?,passport_place), manzil=COALESCE(?,manzil) WHERE id=?')
-      .run('sotish', passport || null, passport_place || null, manzil || null, id)
-    db.prepare("UPDATE apartments SET status='SOLD' WHERE id=?").run(booking.apartment_id)
-    if (oldTgMsgs.length > 0) q.delTgMsgsByBooking.run(id)
-    db.exec('COMMIT')
-  } catch (e) {
-    db.exec('ROLLBACK')
-    return c.json({ error: e.message }, 500)
-  }
-  broadcast('apartment', { id: booking.apartment_id, status: 'SOLD' })
-  broadcast('booking', { updated: true })
-  const token = process.env.TELEGRAM_BOT_TOKEN
-  if (token && oldTgMsgs.length > 0) {
-    Promise.all(oldTgMsgs.map(({ chat_id, message_id }) =>
-      proxiedFetch(`https://api.telegram.org/bot${token}/deleteMessage`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chat_id, message_id }),
-      }).catch(() => {})
-    )).catch(() => {})
-  }
-  return c.json({ ok: true })
-})
-
 app.patch('/bulk-source', requireAuth, requireAdmin, async (c) => {
   const { ids, source_id } = await c.req.json()
   if (!Array.isArray(ids) || ids.length === 0) return c.json({ error: 'ids kerak' }, 400)
@@ -322,7 +282,7 @@ app.post('/send-pdf', requireAuth, async (c) => {
     }
   }
 
-  const caption = (booking.type === 'sotish' ? `🟢 <b>Sotish</b>` : `🟡 <b>Bron</b>`) + `\n` +
+  const caption = (booking.type === 'sotish' ? `🔴 <b>Sotish</b>` : `🟡 <b>Bron</b>`) + `\n` +
     `🏢 <b>${unitLabel}:</b> ${aptIdLabel}\n` +
     `👤 <b>Mijoz:</b> ${booking.ism} ${booking.familiya}\n` +
     (booking.phone ? `📞 <b>Telefon:</b> ${booking.phone}\n` : '') +

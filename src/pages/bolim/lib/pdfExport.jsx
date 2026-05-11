@@ -24,7 +24,7 @@ export async function downloadShartnomaPDF({ apartment, floor, blockId, bolimNum
 
   const cd = contractDate instanceof Date ? contractDate : (contractDate ? new Date(contractDate) : new Date())
   const apt = pairApartment
-    ? { ...apartment, size: Number((apartment.size + pairApartment.size).toFixed(2)) }
+    ? { ...apartment, size: Number((apartment.size + pairApartment.size).toFixed(2)), pairAddress: pairApartment.address }
     : apartment
 
   let resolvedContractNum = contractNumber
