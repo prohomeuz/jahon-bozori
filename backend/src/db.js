@@ -414,6 +414,14 @@ try { db.exec(`UPDATE apartments SET notes = 'Burchak'                  WHERE no
 try { db.exec(`UPDATE apartments SET notes = 'Ko''cha bo''yi, Burchak'  WHERE notes = '临街铺、端头路口'`) } catch {}
 try { db.exec(`UPDATE apartments SET notes = 'Ko''cha bo''yi, Burchak'  WHERE notes = '临街商铺、端头路口'`) } catch {}
 
+// Sotuv shartnomasi raqamlari (HTKH20260504-001 format)
+db.exec(`CREATE TABLE IF NOT EXISTS contract_numbers (
+  id      INTEGER PRIMARY KEY AUTOINCREMENT,
+  booking_id   INTEGER UNIQUE NOT NULL,
+  contract_number TEXT UNIQUE NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now','+5 hours'))
+)`)
+
 export const q = {
   // users
   userByPlainPassword: db.prepare('SELECT * FROM users WHERE plain_password=:plain_password'),
@@ -526,6 +534,12 @@ export const q = {
   getWcPrice:      db.prepare("SELECT price FROM wc_prices WHERE block=:block AND bolim=:bolim AND floor=:floor"),
   upsertWcPrice:   db.prepare("INSERT OR REPLACE INTO wc_prices (block, bolim, floor, price) VALUES (:block, :bolim, :floor, :price)"),
   allWcPrices:     db.prepare("SELECT block, bolim, floor, price FROM wc_prices ORDER BY block, bolim, floor"),
+
+  // contract numbers
+  insertContractNum:  db.prepare("INSERT INTO contract_numbers (booking_id, contract_number) VALUES (:booking_id, :contract_number)"),
+  updateContractNum:  db.prepare("UPDATE contract_numbers SET contract_number=:contract_number WHERE id=:id"),
+  getContractNum:     db.prepare("SELECT contract_number FROM contract_numbers WHERE booking_id=:booking_id"),
+  lastContractSeq:    db.prepare("SELECT id FROM contract_numbers ORDER BY id DESC LIMIT 1"),
 
   totalByBlock:    db.prepare("SELECT COUNT(*) AS n FROM apartments WHERE block=:block"),
   snapshotByBlock: db.prepare(`

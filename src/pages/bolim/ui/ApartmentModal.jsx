@@ -315,6 +315,7 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
       const sourceName = sources.find(s => s.id === form.source_id)?.name ?? ''
       setBooked({
         form, type, bookingId: booking.id, managerName: effectiveManagerName, sourceName,
+        contractNumber: booking.contract_number ?? null,
         bonusEnabled: booking.bonus_enabled != null
           ? (booking.bonus_enabled === 1 || booking.bonus_enabled === true)
           : bonusEnabled,
@@ -336,7 +337,7 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
         const pairApt = booking.pair_booking && pairPartner
           ? { address: pairPartner.address, size: pairPartner.size } : null
         const pdfPromise = type === 'sotish'
-          ? downloadShartnomaPDF({ apartment, floor, blockId, bolimNum, form, bookingId: booking.id, pairApartment: pairApt })
+          ? downloadShartnomaPDF({ apartment, floor, blockId, bolimNum, form, bookingId: booking.id, pairApartment: pairApt, contractNumber: booking.contract_number ?? null })
           : downloadContractPDF({ apartment, floor, blockId, bolimNum, form, type, managerName: effectiveManagerName, sourceName, pairApartment: pairApt, bonusEnabled })
         pdfPromise
           .then(blob => {
@@ -362,7 +363,7 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
       const pairApt = booked.pairApartmentAddress
         ? { address: booked.pairApartmentAddress, size: booked.pairApartmentSize } : null
       const blob = booked.type === 'sotish'
-        ? await downloadShartnomaPDF({ apartment, floor, blockId, bolimNum, form: booked.form, bookingId: booked.bookingId, pairApartment: pairApt })
+        ? await downloadShartnomaPDF({ apartment, floor, blockId, bolimNum, form: booked.form, bookingId: booked.bookingId, pairApartment: pairApt, contractNumber: booked.contractNumber ?? null })
         : await downloadContractPDF({ apartment, floor, blockId, bolimNum, form: booked.form, type: booked.type, managerName: booked.managerName ?? getUser()?.name ?? '', sourceName: booked.sourceName ?? '', pairApartment: pairApt, bonusEnabled: booked.bonusEnabled ?? false, contractDate: booked.createdAt ?? null })
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')

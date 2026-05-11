@@ -6,6 +6,20 @@ import { proxiedFetch, OWNER_CHAT_ID } from '../lib/telegram.js'
 
 const app = new Hono()
 
+function generateContractNumber(bookingId, dateStr) {
+  const { lastInsertRowid } = q.insertContractNum.run({ booking_id: bookingId, contract_number: '__TEMP__' })
+  const seq = Number(lastInsertRowid)
+  const contractNumber = `HTKH${dateStr}-${String(seq).padStart(3, '0')}`
+  q.updateContractNum.run({ id: seq, contract_number: contractNumber })
+  return contractNumber
+}
+
+app.get('/:id/contract-number', requireAuth, (c) => {
+  const bookingId = parseInt(c.req.param('id'))
+  const row = q.getContractNum.get({ booking_id: bookingId })
+  return row ? c.json({ contract_number: row.contract_number }) : c.json({ contract_number: null })
+})
+
 app.get('/pair-group/:group_id', requireAuth, (c) => {
   const groupId = parseInt(c.req.param('group_id'))
   if (!groupId) return c.json([])
@@ -154,6 +168,13 @@ app.post('/', requireAuth, async (c) => {
 
       db.exec('COMMIT')
 
+      let contractNumber = null
+      if (type === 'sotish') {
+        const d = new Date(booking1.created_at ?? Date.now())
+        const dateStr = `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`
+        contractNumber = generateContractNumber(booking1.id, dateStr)
+      }
+
       broadcast('apartment', { id: apartment_id, status: newStatus })
       broadcast('apartment', { id: pair_with, status: newStatus })
       broadcast('booking', {
@@ -161,7 +182,7 @@ app.post('/', requireAuth, async (c) => {
         ism: booking1.ism, familiya: booking1.familiya, manager: booking1.manager_name ?? '',
       })
 
-      return c.json({ ...booking1, pair_group_id: booking1.id, pair_booking: { ...booking2, pair_group_id: booking1.id } }, 201)
+      return c.json({ ...booking1, pair_group_id: booking1.id, contract_number: contractNumber, pair_booking: { ...booking2, pair_group_id: booking1.id } }, 201)
     } catch (e) {
       db.exec('ROLLBACK')
       return c.json({ error: e.message }, 500)
@@ -189,13 +210,19 @@ app.post('/', requireAuth, async (c) => {
     const newStatus = type === 'sotish' ? 'SOLD' : 'RESERVED'
     q.updateStatus.run({ status: newStatus, id: apartment_id })
     const booking = q.lastBooking.get()
+    let contractNumber = null
+    if (type === 'sotish') {
+      const d = new Date(booking.created_at ?? Date.now())
+      const dateStr = `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`
+      contractNumber = generateContractNumber(booking.id, dateStr)
+    }
     db.exec('COMMIT')
     broadcast('apartment', { id: apartment_id, status: newStatus })
     broadcast('booking', {
       id: booking.id, apartment_id, type: type === 'sotish' ? 'Sotish' : 'Bron',
       ism: booking.ism, familiya: booking.familiya, manager: booking.manager_name ?? booking.username ?? '',
     })
-    return c.json(booking, 201)
+    return c.json({ ...booking, contract_number: contractNumber }, 201)
   } catch (e) {
     db.exec('ROLLBACK')
     return c.json({ error: e.message }, 500)

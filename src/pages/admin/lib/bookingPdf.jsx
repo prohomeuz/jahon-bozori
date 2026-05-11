@@ -89,12 +89,18 @@ export async function downloadBookingPDF(b) {
 
   let blob
   if (b.type === 'sotish') {
+    let contractNumber = null
+    try {
+      const cnRes = await apiFetch(`/api/bookings/${b.id}/contract-number`).then(r => r.json())
+      contractNumber = cnRes.contract_number ?? null
+    } catch { contractNumber = null }
     const { ShartnomaPDF } = await import('@/pages/bolim/ui/ShartnomaPDF')
     const pdfApt = partnerApt ? { ...apartment, size: effectiveSize } : apartment
     blob = await pdf(
       <ShartnomaPDF
         apartment={pdfApt} floor={floor} blockId={blockId} bolimNum={bolimNum}
         form={form} contractDate={new Date(b.created_at)} bookingId={b.id}
+        contractNumber={contractNumber}
       />
     ).toBlob()
   } else {
