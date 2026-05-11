@@ -1,4 +1,12 @@
-import { Document, Page, StyleSheet, Text, View } from '@react-pdf/renderer'
+import { Document, Font, Page, StyleSheet, Text, View } from '@react-pdf/renderer'
+
+Font.register({
+  family: 'Roboto',
+  fonts: [
+    { src: '/fonts/Roboto-Regular.ttf', fontWeight: 400 },
+    { src: '/fonts/Roboto-Bold.ttf',    fontWeight: 700 },
+  ],
+})
 
 function fmtD(date) {
   const d = date instanceof Date ? date : new Date(date)
@@ -14,17 +22,17 @@ function usd(v) { return v > 0 ? Number(v).toLocaleString('ru-RU') : '0' }
 
 const BD = '#d1d5db'
 const s = StyleSheet.create({
-  page: { padding: 27, fontFamily: 'Helvetica', fontSize: 7.5, color: '#111827', lineHeight: 1.55 },
-  title: { fontFamily: 'Helvetica-Bold', fontSize: 10.5, textAlign: 'center', marginBottom: 3 },
+  page: { padding: 27, fontFamily: 'Roboto', fontSize: 7.5, color: '#111827', lineHeight: 1.55 },
+  title: { fontFamily: 'Roboto', fontWeight: 700, fontSize: 10.5, textAlign: 'center', marginBottom: 3 },
   sub:   { fontSize: 7, textAlign: 'center', color: '#6b7280', marginBottom: 11 },
-  secHead: { fontFamily: 'Helvetica-Bold', fontSize: 7.5, marginTop: 9, marginBottom: 3,
+  secHead: { fontFamily: 'Roboto', fontWeight: 700, fontSize: 7.5, marginTop: 9, marginBottom: 3,
     paddingBottom: 2, borderBottomWidth: 0.5, borderBottomColor: BD },
   p: { marginBottom: 3, lineHeight: 1.55 },
 
   iTable: { borderWidth: 0.5, borderColor: BD, marginTop: 12, flexDirection: 'row' },
   iCol:   { flex: 1, borderRightWidth: 0.5, borderRightColor: BD },
   iColL:  { flex: 1 },
-  iHead:  { padding: '4 6', fontFamily: 'Helvetica-Bold', fontSize: 7.5, backgroundColor: '#f3f4f6',
+  iHead:  { padding: '4 6', fontFamily: 'Roboto', fontWeight: 700, fontSize: 7.5, backgroundColor: '#f3f4f6',
     borderBottomWidth: 0.5, borderBottomColor: BD, textAlign: 'center' },
   iRow:   { flexDirection: 'row', borderBottomWidth: 0.5, borderBottomColor: '#f0f0f0', minHeight: 16 },
   iLbl:   { width: 78, padding: '2.5 5', fontSize: 6.5, color: '#6b7280', borderRightWidth: 0.5, borderRightColor: '#f0f0f0' },
@@ -32,28 +40,28 @@ const s = StyleSheet.create({
 
   signRow: { flexDirection: 'row', marginTop: 20, gap: 24 },
   signCol: { flex: 1 },
-  signHd:  { fontFamily: 'Helvetica-Bold', fontSize: 7.5, marginBottom: 18 },
+  signHd:  { fontFamily: 'Roboto', fontWeight: 700, fontSize: 7.5, marginBottom: 18 },
   signLn:  { borderBottomWidth: 0.5, borderBottomColor: '#374151', marginBottom: 2 },
   signHt:  { fontSize: 6, color: '#9ca3af' },
 
   sumRow:  { flexDirection: 'row', gap: 5, marginBottom: 7 },
   sumCell: { flex: 1, borderWidth: 0.5, borderColor: BD, padding: '4 5', borderRadius: 2 },
   sumLbl:  { fontSize: 6, color: '#6b7280', marginBottom: 1.5 },
-  sumVal:  { fontFamily: 'Helvetica-Bold', fontSize: 7.5 },
+  sumVal:  { fontFamily: 'Roboto', fontWeight: 700, fontSize: 7.5 },
 
   aTable:  { borderWidth: 0.5, borderColor: BD },
   aHead:   { flexDirection: 'row', backgroundColor: '#f3f4f6', borderBottomWidth: 0.5, borderBottomColor: BD },
   aRow:    { flexDirection: 'row', borderBottomWidth: 0.5, borderBottomColor: '#f0f0f0' },
   aRowAlt: { flexDirection: 'row', borderBottomWidth: 0.5, borderBottomColor: '#f0f0f0', backgroundColor: '#fafafa' },
-  th: { padding: '2.5 4', fontFamily: 'Helvetica-Bold', fontSize: 6.5, textAlign: 'center', borderRightWidth: 0.5, borderRightColor: BD },
-  thL:{ padding: '2.5 4', fontFamily: 'Helvetica-Bold', fontSize: 6.5, textAlign: 'center' },
+  th: { padding: '2.5 4', fontFamily: 'Roboto', fontWeight: 700, fontSize: 6.5, textAlign: 'center', borderRightWidth: 0.5, borderRightColor: BD },
+  thL:{ padding: '2.5 4', fontFamily: 'Roboto', fontWeight: 700, fontSize: 6.5, textAlign: 'center' },
   td: { padding: '2 4', fontSize: 7, textAlign: 'center', borderRightWidth: 0.5, borderRightColor: '#f0f0f0' },
   tdL:{ padding: '2 4', fontSize: 7, textAlign: 'center' },
   note: { fontSize: 6, color: '#6b7280', marginTop: 5, lineHeight: 1.5 },
 })
 
-function B({ children }) { return <Text style={{ fontFamily: 'Helvetica-Bold' }}>{children}</Text> }
-function U({ children }) { return <Text style={{ fontFamily: 'Helvetica-Bold', textDecoration: 'underline' }}>{children}</Text> }
+function B({ children }) { return <Text style={{ fontFamily: 'Roboto', fontWeight: 700 }}>{children}</Text> }
+function U({ children }) { return <Text style={{ fontFamily: 'Roboto', fontWeight: 700, textDecoration: 'underline' }}>{children}</Text> }
 
 export function ShartnomaPDF({ apartment, floor, blockId, bolimNum, form, contractDate, bookingId }) {
   const aptNum = (apartment.address ?? '').split('-').pop()
