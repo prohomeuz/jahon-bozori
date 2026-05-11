@@ -1,4 +1,4 @@
-import { Document, Font, Image, Page, Path, StyleSheet, Svg, Text, View } from '@react-pdf/renderer'
+import { Circle, Document, Font, Image, Page, Path, StyleSheet, Svg, Text, View } from '@react-pdf/renderer'
 
 Font.register({
   family: 'Roboto',
@@ -184,33 +184,55 @@ const s = StyleSheet.create({
     borderRadius: 7,
     overflow: 'hidden',
     backgroundColor: '#f8fafc',
-    padding: 9,
-    gap: 5,
+    padding: 7,
+    gap: 4,
   },
   benefitsTitle: {
     fontFamily: 'Roboto', fontWeight: 700,
-    fontSize: 11,
+    fontSize: 10,
     color: P.fg,
-    marginBottom: 3,
+    marginBottom: 2,
   },
   benefitRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 7,
-    minHeight: 18,
+    gap: 6,
+    minHeight: 16,
   },
   benefitNum: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
     backgroundColor: P.amber,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
   },
-  benefitNumText: { fontFamily: 'Roboto', fontWeight: 700, fontSize: 8, color: P.white },
-  benefitText: { flex: 1, fontSize: 10, color: P.fg, lineHeight: 1.5, paddingTop: 1 },
+  benefitNumText: { fontFamily: 'Roboto', fontWeight: 700, fontSize: 7.5, color: P.white },
+  benefitText: { flex: 1, fontSize: 9, color: P.fg, lineHeight: 1.45, paddingTop: 1 },
   benefitBold: { fontFamily: 'Roboto', fontWeight: 700 },
+
+  /* Signature section */
+  signSection: {
+    borderTopWidth: 1,
+    borderTopColor: P.border,
+    paddingTop: 7,
+  },
+  signRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 10,
+  },
+  signDateBox: {
+    gap: 3,
+    paddingBottom: 7,
+  },
+  signDateLabel: { fontSize: 5.5, color: P.mutedLt, letterSpacing: 0.5 },
+  signDateVal: { fontFamily: 'Roboto', fontWeight: 700, fontSize: 8, color: P.fg },
+  signBox: { alignItems: 'center', gap: 3 },
+  signBoxLabel: { fontSize: 5.5, color: P.mutedLt, letterSpacing: 0.5, textAlign: 'center' },
+  signLine: { width: 80, borderBottomWidth: 1, borderBottomColor: P.fg },
+  signName: { fontSize: 6, color: P.muted, textAlign: 'center' },
 
   /* RIGHT sidebar */
   sidebar: {
@@ -251,6 +273,23 @@ const s = StyleSheet.create({
   },
   bonusName: { fontSize: 8, color: P.fg, fontFamily: 'Roboto', fontWeight: 700, flex: 1 },
 })
+
+/* ── Fingerprint + signature box ─────────────────────── */
+function SignBox({ label, name }) {
+  return (
+    <View style={s.signBox}>
+      <Text style={s.signBoxLabel}>{label}</Text>
+      <Svg viewBox="0 0 32 32" style={{ width: 32, height: 32 }}>
+        <Circle cx="16" cy="16" r="14" fill="#f9fafb" stroke="#c4c4c4" strokeWidth={1} strokeDasharray="2 1.5" />
+        <Circle cx="16" cy="16" r="9"  fill="none"   stroke="#ececec" strokeWidth={0.5} />
+        <Circle cx="16" cy="16" r="5"  fill="none"   stroke="#ececec" strokeWidth={0.5} />
+        <Circle cx="16" cy="16" r="2"  fill="none"   stroke="#ececec" strokeWidth={0.5} />
+      </Svg>
+      <View style={s.signLine} />
+      {name ? <Text style={s.signName}>{name}</Text> : null}
+    </View>
+  )
+}
 
 /* ── Grid cell ────────────────────────────────────────── */
 function Cell({ label, value, strikeValue, last = false, top = false }) {
@@ -296,6 +335,7 @@ export function ContractPDF({
   blockId,
   bolimNum,
   form,
+  date = '',
   floorImgSrc,
   managerName,
   sourceName,
@@ -422,9 +462,9 @@ export function ContractPDF({
           </View>
 
           {/* Floor plan */}
-          <View style={[s.imgBox, { height: apartment.is_wc ? 320 : 250 }]}>
+          <View style={[s.imgBox, { height: apartment.is_wc ? 242 : 220 }]}>
             {floorImgSrc ? (
-              <Image src={floorImgSrc} style={[s.img, { height: apartment.is_wc ? 320 : 250 }]} />
+              <Image src={floorImgSrc} style={[s.img, { height: apartment.is_wc ? 242 : 220 }]} />
             ) : (
               <Text style={s.imgPlaceholder}>Reja rasmi mavjud emas</Text>
             )}
@@ -477,6 +517,19 @@ export function ContractPDF({
               ))}
             </View>
           )}
+          {/* ── Imzo va sana ── */}
+          <View style={s.signSection}>
+            <View style={s.signRow}>
+              <View style={s.signDateBox}>
+                <Text style={s.signDateLabel}>SANA</Text>
+                <Text style={s.signDateVal}>{date}</Text>
+              </View>
+              <View style={{ flex: 1 }} />
+              <SignBox label="MIJOZ" name={`${form.ism} ${form.familiya}`} />
+              <View style={{ width: 18 }} />
+              <SignBox label="KOMPANIYA EGASI" name="" />
+            </View>
+          </View>
         </View>
 
         {/* ════════════ RIGHT: SIDEBAR ════════════ */}
