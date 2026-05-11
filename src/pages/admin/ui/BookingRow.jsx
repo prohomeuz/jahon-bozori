@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Download, FileText, Eye, X } from 'lucide-react'
+import { Download, FileText, X } from 'lucide-react'
 import { apiFetch } from '@/shared/lib/auth'
 import { downloadBookingPDF } from '../lib/bookingPdf.jsx'
 
@@ -153,19 +153,11 @@ export function BookingRow({ b, isAdmin, cancelled, onReset, scrolled, scrolledR
         {pairPosition !== 'last' && (
           <td className={`px-4 py-3 align-middle sticky right-0 transition-shadow ${isPair && !cancelled ? 'bg-violet-50' : 'bg-card'} ${scrolledRight ? 'shadow-[-4px_0_12px_-2px_rgba(0,0,0,0.08)]' : ''}`} rowSpan={isPair ? 2 : 1}>
             <div className="flex items-center gap-2">
-              {b.type === 'bron' ? (
-                <button onClick={handleDownloadPDF} disabled={pdfLoading}
-                  className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border border-border text-muted-foreground hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 transition-colors disabled:opacity-40">
-                  {pdfLoading ? <FileText size={13} className="animate-pulse" /> : <Download size={13} />}
-                  Shartnoma
-                </button>
-              ) : (
-                <button onClick={() => setShowDetail(true)}
-                  className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border border-border text-muted-foreground hover:bg-emerald-50 hover:text-emerald-600 hover:border-emerald-200 transition-colors">
-                  <Eye size={13} />
-                  Ko'rish
-                </button>
-              )}
+              <button onClick={handleDownloadPDF} disabled={pdfLoading}
+                className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border border-border text-muted-foreground hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 transition-colors disabled:opacity-40">
+                {pdfLoading ? <FileText size={13} className="animate-pulse" /> : <Download size={13} />}
+                Shartnoma
+              </button>
               {!cancelled && (
                 <button onClick={() => setShowConfirm(true)} disabled={loading}
                   className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border border-border text-muted-foreground hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors disabled:opacity-40">
