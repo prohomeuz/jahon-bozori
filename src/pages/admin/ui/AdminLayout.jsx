@@ -3,7 +3,7 @@ import { NavLink, Outlet, useNavigate } from 'react-router'
 import { useQueryClient } from '@tanstack/react-query'
 import { getUser, getToken, removeToken, apiFetch } from '@/shared/lib/auth'
 import { startInactivityWatcher } from '@/shared/lib/inactivity'
-import { LayoutDashboard, Users, ClipboardList, LogOut, Home, PanelLeftClose, PanelLeftOpen, KeyRound, CheckCircle, Tag, MapPin, WifiOff, Wifi, ShieldOff, Radio } from 'lucide-react'
+import { LayoutDashboard, Users, ClipboardList, LogOut, Home, PanelLeftClose, PanelLeftOpen, KeyRound, CheckCircle, Tag, MapPin, WifiOff, Wifi, ShieldOff, Radio, Settings } from 'lucide-react'
 import { useBlockedState } from '@/shared/hooks/useBlockedState'
 import { BlockedOverlay } from '@/shared/ui/BlockedOverlay'
 
@@ -15,6 +15,7 @@ const NAV = [
   { to: '/admin/prices',       label: 'Narxlar',             icon: Tag,             adminOnly: true },
   { to: '/admin/sales-lock',   label: "Sotuvni to'xtatish",  icon: ShieldOff,       adminOnly: true },
   { to: '/admin/sources',      label: 'Manbaalar',           icon: Radio,           adminOnly: true },
+  { to: '/admin/settings',     label: 'Sozlamalar',          icon: Settings,        adminOnly: true },
 ]
 
 const PAD = ['1','2','3','4','5','6','7','8','9','','0','⌫']
@@ -216,6 +217,7 @@ function useWorkingHours(isAdmin) {
 
 export default function AdminLayout() {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const user = getUser()
   const isAdmin = user?.role === 'admin'
   const outsideHours = useWorkingHours(isAdmin)
@@ -298,6 +300,11 @@ export default function AdminLayout() {
                 }
                 return
               }
+            }
+            if (event === 'settings_changed') {
+              const settings = JSON.parse(dataLine[1])
+              queryClient.setQueryData(['settings'], settings)
+              continue
             }
             if (event === 'working_hours_ended') {
               if (isLocalhost()) continue

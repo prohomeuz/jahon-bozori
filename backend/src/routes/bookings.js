@@ -81,12 +81,17 @@ app.post('/', requireAuth, async (c) => {
   if (!apartment_id || !type || !ism || !familiya || !boshlangich || !oylar)
     return c.json({ error: "Majburiy maydonlar to'ldirilmagan" }, 400)
 
+  const chegirmaEnabled = q.getSetting.get({ key: 'chegirma_enabled' })?.value === '1'
+  const bonusEnabledNow = q.getSetting.get({ key: 'bonus_enabled' })?.value === '1'
+  const safe_chegirma_m2   = chegirmaEnabled ? (chegirma_m2   ?? null) : null
+  const safe_asl_narx_m2   = chegirmaEnabled ? (asl_narx_m2   ?? null) : null
+
   const effective_user_id = assigned_user_id ? parseInt(assigned_user_id) : user.sub
 
   if (pair_with) {
     db.exec('BEGIN')
     try {
-      const apt1 = db.prepare("SELECT block, bolim, floor, status, size FROM apartments WHERE id=?").get(apartment_id)
+      const apt1 = db.prepare("SELECT block, bolim, floor, status, size, is_wc FROM apartments WHERE id=?").get(apartment_id)
       if (!apt1) { db.exec('ROLLBACK'); return c.json({ error: "Do'kon topilmadi" }, 404) }
       if (apt1.status !== 'EMPTY') { db.exec('ROLLBACK'); return c.json({ error: "Do'kon allaqachon band" }, 409) }
 
@@ -103,12 +108,15 @@ app.post('/', requireAuth, async (c) => {
       const lock = db.prepare("SELECT reason FROM sales_locks WHERE block=? AND bolim=? AND floor=?").get(apt1.block, apt1.bolim, apt1.floor)
       if (lock) { db.exec('ROLLBACK'); return c.json({ error: `Sotuv to'xtatilgan: ${lock.reason}` }, 403) }
 
+      const priceRow1 = apt1.is_wc ? q.getWcPrice.get({ block: apt1.block, bolim: apt1.bolim, floor: apt1.floor }) : q.getPrice.get({ block: apt1.block, bolim: apt1.bolim, floor: apt1.floor })
+      const systemNarxM2 = priceRow1?.price ?? (apt1.is_wc ? 2000 : 1000)
+
       const boshlangichNum = Number(String(boshlangich).replace(/\s/g, '')) || 0
       const half1 = Math.round(boshlangichNum / 2)
       const half2 = boshlangichNum - half1
 
-      const narxM2Num    = Number(String(narx_m2   || '').replace(/\s/g, '')) || 0
-      const chegirmaM2Num = Number(String(chegirma_m2 || '').replace(/\s/g, '')) || 0
+      const narxM2Num    = systemNarxM2
+      const chegirmaM2Num = Number(String(safe_chegirma_m2 || '').replace(/\s/g, '')) || 0
       const yakuniyM2    = narxM2Num > 0 ? Math.max(0, narxM2Num - chegirmaM2Num) : 0
       let umumiy1, umumiy2
       if (yakuniyM2 > 0) {
@@ -127,8 +135,9 @@ app.post('/', requireAuth, async (c) => {
       const sharedFields = {
         user_id: effective_user_id, type, ism, familiya, oylar: parseInt(oylar),
         passport: passport ?? null, manzil: manzil ?? null, phone: phone ?? null,
-        passport_place: passport_place ?? null, narx_m2: narx_m2 ?? null,
-        chegirma_m2: chegirma_m2 ?? null, asl_narx_m2: asl_narx_m2 ?? null,
+        passport_place: passport_place ?? null, narx_m2: String(systemNarxM2),
+        chegirma_m2: safe_chegirma_m2, asl_narx_m2: safe_asl_narx_m2,
+        bonus_enabled: bonusEnabledNow ? 1 : 0,
         source_id: source_id ? parseInt(source_id) : null,
       }
 
@@ -161,17 +170,20 @@ app.post('/', requireAuth, async (c) => {
 
   db.exec('BEGIN')
   try {
-    const apt = db.prepare("SELECT block, bolim, floor, status FROM apartments WHERE id=?").get(apartment_id)
+    const apt = db.prepare("SELECT block, bolim, floor, status, is_wc FROM apartments WHERE id=?").get(apartment_id)
     if (!apt) { db.exec('ROLLBACK'); return c.json({ error: "Do'kon topilmadi" }, 404) }
     if (apt.status !== 'EMPTY') { db.exec('ROLLBACK'); return c.json({ error: "Do'kon allaqachon band yoki sotilgan" }, 409) }
     const lock = db.prepare("SELECT reason FROM sales_locks WHERE block=? AND bolim=? AND floor=?").get(apt.block, apt.bolim, apt.floor)
     if (lock) { db.exec('ROLLBACK'); return c.json({ error: `Sotuv to'xtatilgan: ${lock.reason}` }, 403) }
+    const priceRow = apt.is_wc ? q.getWcPrice.get({ block: apt.block, bolim: apt.bolim, floor: apt.floor }) : q.getPrice.get({ block: apt.block, bolim: apt.bolim, floor: apt.floor })
+    const systemNarxM2 = priceRow?.price ?? (apt.is_wc ? 2000 : 1000)
     q.insertBooking.run({
       apartment_id, user_id: effective_user_id, type, ism, familiya,
       boshlangich, oylar: parseInt(oylar), umumiy: umumiy ?? null,
       passport: passport ?? null, manzil: manzil ?? null, phone: phone ?? null,
-      passport_place: passport_place ?? null, narx_m2: narx_m2 ?? null,
-      chegirma_m2: chegirma_m2 ?? null, asl_narx_m2: asl_narx_m2 ?? null,
+      passport_place: passport_place ?? null, narx_m2: String(systemNarxM2),
+      chegirma_m2: safe_chegirma_m2, asl_narx_m2: safe_asl_narx_m2,
+      bonus_enabled: bonusEnabledNow ? 1 : 0,
       source_id: source_id ? parseInt(source_id) : null,
     })
     const newStatus = type === 'sotish' ? 'SOLD' : 'RESERVED'

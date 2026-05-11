@@ -1,4 +1,12 @@
-import { Document, Image, Page, Path, StyleSheet, Svg, Text, View } from '@react-pdf/renderer'
+import { Circle, Document, Font, Image, Page, Path, StyleSheet, Svg, Text, View } from '@react-pdf/renderer'
+
+Font.register({
+  family: 'Roboto',
+  fonts: [
+    { src: '/fonts/Roboto-Regular.ttf', fontWeight: 400 },
+    { src: '/fonts/Roboto-Bold.ttf',    fontWeight: 700 },
+  ],
+})
 
 /* ── Palette ──────────────────────────────────────────── */
 const P = {
@@ -62,7 +70,7 @@ const s = StyleSheet.create({
     flexDirection: 'row',
     backgroundColor: P.white,
     padding: 22,
-    fontFamily: 'Helvetica',
+    fontFamily: 'Roboto',
     fontSize: 9,
     color: P.fg,
     gap: 16,
@@ -72,7 +80,7 @@ const s = StyleSheet.create({
 
   breadcrumb: { flexDirection: 'row', alignItems: 'center' },
   crumbText: {
-    fontFamily: 'Helvetica-Bold',
+    fontFamily: 'Roboto', fontWeight: 700,
     fontSize: 15,
     color: P.fg,
     letterSpacing: 0.5,
@@ -96,8 +104,8 @@ const s = StyleSheet.create({
   cellLast: { flex: 1, padding: 8, backgroundColor: '#f8fafc' },
   cellTopBorder: { borderBottomWidth: 1, borderBottomColor: P.border },
   cellLabel: { color: P.muted, fontSize: 6.5, marginBottom: 3 },
-  cellVal: { fontFamily: 'Helvetica-Bold', fontSize: 12, color: P.fg },
-  cellValM: { fontFamily: 'Helvetica-Bold', fontSize: 12, color: P.mutedLt },
+  cellVal: { fontFamily: 'Roboto', fontWeight: 700, fontSize: 12, color: P.fg },
+  cellValM: { fontFamily: 'Roboto', fontWeight: 700, fontSize: 12, color: P.mutedLt },
   cellStrike: { fontSize: 9, color: P.mutedLt, textDecoration: 'line-through' },
 
   /* Chegirma row — green tint inside grid */
@@ -114,9 +122,9 @@ const s = StyleSheet.create({
     backgroundColor: P.greenBg,
   },
   chegirmaLabel: { color: P.green, fontSize: 6.5, marginBottom: 3 },
-  chegirmaVal: { fontFamily: 'Helvetica-Bold', fontSize: 12, color: P.fg },
-  chegirmaValGreen: { fontFamily: 'Helvetica-Bold', fontSize: 12, color: P.green },
-  chegirmaValRed: { fontFamily: 'Helvetica-Bold', fontSize: 12, color: P.red },
+  chegirmaVal: { fontFamily: 'Roboto', fontWeight: 700, fontSize: 12, color: P.fg },
+  chegirmaValGreen: { fontFamily: 'Roboto', fontWeight: 700, fontSize: 12, color: P.green },
+  chegirmaValRed: { fontFamily: 'Roboto', fontWeight: 700, fontSize: 12, color: P.red },
 
   /* Image */
   imgBox: {
@@ -141,7 +149,7 @@ const s = StyleSheet.create({
     gap: 5,
   },
   wcBlockTitle: {
-    fontFamily: 'Helvetica-Bold',
+    fontFamily: 'Roboto', fontWeight: 700,
     fontSize: 10,
     color: '#0369a1',
     marginBottom: 2,
@@ -165,7 +173,7 @@ const s = StyleSheet.create({
     color: '#1e3a5f',
     lineHeight: 1.5,
   },
-  wcBold: { fontFamily: 'Helvetica-Bold' },
+  wcBold: { fontFamily: 'Roboto', fontWeight: 700 },
 
   imgPlaceholder: { color: P.mutedLt, fontSize: 7, padding: 20 },
 
@@ -176,33 +184,55 @@ const s = StyleSheet.create({
     borderRadius: 7,
     overflow: 'hidden',
     backgroundColor: '#f8fafc',
-    padding: 9,
-    gap: 5,
+    padding: 7,
+    gap: 4,
   },
   benefitsTitle: {
-    fontFamily: 'Helvetica-Bold',
-    fontSize: 11,
+    fontFamily: 'Roboto', fontWeight: 700,
+    fontSize: 10,
     color: P.fg,
-    marginBottom: 3,
+    marginBottom: 2,
   },
   benefitRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 7,
-    minHeight: 18,
+    gap: 6,
+    minHeight: 16,
   },
   benefitNum: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
     backgroundColor: P.amber,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
   },
-  benefitNumText: { fontFamily: 'Helvetica-Bold', fontSize: 8, color: P.white },
-  benefitText: { flex: 1, fontSize: 10, color: P.fg, lineHeight: 1.5, paddingTop: 1 },
-  benefitBold: { fontFamily: 'Helvetica-Bold' },
+  benefitNumText: { fontFamily: 'Roboto', fontWeight: 700, fontSize: 7.5, color: P.white },
+  benefitText: { flex: 1, fontSize: 9, color: P.fg, lineHeight: 1.45, paddingTop: 1 },
+  benefitBold: { fontFamily: 'Roboto', fontWeight: 700 },
+
+  /* Signature section */
+  signSection: {
+    borderTopWidth: 1,
+    borderTopColor: P.border,
+    paddingTop: 7,
+  },
+  signRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 10,
+  },
+  signDateBox: {
+    gap: 3,
+    paddingBottom: 7,
+  },
+  signDateLabel: { fontSize: 5.5, color: P.mutedLt, letterSpacing: 0.5 },
+  signDateVal: { fontFamily: 'Roboto', fontWeight: 700, fontSize: 8, color: P.fg },
+  signBox: { alignItems: 'center', gap: 3 },
+  signBoxLabel: { fontSize: 5.5, color: P.mutedLt, letterSpacing: 0.5, textAlign: 'center' },
+  signLine: { width: 80, borderBottomWidth: 1, borderBottomColor: P.fg },
+  signName: { fontSize: 6, color: P.muted, textAlign: 'center' },
 
   /* RIGHT sidebar */
   sidebar: {
@@ -214,7 +244,7 @@ const s = StyleSheet.create({
     paddingLeft: 14,
   },
 
-  logoName: { fontFamily: 'Helvetica-Bold', fontSize: 13, color: P.fg, lineHeight: 1.2 },
+  logoName: { fontFamily: 'Roboto', fontWeight: 700, fontSize: 13, color: P.fg, lineHeight: 1.2 },
   divider: { borderTopWidth: 1, borderTopColor: P.border },
   section: { gap: 3 },
   sRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
@@ -222,7 +252,7 @@ const s = StyleSheet.create({
 
   /* Bonus sidebar section */
   bonusTitle: {
-    fontFamily: 'Helvetica-Bold',
+    fontFamily: 'Roboto', fontWeight: 700,
     fontSize: 7,
     color: P.amber,
     letterSpacing: 0.5,
@@ -241,8 +271,25 @@ const s = StyleSheet.create({
     backgroundColor: P.amber,
     flexShrink: 0,
   },
-  bonusName: { fontSize: 8, color: P.fg, fontFamily: 'Helvetica-Bold', flex: 1 },
+  bonusName: { fontSize: 8, color: P.fg, fontFamily: 'Roboto', fontWeight: 700, flex: 1 },
 })
+
+/* ── Fingerprint + signature box ─────────────────────── */
+function SignBox({ label, name }) {
+  return (
+    <View style={s.signBox}>
+      <Text style={s.signBoxLabel}>{label}</Text>
+      <Svg viewBox="0 0 32 32" style={{ width: 32, height: 32 }}>
+        <Circle cx="16" cy="16" r="14" fill="#f9fafb" stroke="#c4c4c4" strokeWidth={1} strokeDasharray="2 1.5" />
+        <Circle cx="16" cy="16" r="9"  fill="none"   stroke="#ececec" strokeWidth={0.5} />
+        <Circle cx="16" cy="16" r="5"  fill="none"   stroke="#ececec" strokeWidth={0.5} />
+        <Circle cx="16" cy="16" r="2"  fill="none"   stroke="#ececec" strokeWidth={0.5} />
+      </Svg>
+      <View style={s.signLine} />
+      {name ? <Text style={s.signName}>{name}</Text> : null}
+    </View>
+  )
+}
 
 /* ── Grid cell ────────────────────────────────────────── */
 function Cell({ label, value, strikeValue, last = false, top = false }) {
@@ -288,6 +335,7 @@ export function ContractPDF({
   blockId,
   bolimNum,
   form,
+  date = '',
   floorImgSrc,
   managerName,
   sourceName,
@@ -413,14 +461,17 @@ export function ContractPDF({
             )}
           </View>
 
-          {/* Floor plan */}
-          <View style={[s.imgBox, { height: apartment.is_wc ? 320 : 250 }]}>
-            {floorImgSrc ? (
-              <Image src={floorImgSrc} style={[s.img, { height: apartment.is_wc ? 320 : 250 }]} />
-            ) : (
-              <Text style={s.imgPlaceholder}>Reja rasmi mavjud emas</Text>
-            )}
-          </View>
+          {/* Floor plan — chegirma qatori bo'lsa balandlikni kamaytirish */}
+          {(() => {
+            const imgH = apartment.is_wc ? 242 : (hasChegirma ? 178 : 220)
+            return (
+              <View style={[s.imgBox, { height: imgH }]}>
+                {floorImgSrc
+                  ? <Image src={floorImgSrc} style={[s.img, { height: imgH }]} />
+                  : <Text style={s.imgPlaceholder}>Reja rasmi mavjud emas</Text>}
+              </View>
+            )
+          })()}
 
           {/* WC marketing block */}
           {apartment.is_wc && (
@@ -469,6 +520,19 @@ export function ContractPDF({
               ))}
             </View>
           )}
+          {/* ── Imzo va sana ── */}
+          <View style={s.signSection}>
+            <View style={s.signRow}>
+              <View style={s.signDateBox}>
+                <Text style={s.signDateLabel}>SANA</Text>
+                <Text style={s.signDateVal}>{date}</Text>
+              </View>
+              <View style={{ flex: 1 }} />
+              <SignBox label="MIJOZ" name={`${form.ism} ${form.familiya}`} />
+              <View style={{ width: 18 }} />
+              <SignBox label="HENGTAI" name="" />
+            </View>
+          </View>
         </View>
 
         {/* ════════════ RIGHT: SIDEBAR ════════════ */}
@@ -497,10 +561,10 @@ export function ContractPDF({
           {/* Aloqa */}
           <View style={s.section}>
             <Text style={{ fontSize: 7, color: P.fg, lineHeight: 1.6 }}>
-              <Text style={{ fontFamily: 'Helvetica-Bold' }}>Telegram: </Text>
+              <Text style={{ fontFamily: 'Roboto', fontWeight: 700 }}>Telegram: </Text>
               <Text style={{ color: '#2563eb' }}>@HengTai_Admin</Text>
             </Text>
-            <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 7, color: P.fg, marginTop: 2 }}>
+            <Text style={{ fontFamily: 'Roboto', fontWeight: 700, fontSize: 7, color: P.fg, marginTop: 2 }}>
               Murojaat uchun:
             </Text>
             <View style={s.sRow}>
@@ -521,7 +585,7 @@ export function ContractPDF({
 
           {/* Mijoz */}
           <View style={s.section}>
-            <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 9, color: P.fg }}>
+            <Text style={{ fontFamily: 'Roboto', fontWeight: 700, fontSize: 9, color: P.fg }}>
               {form.ism} {form.familiya}
             </Text>
             {form.telefon ? (
@@ -541,7 +605,7 @@ export function ContractPDF({
                 >
                   SOTUV MENEJER
                 </Text>
-                <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 9, color: P.fg }}>
+                <Text style={{ fontFamily: 'Roboto', fontWeight: 700, fontSize: 9, color: P.fg }}>
                   {managerName}
                 </Text>
               </View>
@@ -557,7 +621,7 @@ export function ContractPDF({
                 >
                   MANBAA
                 </Text>
-                <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 9, color: P.fg }}>
+                <Text style={{ fontFamily: 'Roboto', fontWeight: 700, fontSize: 9, color: P.fg }}>
                   {sourceName}
                 </Text>
               </View>
@@ -592,7 +656,7 @@ export function ContractPDF({
                     fontSize: 6.5,
                     color: P.muted,
                     textAlign: 'center',
-                    fontFamily: 'Helvetica-Bold',
+                    fontFamily: 'Roboto', fontWeight: 700,
                   }}
                 >
                   Skayner qiling!

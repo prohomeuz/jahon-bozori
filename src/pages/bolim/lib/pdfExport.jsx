@@ -1,5 +1,6 @@
 import { getBolimViewBox, getAptRect, drawHighlight, drawWcHighlight, drawPairHighlight, imgToDataUrl } from '@/shared/lib/canvasHighlight'
 import { WC_OVERLAYS } from '../config/hojatxonaOverlays'
+import { BONUS_MAP, BONUS_BRACKETS } from '@/shared/config/bonusConfig'
 
 const allBlockImgs = import.meta.glob('@/assets/blocks/**/*.webp', { eager: true })
 
@@ -15,16 +16,6 @@ for (const [k, v] of Object.entries(allBlockImgs)) {
 export function loadImg(blockId, floor, bolimNum) {
   return _imgIndex.get(`${blockId}/${floor}/${bolimNum}`) ?? null
 }
-
-const PDF_BONUS_TABLE = {
-  30:  ['Konditsioner'],
-  40:  ['Konditsioner'],
-  50:  ['Konditsioner', 'TV (43)'],
-  60:  ['Konditsioner', 'TV (43)'],
-  70:  ['Konditsioner', 'Muzlatgich'],
-  100: ['Konditsioner', 'TV (43)', 'Muzlatgich'],
-}
-const CHEGIRMA_BRACKETS = [100, 70, 60, 50, 40, 30]
 
 export async function downloadShartnomaPDF({ apartment, floor, blockId, bolimNum, form, bookingId, pairApartment = null, contractDate = null }) {
   const { pdf } = await import('@react-pdf/renderer')
@@ -49,7 +40,7 @@ export async function downloadShartnomaPDF({ apartment, floor, blockId, bolimNum
   return blob
 }
 
-export async function downloadContractPDF({ apartment, floor, blockId, bolimNum, form, type, managerName, sourceName = '', pairApartment = null }) {
+export async function downloadContractPDF({ apartment, floor, blockId, bolimNum, form, type, managerName, sourceName = '', pairApartment = null, bonusEnabled = true, contractDate = null }) {
   const { pdf } = await import('@react-pdf/renderer')
   const { ContractPDF } = await import('../ui/ContractPDF')
   const qrImg = await import('@/assets/qrcode.png')
@@ -62,15 +53,19 @@ export async function downloadContractPDF({ apartment, floor, blockId, bolimNum,
   const chegirmaM2 = Number(String(form.chegirma_m2 || '').replace(/\s/g, '')) || 0
   const aslNarxM2  = Number(String(form.asl_narx_m2 || '').replace(/\s/g, '')) || 0
   let bonusDataItems = []
-  if (chegirmaM2 > 0 && aslNarxM2 > 0) {
-    const baseTotal  = Math.round(aslNarxM2 * effectiveSize)
-    const downVal    = Number(String(form.boshlangich || '').replace(/\s/g, '')) || 0
-    const umumiyNum  = Number(String(form.umumiy || '').replace(/\s/g, '')) || 0
-    const pctOfBase  = baseTotal > 0 && downVal > 0
+  if (bonusEnabled) {
+    const downVal   = Number(String(form.boshlangich || '').replace(/\s/g, '')) || 0
+    const umumiyNum = Number(String(form.umumiy || '').replace(/\s/g, '')) || 0
+    // chegirma bor → asl narxdan, chegirma yo'q → joriy narxdan hisoblash
+    const baseM2    = chegirmaM2 > 0 && aslNarxM2 > 0
+      ? aslNarxM2
+      : Number(String(form.narx_m2 || '').replace(/\s/g, '')) || 0
+    const baseTotal = Math.round(baseM2 * effectiveSize)
+    const pctOfBase = baseTotal > 0 && downVal > 0
       ? (umumiyNum > 0 && downVal >= umumiyNum ? 100 : Math.floor((downVal / baseTotal) * 100))
       : 0
-    const bracket    = CHEGIRMA_BRACKETS.find(p => pctOfBase >= p) ?? null
-    bonusDataItems   = bracket ? (PDF_BONUS_TABLE[bracket] ?? []).map(name => ({ name })) : []
+    const bracket   = BONUS_BRACKETS.find(p => pctOfBase >= p) ?? null
+    bonusDataItems  = bracket ? (BONUS_MAP[bracket] ?? []).map(name => ({ name })) : []
   }
 
   const [logoSrc, rawFloorImg] = await Promise.all([
@@ -104,7 +99,9 @@ export async function downloadContractPDF({ apartment, floor, blockId, bolimNum,
     ? { ...apartment, size: effectiveSize, pairAddress: pairApartment.address }
     : apartment
 
-  const date = new Date().toLocaleDateString('uz-UZ', { year: 'numeric', month: 'long', day: 'numeric' })
+  const dateObj = contractDate instanceof Date ? contractDate : (contractDate ? new Date(contractDate) : new Date())
+  const _months = ['yanvar','fevral','mart','aprel','may','iyun','iyul','avgust','sentabr','oktabr','noyabr','dekabr']
+  const date = `${dateObj.getDate()}-${_months[dateObj.getMonth()]}, ${dateObj.getFullYear()}-yil`
   const blob = await pdf(
     <ContractPDF
       apartment={pdfApartment}
