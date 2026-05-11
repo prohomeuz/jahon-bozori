@@ -3,7 +3,7 @@ import { NavLink, Outlet, useNavigate } from 'react-router'
 import { useQueryClient } from '@tanstack/react-query'
 import { getUser, getToken, removeToken, apiFetch } from '@/shared/lib/auth'
 import { startInactivityWatcher } from '@/shared/lib/inactivity'
-import { LayoutDashboard, Users, ClipboardList, LogOut, Home, PanelLeftClose, PanelLeftOpen, KeyRound, CheckCircle, Tag, MapPin, WifiOff, Wifi, ShieldOff, Radio, Settings } from 'lucide-react'
+import { LayoutDashboard, Users, ClipboardList, LogOut, Home, PanelLeftClose, PanelLeftOpen, KeyRound, CheckCircle, Tag, MapPin, WifiOff, Wifi, ShieldOff, Settings } from 'lucide-react'
 import { useBlockedState } from '@/shared/hooks/useBlockedState'
 import { BlockedOverlay } from '@/shared/ui/BlockedOverlay'
 
@@ -14,7 +14,6 @@ const NAV = [
   { to: '/admin/managers',     label: 'Salesmanagerlar',     icon: Users,           adminOnly: true },
   { to: '/admin/prices',       label: 'Narxlar',             icon: Tag,             adminOnly: true },
   { to: '/admin/sales-lock',   label: "Sotuvni to'xtatish",  icon: ShieldOff,       adminOnly: true },
-  { to: '/admin/sources',      label: 'Manbaalar',           icon: Radio,           adminOnly: true },
   { to: '/admin/settings',     label: 'Sozlamalar',          icon: Settings,        adminOnly: true },
 ]
 

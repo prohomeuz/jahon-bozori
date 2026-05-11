@@ -259,7 +259,7 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
     setTimeout(() => el.removeAttribute('data-active'), 150)
   }
 
-  function getErrors(form) {
+  function getErrors(form, type) {
     const e = {}
     if (!form.ism.trim()) e.ism = "To'ldirilishi shart"
     if (!form.familiya.trim()) e.familiya = "To'ldirilishi shart"
@@ -267,12 +267,12 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
     if (phoneDigits.length < 9) e.telefon = phoneDigits.length === 0 ? 'Telefon raqam kiritilishi shart' : "Telefon raqam to'liq emas"
     const boshlVal = Number(String(form.boshlangich || '').replace(/\s/g, ''))
     if (!boshlVal) e.boshlangich = boshlVal === 0 && form.boshlangich ? "Summa noldan katta bo'lishi shart" : "Boshlang'ich to'lov kiritilishi shart"
-    if (sources.length > 0 && !form.source_id) e.source_id = "Manbaa tanlanishi shart"
+    if (type === 'bron' && sources.length > 0 && !form.source_id) e.source_id = "Manbaa tanlanishi shart"
     return e
   }
 
-  const bronErrors   = bronShowErrors   ? getErrors(bronForm)   : {}
-  const sotishErrors = sotishShowErrors ? getErrors(sotishForm) : {}
+  const bronErrors   = bronShowErrors   ? getErrors(bronForm,   'bron')   : {}
+  const sotishErrors = sotishShowErrors ? getErrors(sotishForm, 'sotish') : {}
   const activeErrors = tab === 'bron' ? bronErrors : sotishErrors
   const hasErrors    = Object.keys(activeErrors).length > 0
 
@@ -315,6 +315,7 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
       const sourceName = sources.find(s => s.id === form.source_id)?.name ?? ''
       setBooked({
         form, type, bookingId: booking.id, managerName: effectiveManagerName, sourceName,
+        contractNumber: booking.contract_number ?? null,
         bonusEnabled: booking.bonus_enabled != null
           ? (booking.bonus_enabled === 1 || booking.bonus_enabled === true)
           : bonusEnabled,
@@ -336,7 +337,7 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
         const pairApt = booking.pair_booking && pairPartner
           ? { address: pairPartner.address, size: pairPartner.size } : null
         const pdfPromise = type === 'sotish'
-          ? downloadShartnomaPDF({ apartment, floor, blockId, bolimNum, form, bookingId: booking.id, pairApartment: pairApt })
+          ? downloadShartnomaPDF({ apartment, floor, blockId, bolimNum, form, bookingId: booking.id, pairApartment: pairApt, contractNumber: booking.contract_number ?? null })
           : downloadContractPDF({ apartment, floor, blockId, bolimNum, form, type, managerName: effectiveManagerName, sourceName, pairApartment: pairApt, bonusEnabled })
         pdfPromise
           .then(blob => {
@@ -362,7 +363,7 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
       const pairApt = booked.pairApartmentAddress
         ? { address: booked.pairApartmentAddress, size: booked.pairApartmentSize } : null
       const blob = booked.type === 'sotish'
-        ? await downloadShartnomaPDF({ apartment, floor, blockId, bolimNum, form: booked.form, bookingId: booked.bookingId, pairApartment: pairApt })
+        ? await downloadShartnomaPDF({ apartment, floor, blockId, bolimNum, form: booked.form, bookingId: booked.bookingId, pairApartment: pairApt, contractNumber: booked.contractNumber ?? null })
         : await downloadContractPDF({ apartment, floor, blockId, bolimNum, form: booked.form, type: booked.type, managerName: booked.managerName ?? getUser()?.name ?? '', sourceName: booked.sourceName ?? '', pairApartment: pairApt, bonusEnabled: booked.bonusEnabled ?? false, contractDate: booked.createdAt ?? null })
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
@@ -767,7 +768,6 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
           <Field label="Ism" placeholder="Abdulloh" value={sotishForm.ism} onChange={setSotishCap('ism')} autoComplete="given-name" error={sotishErrors.ism} />
           <Field label="Familiya" placeholder="Karimov" value={sotishForm.familiya} onChange={setSotishCap('familiya')} autoComplete="family-name" error={sotishErrors.familiya} />
           <PhoneField label="Telefon raqam" value={sotishForm.telefon} isOpen={phoneTarget === 'sotish'} onOpenNumpad={() => setPhoneTarget('sotish')} error={sotishErrors.telefon} />
-          <SourceSelector value={sotishForm.source_id} onChange={id => setSotishForm(f => ({ ...f, source_id: id }))} errors={sotishErrors} />
           <FormSummaryCard form={sotishForm} errors={sotishErrors} />
           <div className="grid grid-cols-2 gap-4">
             <PassportField label="Passport seriya/raqam" value={sotishForm.passport} onChange={v => setSotishForm(f => ({ ...f, passport: v }))} />
@@ -787,7 +787,7 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
 
   // ── STATUS VIEWS ─────────────────────────────────────────────────────────────
   if (apartment.status === 'RESERVED' || apartment.status === 'SOLD') {
-    return <StatusCard apartment={apartment} isReserved={apartment.status === 'RESERVED'} onClose={onClose} onBooked={onBooked} />
+    return <StatusCard apartment={apartment} isReserved={apartment.status === 'RESERVED'} onClose={onClose} />
   }
 
   if (booked) {

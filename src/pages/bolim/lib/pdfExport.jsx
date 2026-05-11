@@ -17,14 +17,23 @@ export function loadImg(blockId, floor, bolimNum) {
   return _imgIndex.get(`${blockId}/${floor}/${bolimNum}`) ?? null
 }
 
-export async function downloadShartnomaPDF({ apartment, floor, blockId, bolimNum, form, bookingId, pairApartment = null, contractDate = null }) {
+export async function downloadShartnomaPDF({ apartment, floor, blockId, bolimNum, form, bookingId, pairApartment = null, contractDate = null, contractNumber = null }) {
   const { pdf } = await import('@react-pdf/renderer')
   const { ShartnomaPDF } = await import('../ui/ShartnomaPDF.jsx')
+  const { apiFetch } = await import('@/shared/lib/auth')
 
   const cd = contractDate instanceof Date ? contractDate : (contractDate ? new Date(contractDate) : new Date())
   const apt = pairApartment
-    ? { ...apartment, size: Number((apartment.size + pairApartment.size).toFixed(2)) }
+    ? { ...apartment, size: Number((apartment.size + pairApartment.size).toFixed(2)), pairAddress: pairApartment.address }
     : apartment
+
+  let resolvedContractNum = contractNumber
+  if (!resolvedContractNum && bookingId) {
+    try {
+      const r = await apiFetch(`/api/bookings/${bookingId}/contract-number`).then(x => x.json())
+      resolvedContractNum = r.contract_number ?? null
+    } catch { resolvedContractNum = null }
+  }
 
   const blob = await pdf(
     <ShartnomaPDF
@@ -35,6 +44,7 @@ export async function downloadShartnomaPDF({ apartment, floor, blockId, bolimNum
       form={form}
       contractDate={cd}
       bookingId={bookingId}
+      contractNumber={resolvedContractNum}
     />
   ).toBlob()
   return blob

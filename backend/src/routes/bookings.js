@@ -6,6 +6,20 @@ import { proxiedFetch, OWNER_CHAT_ID } from '../lib/telegram.js'
 
 const app = new Hono()
 
+function generateContractNumber(bookingId, dateStr) {
+  const { lastInsertRowid } = q.insertContractNum.run({ booking_id: bookingId, contract_number: '__TEMP__' })
+  const seq = Number(lastInsertRowid)
+  const contractNumber = `HTKH${dateStr}-${String(seq).padStart(3, '0')}`
+  q.updateContractNum.run({ id: seq, contract_number: contractNumber })
+  return contractNumber
+}
+
+app.get('/:id/contract-number', requireAuth, (c) => {
+  const bookingId = parseInt(c.req.param('id'))
+  const row = q.getContractNum.get({ booking_id: bookingId })
+  return row ? c.json({ contract_number: row.contract_number }) : c.json({ contract_number: null })
+})
+
 app.get('/pair-group/:group_id', requireAuth, (c) => {
   const groupId = parseInt(c.req.param('group_id'))
   if (!groupId) return c.json([])
@@ -154,6 +168,13 @@ app.post('/', requireAuth, async (c) => {
 
       db.exec('COMMIT')
 
+      let contractNumber = null
+      if (type === 'sotish') {
+        const d = new Date(booking1.created_at ?? Date.now())
+        const dateStr = `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`
+        contractNumber = generateContractNumber(booking1.id, dateStr)
+      }
+
       broadcast('apartment', { id: apartment_id, status: newStatus })
       broadcast('apartment', { id: pair_with, status: newStatus })
       broadcast('booking', {
@@ -161,7 +182,7 @@ app.post('/', requireAuth, async (c) => {
         ism: booking1.ism, familiya: booking1.familiya, manager: booking1.manager_name ?? '',
       })
 
-      return c.json({ ...booking1, pair_group_id: booking1.id, pair_booking: { ...booking2, pair_group_id: booking1.id } }, 201)
+      return c.json({ ...booking1, pair_group_id: booking1.id, contract_number: contractNumber, pair_booking: { ...booking2, pair_group_id: booking1.id } }, 201)
     } catch (e) {
       db.exec('ROLLBACK')
       return c.json({ error: e.message }, 500)
@@ -189,57 +210,23 @@ app.post('/', requireAuth, async (c) => {
     const newStatus = type === 'sotish' ? 'SOLD' : 'RESERVED'
     q.updateStatus.run({ status: newStatus, id: apartment_id })
     const booking = q.lastBooking.get()
+    let contractNumber = null
+    if (type === 'sotish') {
+      const d = new Date(booking.created_at ?? Date.now())
+      const dateStr = `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`
+      contractNumber = generateContractNumber(booking.id, dateStr)
+    }
     db.exec('COMMIT')
     broadcast('apartment', { id: apartment_id, status: newStatus })
     broadcast('booking', {
       id: booking.id, apartment_id, type: type === 'sotish' ? 'Sotish' : 'Bron',
       ism: booking.ism, familiya: booking.familiya, manager: booking.manager_name ?? booking.username ?? '',
     })
-    return c.json(booking, 201)
+    return c.json({ ...booking, contract_number: contractNumber }, 201)
   } catch (e) {
     db.exec('ROLLBACK')
     return c.json({ error: e.message }, 500)
   }
-})
-
-app.patch('/:id/convert', requireAuth, async (c) => {
-  const { sub: userId, role } = c.get('user')
-  const id = parseInt(c.req.param('id'))
-  const booking = db.prepare(
-    'SELECT b.*, a.block, a.bolim, a.floor FROM bookings b JOIN apartments a ON a.id=b.apartment_id WHERE b.id=? AND b.cancelled_at IS NULL'
-  ).get(id)
-  if (!booking) return c.json({ error: 'Topilmadi' }, 404)
-  if (booking.type !== 'bron') return c.json({ error: "Faqat bron qilingan do'konni sotishga o'tkazish mumkin" }, 400)
-  if (booking.user_id !== userId && role !== 'admin') return c.json({ error: "Ruxsat yo'q" }, 403)
-  const lock = db.prepare("SELECT reason FROM sales_locks WHERE block=? AND bolim=? AND floor=?").get(booking.block, booking.bolim, booking.floor)
-  if (lock) return c.json({ error: `Sotuv to'xtatilgan: ${lock.reason}` }, 403)
-
-  const { passport, passport_place, manzil } = await c.req.json().catch(() => ({}))
-  const oldTgMsgs = q.tgMsgsByBooking.all(id)
-  db.exec('BEGIN')
-  try {
-    db.prepare('UPDATE bookings SET type=?, passport=COALESCE(?,passport), passport_place=COALESCE(?,passport_place), manzil=COALESCE(?,manzil) WHERE id=?')
-      .run('sotish', passport || null, passport_place || null, manzil || null, id)
-    db.prepare("UPDATE apartments SET status='SOLD' WHERE id=?").run(booking.apartment_id)
-    if (oldTgMsgs.length > 0) q.delTgMsgsByBooking.run(id)
-    db.exec('COMMIT')
-  } catch (e) {
-    db.exec('ROLLBACK')
-    return c.json({ error: e.message }, 500)
-  }
-  broadcast('apartment', { id: booking.apartment_id, status: 'SOLD' })
-  broadcast('booking', { updated: true })
-  const token = process.env.TELEGRAM_BOT_TOKEN
-  if (token && oldTgMsgs.length > 0) {
-    Promise.all(oldTgMsgs.map(({ chat_id, message_id }) =>
-      proxiedFetch(`https://api.telegram.org/bot${token}/deleteMessage`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chat_id, message_id }),
-      }).catch(() => {})
-    )).catch(() => {})
-  }
-  return c.json({ ok: true })
 })
 
 app.patch('/bulk-source', requireAuth, requireAdmin, async (c) => {
@@ -295,7 +282,7 @@ app.post('/send-pdf', requireAuth, async (c) => {
     }
   }
 
-  const caption = (booking.type === 'sotish' ? `🟢 <b>Sotish</b>` : `🟡 <b>Bron</b>`) + `\n` +
+  const caption = (booking.type === 'sotish' ? `🔴 <b>Sotish</b>` : `🟡 <b>Bron</b>`) + `\n` +
     `🏢 <b>${unitLabel}:</b> ${aptIdLabel}\n` +
     `👤 <b>Mijoz:</b> ${booking.ism} ${booking.familiya}\n` +
     (booking.phone ? `📞 <b>Telefon:</b> ${booking.phone}\n` : '') +
