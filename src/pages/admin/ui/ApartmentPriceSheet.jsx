@@ -110,10 +110,16 @@ export function ApartmentPriceSheet({ onBack }) {
 
     return (
       <tr key={id} className={`border-b border-gray-100 ${isDirty ? 'bg-amber-50/60' : 'hover:bg-gray-50/40'}`}>
-        <td className="px-4 py-2 font-mono font-bold text-sm text-gray-800 w-16">{aptNum}</td>
-        <td className="px-4 py-2 text-sm text-gray-500 tabular-nums w-20">{row.size} m²</td>
+        <td className="px-4 py-2 font-mono font-bold text-sm text-gray-800 w-14">{aptNum}</td>
+        <td className="px-4 py-2 w-52">
+          <span className="text-xs text-gray-500 font-medium">
+            {sheet.block}-blok · {row.bolim}-bo'lim · {sheet.floor}-qavat
+            {row.is_wc ? <span className="ml-1.5 text-sky-500 font-bold">WC</span> : null}
+          </span>
+        </td>
+        <td className="px-4 py-2 text-sm text-gray-400 tabular-nums w-20">{row.size} m²</td>
         <td className="px-4 py-2 text-sm font-mono text-gray-400 tabular-nums w-28">{fmt(row.general_price)} $</td>
-        <td className="px-3 py-1.5">
+        <td className="px-4 py-1.5 text-right">
           {isEdit ? (
             <input
               autoFocus
@@ -125,12 +131,12 @@ export function ApartmentPriceSheet({ onBack }) {
                 if (e.key === 'Escape') setEditId(null)
               }}
               placeholder="bo'sh = umumiy narx"
-              className="w-full px-2 py-1 rounded border border-amber-400 ring-1 ring-amber-200 bg-white font-mono text-sm focus:outline-none tabular-nums"
+              className="w-44 px-2 py-1 rounded border border-amber-400 ring-1 ring-amber-200 bg-white font-mono text-sm focus:outline-none tabular-nums text-right"
             />
           ) : (
             <button
               onClick={() => startEdit(row)}
-              className={`w-full text-left px-2 py-1 rounded text-sm font-mono tabular-nums transition-colors
+              className={`px-3 py-1 rounded text-sm font-mono tabular-nums transition-colors
                 ${isDirty
                   ? 'bg-amber-100 border border-amber-300 text-amber-900 font-bold'
                   : hasCustom
@@ -189,16 +195,17 @@ export function ApartmentPriceSheet({ onBack }) {
           <table className="w-full border-collapse text-left">
             <thead className="sticky top-0 z-10">
               <tr className="bg-gray-50 border-b-2 border-gray-200">
-                <th className="px-4 py-2.5 text-[11px] font-bold text-gray-400 uppercase tracking-wider w-16">№</th>
-                <th className="px-4 py-2.5 text-[11px] font-bold text-gray-400 uppercase tracking-wider">Maydon</th>
-                <th className="px-4 py-2.5 text-[11px] font-bold text-gray-400 uppercase tracking-wider">Umumiy narx</th>
-                <th className="px-4 py-2.5 text-[11px] font-bold text-gray-400 uppercase tracking-wider">Alohida narx</th>
+                <th className="px-4 py-2.5 text-[11px] font-bold text-gray-400 uppercase tracking-wider w-14">№</th>
+                <th className="px-4 py-2.5 text-[11px] font-bold text-gray-400 uppercase tracking-wider w-52">Joylashuv</th>
+                <th className="px-4 py-2.5 text-[11px] font-bold text-gray-400 uppercase tracking-wider w-20">Maydon</th>
+                <th className="px-4 py-2.5 text-[11px] font-bold text-gray-400 uppercase tracking-wider w-28">Umumiy narx</th>
+                <th className="px-4 py-2.5 text-[11px] font-bold text-gray-400 uppercase tracking-wider text-right">Alohida narx</th>
               </tr>
             </thead>
             <tbody>
               {shopBolims.flatMap(bolim => [
                 <tr key={`sh-${bolim}`}>
-                  <td colSpan={4} className="sticky top-10.25 z-5 bg-gray-100 border-y border-gray-200 px-4 py-1.5 text-[11px] font-black text-gray-400 uppercase tracking-widest">
+                  <td colSpan={5} className="sticky top-10.25 z-5 bg-gray-100 border-y border-gray-200 px-4 py-1.5 text-[11px] font-black text-gray-400 uppercase tracking-widest">
                     {bolim}-bo'lim
                   </td>
                 </tr>,
@@ -206,14 +213,14 @@ export function ApartmentPriceSheet({ onBack }) {
               ])}
               {wcBolims.length > 0 && (
                 <tr>
-                  <td colSpan={4} className="sticky top-10.25 z-5 bg-sky-50 border-y-2 border-sky-200 px-4 py-1.5 text-[11px] font-black text-sky-500 uppercase tracking-widest">
+                  <td colSpan={5} className="sticky top-10.25 z-5 bg-sky-50 border-y-2 border-sky-200 px-4 py-1.5 text-[11px] font-black text-sky-500 uppercase tracking-widest">
                     Hojatxonalar
                   </td>
                 </tr>
               )}
               {wcBolims.flatMap(bolim => [
                 <tr key={`wch-${bolim}`}>
-                  <td colSpan={4} className="sticky top-10.25 z-5 bg-sky-50/60 border-b border-sky-100 px-6 py-1 text-[11px] font-semibold text-sky-400">
+                  <td colSpan={5} className="sticky top-10.25 z-5 bg-sky-50/60 border-b border-sky-100 px-6 py-1 text-[11px] font-semibold text-sky-400">
                     {bolim}-bo'lim
                   </td>
                 </tr>,
