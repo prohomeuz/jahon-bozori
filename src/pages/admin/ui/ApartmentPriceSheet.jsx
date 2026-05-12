@@ -234,7 +234,7 @@ export function ApartmentPriceSheet({ onBack }) {
   const sheetId  = SHEETS.find(s => s.id === params.get('sheet'))?.id ?? 'A-1'
   const typeTab  = params.get('type') === 'wc' ? 'wc' : 'shops'
 
-  function setSheetId(id) { setParams(p => { const n = new URLSearchParams(p); n.set('sheet', id); n.delete('type'); return n }, { replace: true }) }
+  function setSheetId(id) { setParams(p => { const n = new URLSearchParams(p); n.set('sheet', id); return n }, { replace: true }) }
   function setTypeTab(t)  { setParams(p => { const n = new URLSearchParams(p); n.set('type', t);  return n }, { replace: true }) }
 
   const [allDrafts, setAllDrafts]   = useState({})
