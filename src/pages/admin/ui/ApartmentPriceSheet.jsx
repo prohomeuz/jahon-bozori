@@ -375,34 +375,34 @@ export function ApartmentPriceSheet({ onBack }) {
             <table className="w-full border-collapse text-left">
               <thead className="sticky top-0 z-10">
                 <tr className="bg-white h-10" style={{ boxShadow: '0 1px 0 0 #f3f4f6, 0 2px 0 0 #e5e7eb' }}>
-                  <th className="px-4 text-[10px] font-extrabold text-gray-300 uppercase tracking-widest w-14">№</th>
-                  <th className="px-4 text-[10px] font-extrabold text-gray-300 uppercase tracking-widest w-20">Maydon</th>
-                  <th className="px-4 text-[10px] font-extrabold text-gray-300 uppercase tracking-widest w-32 whitespace-nowrap">Umumiy narx</th>
+                  <th className="px-4 text-[11px] font-bold text-gray-500 uppercase tracking-wider w-14">№</th>
+                  <th className="px-4 text-[11px] font-bold text-gray-500 uppercase tracking-wider w-20">Maydon</th>
+                  <th className="px-4 text-[11px] font-bold text-gray-500 uppercase tracking-wider w-32 whitespace-nowrap">Umumiy narx</th>
                   <th />
-                  <th className="px-4 text-[10px] font-extrabold text-gray-300 uppercase tracking-widest w-56">Joylashuv</th>
-                  <th className="px-4 text-[10px] font-extrabold text-gray-300 uppercase tracking-widest w-48 text-right">Alohida narx</th>
+                  <th className="px-4 text-[11px] font-bold text-gray-500 uppercase tracking-wider w-56">Joylashuv</th>
+                  <th className="px-4 text-[11px] font-bold text-gray-500 uppercase tracking-wider w-48 text-right">Alohida narx</th>
                 </tr>
               </thead>
               <tbody>
                 {shopBolims.flatMap(bolim => [
                   <tr key={`sh-${bolim}`}>
-                    <td colSpan={6} className="sticky top-10 z-5 px-4 py-1.5" style={{ background: '#f9fafb', boxShadow: 'inset 3px 0 0 0 #d1d5db' }}>
-                      <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{bolim}-bo'lim</span>
+                    <td colSpan={6} className="sticky top-10 z-5 px-4 py-2" style={{ background: '#f3f4f6', boxShadow: 'inset 3px 0 0 0 #9ca3af' }}>
+                      <span className="text-[11px] font-bold text-gray-600 uppercase tracking-wider">{bolim}-bo'lim</span>
                     </td>
                   </tr>,
                   ...shopMap[bolim].map(renderRow),
                 ])}
                 {wcBolims.length > 0 && (
                   <tr>
-                    <td colSpan={6} className="sticky top-10 z-5 px-4 py-1.5" style={{ background: '#f0f9ff', boxShadow: 'inset 3px 0 0 0 #38bdf8' }}>
-                      <span className="text-[10px] font-black text-sky-500 uppercase tracking-widest">Hojatxonalar</span>
+                    <td colSpan={6} className="sticky top-10 z-5 px-4 py-2" style={{ background: '#e0f2fe', boxShadow: 'inset 3px 0 0 0 #0ea5e9' }}>
+                      <span className="text-[11px] font-bold text-sky-600 uppercase tracking-wider">Hojatxonalar</span>
                     </td>
                   </tr>
                 )}
                 {wcBolims.flatMap(bolim => [
                   <tr key={`wch-${bolim}`}>
-                    <td colSpan={6} className="sticky top-10 z-5 px-6 py-1" style={{ background: '#f0f9ff', boxShadow: 'inset 3px 0 0 0 #7dd3fc' }}>
-                      <span className="text-[10px] font-semibold text-sky-400 uppercase tracking-widest">{bolim}-bo'lim</span>
+                    <td colSpan={6} className="sticky top-10 z-5 px-6 py-1.5" style={{ background: '#e0f2fe', boxShadow: 'inset 3px 0 0 0 #7dd3fc' }}>
+                      <span className="text-[11px] font-semibold text-sky-600 uppercase tracking-wider">{bolim}-bo'lim</span>
                     </td>
                   </tr>,
                   ...wcMap[bolim].map(renderRow),
