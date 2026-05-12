@@ -4,12 +4,12 @@ import { apiFetch } from '@/shared/lib/auth'
 import { ArrowLeft, Check, Save, X, MapPin } from 'lucide-react'
 
 const SHEETS = [
-  { id: 'A-1', block: 'A', floor: 1, label: 'A  1-qavat' },
-  { id: 'A-2', block: 'A', floor: 2, label: 'A  2-qavat' },
-  { id: 'B-1', block: 'B', floor: 1, label: 'B  1-qavat' },
-  { id: 'B-2', block: 'B', floor: 2, label: 'B  2-qavat' },
-  { id: 'C-1', block: 'C', floor: 1, label: 'C  1-qavat' },
-  { id: 'C-2', block: 'C', floor: 2, label: 'C  2-qavat' },
+  { id: 'A-1', block: 'A', floor: 1, label: 'A · 1-qavat' },
+  { id: 'A-2', block: 'A', floor: 2, label: 'A · 2-qavat' },
+  { id: 'B-1', block: 'B', floor: 1, label: 'B · 1-qavat' },
+  { id: 'B-2', block: 'B', floor: 2, label: 'B · 2-qavat' },
+  { id: 'C-1', block: 'C', floor: 1, label: 'C · 1-qavat' },
+  { id: 'C-2', block: 'C', floor: 2, label: 'C · 2-qavat' },
 ]
 
 // ─── Location highlight helpers (same logic as ShopsPage) ────────────────────
