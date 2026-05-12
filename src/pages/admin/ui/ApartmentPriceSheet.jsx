@@ -357,7 +357,7 @@ export function ApartmentPriceSheet({ onBack }) {
           ) : (
             <table className="w-full border-collapse text-left">
               <thead className="sticky top-0 z-10">
-                <tr className="bg-gray-50 border-b-2 border-gray-200 h-10">
+                <tr className="bg-gray-50 h-10" style={{ boxShadow: '0 2px 0 0 #e5e7eb' }}>
                   <th className="px-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider w-14">№</th>
                   <th className="px-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider w-20">Maydon</th>
                   <th className="px-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider w-32 whitespace-nowrap">Umumiy narx</th>
