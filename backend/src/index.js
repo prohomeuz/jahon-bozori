@@ -50,6 +50,17 @@ app.get('/api/health', (c) => c.json({ ok: true }))
   }
 }
 
+// ─── NARXCHI SEED ────────────────────────────────────────────────────────────
+{
+  const existing = db.prepare("SELECT id FROM users WHERE role='narxchi'").get()
+  if (!existing) {
+    const pass = '09080706'
+    db.prepare("INSERT INTO users (username, password, plain_password, role, name, telegram_id, created_at) VALUES (?,?,?,'narxchi',?,NULL,datetime('now','+5 hours'))")
+      .run(pass, hashPassword(pass), pass, 'Xiang Xiobin')
+    console.log('[seed] Narxchi yaratildi')
+  }
+}
+
 // ─── WORKING HOURS BROADCAST — aniq 20:00 da ─────────────────────────────────
 function scheduleWorkEnd() {
   const now    = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Tashkent' }))

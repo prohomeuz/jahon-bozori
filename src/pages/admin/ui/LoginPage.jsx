@@ -57,15 +57,23 @@ export default function LoginPage() {
       })
       const data = await res.json()
       if (!res.ok) {
-        setError(data.error === 'OUTSIDE_HOURS' ? data.message : data.error)
+        setError(
+          data.error === 'OUTSIDE_HOURS' ? data.message :
+          data.error === 'BLOCKED'        ? "Hisobingiz bloklangan. Admin bilan bog'laning." :
+          data.error
+        )
         setDigits([])
         setRevealIdx(-1)
         return
       }
       setToken(data.token)
       if (data.refreshToken) setRefreshToken(data.refreshToken)
-      const defaultDest = data.user?.role === 'salesmanager' ? '/admin/bookings' : '/admin'
+      const defaultDest = data.user?.role === 'salesmanager' ? '/admin/bookings' : data.user?.role === 'narxchi' ? '/admin/prices' : '/admin'
       navigate(from ?? defaultDest, { replace: true })
+    } catch {
+      setError("Server bilan aloqa yo'q. Internet yoki serverni tekshiring.")
+      setDigits([])
+      setRevealIdx(-1)
     } finally {
       setLoading(false)
     }

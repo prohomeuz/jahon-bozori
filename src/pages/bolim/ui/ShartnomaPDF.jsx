@@ -50,7 +50,6 @@ const s = StyleSheet.create({
   signCol: { flex: 1, alignItems: 'center' },
   signLbl: { fontFamily: 'NotoSC', fontWeight: 700, fontSize: 9, color: '#000000', marginBottom: 6, textAlign: 'center' },
   signFp:  { width: 48, height: 48, marginBottom: 6 },
-  signLn:  { width: '100%', borderBottomWidth: 0.5, borderBottomColor: '#374151', marginBottom: 3 },
   signHt:  { fontSize: 9, color: '#9ca3af', textAlign: 'center' },
   // annex 2 summary
   sumRow:  { flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginBottom: 8 },
@@ -117,7 +116,6 @@ function SignBox({ label, name }) {
         <Circle cx="24" cy="24" r="8"  fill="none" stroke="#ececec" strokeWidth={0.5} />
         <Circle cx="24" cy="24" r="3"  fill="none" stroke="#ececec" strokeWidth={0.5} />
       </Svg>
-      <View style={s.signLn} />
       {name ? <Text style={s.signHt}>{name}</Text> : <Text style={s.signHt}> </Text>}
     </View>
   )
@@ -455,7 +453,7 @@ export function ShartnomaPDF({ apartment, floor, blockId, bolimNum, form, contra
               <Text style={[s.th, { flex: 1 }]}>分期金额{'\n'}Toʻlov summasi (USD)</Text>
               <Text style={[s.thL, { flex: 1 }]}>剩余款项{'\n'}Qolgan summa (USD)</Text>
             </View>
-            {schedule.map((row, i) => (
+            {schedule.slice(0, Math.max(0, schedule.length - 3)).map((row, i) => (
               <View key={row.num} style={i % 2 === 0 ? s.trow : s.trowA}>
                 <Text style={[s.td, { width: 28 }]}>{row.num}</Text>
                 <Text style={[s.td, { width: 90 }]}>{row.date}</Text>
@@ -463,12 +461,27 @@ export function ShartnomaPDF({ apartment, floor, blockId, bolimNum, form, contra
                 <Text style={[s.tdL, { flex: 1 }]}>{usd(row.remaining)}</Text>
               </View>
             ))}
+            <View wrap={false}>
+              {schedule.slice(Math.max(0, schedule.length - 3)).map((row, i) => {
+                const idx = Math.max(0, schedule.length - 3) + i
+                return (
+                  <View key={row.num} style={idx % 2 === 0 ? s.trow : s.trowA}>
+                    <Text style={[s.td, { width: 28 }]}>{row.num}</Text>
+                    <Text style={[s.td, { width: 90 }]}>{row.date}</Text>
+                    <Text style={[s.td, { flex: 1 }]}>{usd(row.amount)}</Text>
+                    <Text style={[s.tdL, { flex: 1 }]}>{usd(row.remaining)}</Text>
+                  </View>
+                )
+              })}
+            </View>
           </View>
 
-          <Text style={s.note} hyphenationCallback={cjkHyphen}>若交款时，客户采用苏姆支付，按交款当天汇率折成苏姆后支付。</Text>
-          <Text style={[s.note, { fontFamily: 'Roboto' }]}>Agar mijoz to'lovni so'mda amalga oshirsa, to'lov kuni amaldagi valyuta kursi bo'yicha so'mga aylantirilib to'lanadi.</Text>
-          <Text style={s.note} hyphenationCallback={cjkHyphen}>银行 Bank: TOSHKENT SH., "UZSANOATKURILISHBANKI" ATB BOS OFISI  ·  纳税人 STIR: 312256591  ·  MFO: 00440</Text>
-          <Text style={s.note} hyphenationCallback={cjkHyphen}>账号 H/r (USD): 20208840907268122001  ·  账号 H/r (so'm): 20208000807268122001</Text>
+          <View wrap={false}>
+            <Text style={s.note} hyphenationCallback={cjkHyphen}>若交款时，客户采用苏姆支付，按交款当天汇率折成苏姆后支付。</Text>
+            <Text style={[s.note, { fontFamily: 'Roboto' }]}>Agar mijoz to'lovni so'mda amalga oshirsa, to'lov kuni amaldagi valyuta kursi bo'yicha so'mga aylantirilib to'lanadi.</Text>
+            <Text style={s.note} hyphenationCallback={cjkHyphen}>银行 Bank: TOSHKENT SH., "UZSANOATKURILISHBANKI" ATB BOS OFISI  ·  纳税人 STIR: 312256591  ·  MFO: 00440</Text>
+            <Text style={s.note} hyphenationCallback={cjkHyphen}>账号 H/r (USD): 20208840907268122001  ·  账号 H/r (so'm): 20208000807268122001</Text>
+          </View>
         </View>
       </Page>
     </Document>

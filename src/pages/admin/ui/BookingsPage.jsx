@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { getUser, apiFetch } from '@/shared/lib/auth'
+import { showToast } from '@/shared/lib/toast'
 import { useRealtimeApts } from '@/shared/hooks/useRealtimeApts'
 import { Search, X, SlidersHorizontal, Tag } from 'lucide-react'
 import { BookingsTable } from './BookingsTable'
@@ -90,13 +91,20 @@ export default function BookingsPage() {
     if (!bulkSourceId || selectedIds.size === 0) return
     setBulkLoading(true)
     try {
-      await apiFetch('/api/bookings/bulk-source', {
+      const res = await apiFetch('/api/bookings/bulk-source', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ids: Array.from(selectedIds), source_id: bulkSourceId === 'none' ? null : parseInt(bulkSourceId) }),
       })
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}))
+        showToast(d.error ?? "Amal bajarilmadi", 'error')
+        return
+      }
       queryClient.invalidateQueries({ queryKey: ['bookings'] })
       setSelectedIds(new Set()); setBulkSourceId(''); setBulkMode(false)
+    } catch {
+      showToast("Server bilan aloqa yo'q", 'error')
     } finally {
       setBulkLoading(false)
     }

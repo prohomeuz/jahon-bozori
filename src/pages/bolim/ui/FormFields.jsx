@@ -131,15 +131,16 @@ export function FullPhoneNumpad({ value, onChange, onClose }) {
   )
 }
 
-export function PassportField({ label, value, onChange }) {
+export function PassportField({ label, value, onChange, error }) {
   const [touched, setTouched] = useState(false)
   const invalid = touched && value && !/^[A-Z]{2} \d{7}$/.test(value)
+  const hasError = error || invalid
 
   return (
     <div>
       <label className={LABEL}>{label}</label>
       <input
-        className={INPUT + (invalid ? ' border-red-400 ring-1 ring-red-300 focus:ring-red-400' : '')}
+        className={INPUT + (hasError ? ' border-red-400 ring-1 ring-red-300 focus:ring-red-400' : '')}
         placeholder="AA 1234567"
         value={value}
         onChange={e => onChange(formatPassport(e.target.value))}
@@ -149,6 +150,7 @@ export function PassportField({ label, value, onChange }) {
         spellCheck={false}
       />
       {invalid && <p className="text-xs text-red-500 mt-1.5">2 harf + 7 raqam bo'lishi kerak</p>}
+      {!invalid && error && <p className="text-xs text-red-500 mt-1.5">{error}</p>}
     </div>
   )
 }

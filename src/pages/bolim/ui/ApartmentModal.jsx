@@ -71,6 +71,7 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
   const [phoneTarget, setPhoneTarget]   = useState(null)
   const [sendSms, setSendSms]           = useState(false)
   const [pairPartner, setPairPartner]   = useState(null)
+  const [pairNarxM2, setPairNarxM2]     = useState(0)
   const [bookWithPair, setBookWithPair] = useState(false)
   const [sources, setSources]           = useState([])
 
@@ -131,12 +132,19 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
     const narxVal   = Number(String(calc.narxM2).replace(/\s/g, ''))
     const downVal   = Number(String(calc.boshlangich).replace(/\s/g, ''))
     const months    = parseInt(calc.oylar) || 12
-    const baseTotal = Math.round(narxVal * effectiveAptSize)
+    const isPair    = bookWithPair && pairPartner
+    const pNarx     = isPair && pairNarxM2 > 0 ? pairNarxM2 : narxVal
+    const baseTotal = isPair
+      ? Math.round(narxVal * apartment.size + pNarx * pairPartner.size)
+      : Math.round(narxVal * apartment.size)
     const pctOfBase = baseTotal > 0 && downVal > 0 ? Math.floor((downVal / baseTotal) * 100) : 0
     const pctBracket = apartment.is_wc ? null : (CHEGIRMA_BRACKETS.find(p => pctOfBase >= p) ?? null)
     const chegirma  = (apartment.is_wc || !chegirmaEnabled) ? 0 : (pctBracket ? CHEGIRMA_TABLE[pctBracket] : 0)
     const yakuniy   = narxVal > 0 ? Math.max(0, narxVal - chegirma) : 0
-    const total     = Math.round(yakuniy * effectiveAptSize)
+    const yakuniy2  = pNarx > 0   ? Math.max(0, pNarx - chegirma)   : 0
+    const total     = isPair
+      ? Math.round(yakuniy * apartment.size + yakuniy2 * pairPartner.size)
+      : Math.round(yakuniy * apartment.size)
     const percent   = Math.min(100, pctOfBase)
     const qolgan    = Math.max(0, total - downVal)
     const qolganDisplay = qolgan > 0 ? qolgan : (pctOfBase < 100 ? Math.max(0, baseTotal - downVal) : 0)
@@ -144,7 +152,7 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
     const bonusBracket = BONUS_BRACKETS.find(p => pctOfBase >= p) ?? null
     const bonus     = (apartment.is_wc || !bonusEnabled) ? null : (bonusBracket ? BONUS_TABLE[bonusBracket] : null)
     return { narxVal, downVal, months, baseTotal, pctOfBase, pctBracket, chegirma, yakuniy, total, percent, qolgan, monthly, bonus }
-  }, [calc.narxM2, calc.boshlangich, calc.oylar, effectiveAptSize, apartment.is_wc, chegirmaEnabled, bonusEnabled])
+  }, [calc.narxM2, calc.boshlangich, calc.oylar, apartment.size, apartment.is_wc, bookWithPair, pairPartner, pairNarxM2, chegirmaEnabled, bonusEnabled])
 
   const { pctBracket: currentBracket } = calcDerived
   useEffect(() => {
@@ -162,7 +170,7 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
     let cancelled = false
     const [block, bolimStr] = apartment.address.split('-')
     const isWc = apartment.is_wc ? '&is_wc=1' : ''
-    apiFetch(`/api/prices?block=${block}&bolim=${parseInt(bolimStr)}&floor=${floor}${isWc}`)
+    apiFetch(`/api/prices?block=${block}&bolim=${parseInt(bolimStr)}&floor=${floor}${isWc}&apt=${apartment.address}`)
       .then(r => r.json())
       .then(({ price }) => {
         if (!cancelled && price) {
@@ -177,7 +185,7 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
   function fetchCalcPrice() {
     const [block, bolimStr] = apartment.address.split('-')
     const isWc = apartment.is_wc ? '&is_wc=1' : ''
-    apiFetch(`/api/prices?block=${block}&bolim=${parseInt(bolimStr)}&floor=${floor}${isWc}`)
+    apiFetch(`/api/prices?block=${block}&bolim=${parseInt(bolimStr)}&floor=${floor}${isWc}&apt=${apartment.address}`)
       .then(r => r.json())
       .then(({ price }) => {
         if (price) {
@@ -195,13 +203,22 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
   }, [])
 
   useEffect(() => {
-    setPairPartner(null); setBookWithPair(false)
+    setPairPartner(null); setPairNarxM2(0); setBookWithPair(false)
     if (apartment.is_wc) return
     apiFetch(`/api/apartments/${apartment.address}/pair`)
       .then(r => r.json())
-      .then(partner => { if (partner && partner.status === 'EMPTY') setPairPartner(partner) })
+      .then(partner => {
+        if (partner && partner.status === 'EMPTY') {
+          setPairPartner(partner)
+          const [pBlock, pBolimStr] = partner.address.split('-')
+          apiFetch(`/api/prices?block=${pBlock}&bolim=${parseInt(pBolimStr)}&floor=${floor}&apt=${partner.address}`)
+            .then(r => r.json())
+            .then(({ price }) => { if (price) setPairNarxM2(price) })
+            .catch(() => {})
+        }
+      })
       .catch(() => {})
-  }, [apartment.address, apartment.is_wc])
+  }, [apartment.address, apartment.is_wc, floor])
 
   useEffect(() => {
     const handler = (e) => { if (e.key === 'Escape') onClose() }
@@ -267,7 +284,12 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
     if (phoneDigits.length < 9) e.telefon = phoneDigits.length === 0 ? 'Telefon raqam kiritilishi shart' : "Telefon raqam to'liq emas"
     const boshlVal = Number(String(form.boshlangich || '').replace(/\s/g, ''))
     if (!boshlVal) e.boshlangich = boshlVal === 0 && form.boshlangich ? "Summa noldan katta bo'lishi shart" : "Boshlang'ich to'lov kiritilishi shart"
-    if (type === 'bron' && sources.length > 0 && !form.source_id) e.source_id = "Manbaa tanlanishi shart"
+    if (sources.length > 0 && !form.source_id) e.source_id = "Manbaa tanlanishi shart"
+    if (type === 'sotish') {
+      if (!form.passport?.trim()) e.passport = "To'ldirilishi shart"
+      if (!form.passport_place?.trim()) e.passport_place = "To'ldirilishi shart"
+      if (!form.manzil?.trim()) e.manzil = "To'ldirilishi shart"
+    }
     return e
   }
 
@@ -768,12 +790,13 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
           <Field label="Ism" placeholder="Abdulloh" value={sotishForm.ism} onChange={setSotishCap('ism')} autoComplete="given-name" error={sotishErrors.ism} />
           <Field label="Familiya" placeholder="Karimov" value={sotishForm.familiya} onChange={setSotishCap('familiya')} autoComplete="family-name" error={sotishErrors.familiya} />
           <PhoneField label="Telefon raqam" value={sotishForm.telefon} isOpen={phoneTarget === 'sotish'} onOpenNumpad={() => setPhoneTarget('sotish')} error={sotishErrors.telefon} />
+          <SourceSelector value={sotishForm.source_id} onChange={id => setSotishForm(f => ({ ...f, source_id: id }))} errors={sotishErrors} />
           <FormSummaryCard form={sotishForm} errors={sotishErrors} />
           <div className="grid grid-cols-2 gap-4">
-            <PassportField label="Passport seriya/raqam" value={sotishForm.passport} onChange={v => setSotishForm(f => ({ ...f, passport: v }))} />
-            <Field label="Passport berilgan joy" placeholder="Toshkent sh. IIB" value={sotishForm.passport_place} onChange={setSotish('passport_place')} />
+            <PassportField label="Passport seriya/raqam" value={sotishForm.passport} onChange={v => setSotishForm(f => ({ ...f, passport: v }))} error={sotishErrors.passport} />
+            <Field label="Passport berilgan joy" placeholder="Toshkent sh. IIB" value={sotishForm.passport_place} onChange={setSotish('passport_place')} error={sotishErrors.passport_place} />
           </div>
-          <Field label="Manzil" placeholder="Toshkent, Chilonzor" value={sotishForm.manzil} onChange={setSotish('manzil')} />
+          <Field label="Manzil" placeholder="Toshkent, Chilonzor" value={sotishForm.manzil} onChange={setSotish('manzil')} error={sotishErrors.manzil} />
         </div>
       )}
       <div className="flex items-stretch" style={{ flex: '0 0 30%' }}>
@@ -898,11 +921,11 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
 
       <div className="flex flex-col flex-1 min-h-0">
         {tab === 'bron' ? (
-          <form id="bron-form" onSubmit={e => { e.preventDefault(); const errs = getErrors(bronForm); if (Object.keys(errs).length > 0) { setBronShowErrors(true); return }; setConfirmPending('bron') }} className="flex flex-col flex-1 min-h-0">
+          <form id="bron-form" onSubmit={e => { e.preventDefault(); const errs = getErrors(bronForm, 'bron'); if (Object.keys(errs).length > 0) { setBronShowErrors(true); return }; setConfirmPending('bron') }} className="flex flex-col flex-1 min-h-0">
             {bronFields}
           </form>
         ) : (
-          <form id="sotish-form" onSubmit={e => { e.preventDefault(); const errs = getErrors(sotishForm); if (Object.keys(errs).length > 0) { setSotishShowErrors(true); return }; setConfirmPending('sotish') }} className="flex flex-col flex-1 min-h-0">
+          <form id="sotish-form" onSubmit={e => { e.preventDefault(); const errs = getErrors(sotishForm, 'sotish'); if (Object.keys(errs).length > 0) { setSotishShowErrors(true); return }; setConfirmPending('sotish') }} className="flex flex-col flex-1 min-h-0">
             {sotishFields}
           </form>
         )}

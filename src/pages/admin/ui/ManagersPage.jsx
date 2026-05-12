@@ -2,6 +2,7 @@ import { useState, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from '@/shared/lib/auth'
 import { UserPlus, Pencil, Trash2, Eye, EyeOff, Copy, Check, RefreshCw, Search, X } from 'lucide-react'
+import { showToast } from '@/shared/lib/toast'
 
 const PAD = ['1','2','3','4','5','6','7','8','9','','0','⌫']
 const REVEAL_MS = 800
@@ -192,10 +193,20 @@ function DeleteConfirm({ user, onClose, onDone }) {
 
   async function handleDelete() {
     setLoading(true)
-    await apiFetch(`/api/users/${user.id}`, { method: 'DELETE' })
-    setLoading(false)
-    onDone()
-    onClose()
+    try {
+      const res = await apiFetch(`/api/users/${user.id}`, { method: 'DELETE' })
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}))
+        showToast(d.error ?? "O'chirishda xatolik", 'error')
+        return
+      }
+      onDone()
+      onClose()
+    } catch {
+      showToast("Server bilan aloqa yo'q", 'error')
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
@@ -268,8 +279,13 @@ function PasswordCell({ password }) {
 function ActiveToggle({ user, onDone }) {
   const cooldownRef = useRef(false)
   const { mutate, isPending } = useMutation({
-    mutationFn: () => apiFetch(`/api/users/${user.id}/active`, { method: 'PATCH' }).then(r => r.json()),
+    mutationFn: () => apiFetch(`/api/users/${user.id}/active`, { method: 'PATCH' }).then(async r => {
+      const d = await r.json()
+      if (!r.ok) throw new Error(d.error ?? 'Xatolik')
+      return d
+    }),
     onSuccess: onDone,
+    onError: (e) => showToast(e.message, 'error'),
     onSettled: () => { setTimeout(() => { cooldownRef.current = false }, 800) },
   })
   const active = !!user.is_active
@@ -303,12 +319,20 @@ export default function ManagersPage() {
     queryKey: ['users'],
     queryFn: () => apiFetch('/api/users').then(r => r.json()),
   })
+  const { data: narxchiData } = useQuery({
+    queryKey: ['narxchi'],
+    queryFn: () => apiFetch('/api/users/narxchi').then(r => r.json()),
+  })
   const users = Array.isArray(data) ? data : []
+  const narxchiList = Array.isArray(narxchiData) ? narxchiData : []
   const filtered = search.trim()
     ? users.filter(u => u.name.toLowerCase().includes(search.trim().toLowerCase()))
     : users
 
-  const refresh = () => queryClient.invalidateQueries({ queryKey: ['users'] })
+  const refresh = () => {
+    queryClient.invalidateQueries({ queryKey: ['users'] })
+    queryClient.invalidateQueries({ queryKey: ['narxchi'] })
+  }
 
   return (
     <div className="p-4 md:p-6 flex flex-col gap-3 h-full min-h-0 overflow-hidden">
@@ -403,6 +427,41 @@ export default function ManagersPage() {
           </table>
         </div>
       </div>
+
+      {/* Narxchi section */}
+      {narxchiList.length > 0 && (
+        <div className="bg-card border border-border rounded-2xl overflow-hidden shrink-0">
+          <div className="px-4 py-3 border-b border-border bg-muted/40">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Narxchi</p>
+          </div>
+          <table className="w-full text-sm">
+            <tbody className="divide-y divide-border">
+              {narxchiList.map(u => (
+                <tr key={u.id} className="hover:bg-muted/30 transition-colors">
+                  <td className="px-4 py-3.5 font-medium whitespace-nowrap">{u.name}</td>
+                  <td className="px-4 py-3.5"><PasswordCell password={u.plain_password} /></td>
+                  <td className="px-4 py-3.5 text-xs text-muted-foreground whitespace-nowrap">Har doim aktiv · Faqat narxlar</td>
+                  <td className="px-4 py-3.5 whitespace-nowrap">
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={() => setModal({ type: 'edit', user: u })}
+                        className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                        title="Tahrirlash"
+                      >
+                        <Pencil size={15} />
+                      </button>
+                      <ActiveToggle user={u} onDone={refresh} />
+                      <span className={`text-xs font-medium inline-block w-16 ${u.is_active ? 'text-emerald-600' : 'text-muted-foreground'}`}>
+                        {u.is_active ? 'Aktiv' : 'Bloklangan'}
+                      </span>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {modal?.type === 'create' && <UserModal onClose={() => setModal(null)} onDone={refresh} />}
       {modal?.type === 'edit' && <UserModal user={modal.user} onClose={() => setModal(null)} onDone={refresh} />}

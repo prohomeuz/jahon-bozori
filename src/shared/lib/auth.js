@@ -80,13 +80,17 @@ export async function apiFetch(url, options = {}) {
 
   const res = await fetch(url, { ...options, headers: makeHeaders(token) })
 
-  // 403 OUTSIDE_HOURS — ish vaqti tugagan, darhol chiqar
+  // 403 — OUTSIDE_HOURS yoki BLOCKED: darhol chiqar
   if (res.status === 403) {
     const clone = res.clone()
     const data = await clone.json().catch(() => ({}))
     if (data.error === 'OUTSIDE_HOURS') {
       forceLogout(true)
       throw new Error('outside_hours')
+    }
+    if (data.error === 'BLOCKED') {
+      forceLogout(false)
+      throw new Error('blocked')
     }
     return res
   }

@@ -1,10 +1,11 @@
 import { Hono } from 'hono'
 import { q } from '../db.js'
-import { requireAuth, requireAdmin } from '../auth.js'
+import { requireAuth, requireAdmin, blockNarxchi } from '../auth.js'
 
 const app = new Hono()
+app.use('*', requireAuth, blockNarxchi)
 
-app.get('/', requireAuth, (c) => c.json(q.allSources.all()))
+app.get('/', (c) => c.json(q.allSources.all()))
 
 app.post('/', requireAuth, requireAdmin, async (c) => {
   const { name } = await c.req.json()

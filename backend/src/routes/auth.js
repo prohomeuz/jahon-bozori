@@ -35,6 +35,7 @@ app.post('/login', async (c) => {
   if (!user) return c.json({ error: "Parol noto'g'ri" }, 401)
   if (user.role === 'salesmanager' && !isWorkingHours() && !isLocalhost(c))
     return c.json({ error: 'OUTSIDE_HOURS', message: "Tizim faqat 08:00–20:00 orasida ishlaydi" }, 403)
+  if (!user.is_active && user.role !== 'admin') return c.json({ error: 'BLOCKED' }, 403)
   const { accessToken, refreshToken } = await createTokenPair(user)
   return c.json({ token: accessToken, refreshToken, user: { id: user.id, role: user.role, name: user.name } })
 })
@@ -51,6 +52,7 @@ app.post('/refresh', async (c) => {
       return c.json({ error: 'OUTSIDE_HOURS', message: "Tizim faqat 08:00–20:00 orasida ishlaydi" }, 403)
     const user = q.userById.get({ id: payload.sub })
     if (!user) return c.json({ error: 'Unauthorized' }, 401)
+    if (!user.is_active && user.role !== 'admin') return c.json({ error: 'BLOCKED' }, 403)
     const { accessToken, refreshToken: newRefresh } = await createTokenPair(user)
     return c.json({ token: accessToken, refreshToken: newRefresh })
   } catch { return c.json({ error: 'Unauthorized' }, 401) }
@@ -65,6 +67,7 @@ app.get('/me', (c) => {
 app.patch('/change-password', async (c) => {
   const { sub: id, role } = c.get('user')
   if (role === 'admin') return c.json({ error: "Admin paroli faqat dasturchi tomonidan o'zgartiriladi" }, 403)
+  if (role === 'narxchi') return c.json({ error: "Narxchi paroli o'zgartirilmaydi" }, 403)
   const { currentPassword, newPassword } = await c.req.json()
   if (!currentPassword || !newPassword) return c.json({ error: "Maydonlar to'ldirilmagan" }, 400)
   if (newPassword.length !== 8 || !/^\d+$/.test(newPassword)) return c.json({ error: "Yangi parol 8 ta raqamdan iborat bo'lishi kerak" }, 400)

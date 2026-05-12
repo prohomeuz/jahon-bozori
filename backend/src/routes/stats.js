@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import { q } from '../db.js'
-import { requireAuth, requireAdmin } from '../auth.js'
+import { requireAuth, requireAdmin, requireAdminOrNarxchi } from '../auth.js'
 
 const app = new Hono()
 
@@ -23,7 +23,7 @@ app.get('/dashboard', requireAuth, (c) => {
   const { blocks: shopBlocks, total: shopTotal } = buildBlocks(q.statsShops.all())
   const { blocks: wcBlocks,   total: wcTotal   } = buildBlocks(q.statsWc.all())
 
-  if (user.role === 'admin') {
+  if (user.role === 'admin' || user.role === 'narxchi') {
     const bookings = q.allBookings.all({ limit: 20, offset: 0 })
     const totalB   = q.totalBookings.get()
     return c.json({ shopBlocks, wcBlocks, shopTotal, wcTotal, bookings, totalBookings: totalB.n })
@@ -76,7 +76,7 @@ app.get('/stats/snapshot', requireAuth, (c) => {
   return c.json({ sold, reserved, empty: total - sold - reserved, total, date, block })
 })
 
-app.get('/stats/sources', requireAuth, requireAdmin, (c) => {
+app.get('/stats/sources', requireAuth, requireAdminOrNarxchi, (c) => {
   const from      = c.req.query('from') || ''
   const to        = c.req.query('to')   || ''
   const cancelled = c.req.query('cancelled') === '1' ? 1 : 0

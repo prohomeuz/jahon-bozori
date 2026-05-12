@@ -2,12 +2,13 @@ import { useState } from 'react'
 import { Download, FileText, X } from 'lucide-react'
 import { apiFetch } from '@/shared/lib/auth'
 import { downloadBookingPDF } from '../lib/bookingPdf.jsx'
+import { showToast } from '@/shared/lib/toast'
 
 const TYPE_BADGE = {
   bron:   'bg-amber-100 text-amber-700 border border-amber-200',
-  sotish: 'bg-emerald-100 text-emerald-700 border border-emerald-200',
+  sotish: 'bg-red-100 text-red-700 border border-red-200',
 }
-const TYPE_LABEL = { bron: 'Bron', sotish: 'Sotish' }
+const TYPE_LABEL = { bron: 'Bron', sotish: 'Sotilgan' }
 
 function fmtMoney(val) {
   if (!val) return null
@@ -75,13 +76,23 @@ export function BookingRow({ b, isAdmin, cancelled, onReset, scrolled, scrolledR
 
   async function handleReset() {
     setShowConfirm(false); setLoading(true)
-    await apiFetch(`/api/apartments/${b.apartment_id}/status`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: 'EMPTY' }),
-    })
-    setLoading(false)
-    onReset?.()
+    try {
+      const res = await apiFetch(`/api/apartments/${b.apartment_id}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'EMPTY' }),
+      })
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}))
+        showToast(d.error ?? "Amal bajarilmadi", 'error')
+        return
+      }
+      onReset?.()
+    } catch {
+      showToast("Server bilan aloqa yo'q", 'error')
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (

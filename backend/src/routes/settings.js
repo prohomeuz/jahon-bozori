@@ -1,9 +1,10 @@
 import { Hono } from 'hono'
 import { q } from '../db.js'
-import { requireAuth, requireAdmin } from '../auth.js'
+import { requireAuth, requireAdmin, blockNarxchi } from '../auth.js'
 import { broadcast } from '../lib/sse.js'
 
 const app = new Hono()
+app.use('*', requireAuth, blockNarxchi)
 
 app.get('/', requireAuth, (c) => {
   const rows = q.allSettings.all()

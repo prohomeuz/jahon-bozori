@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from '@/shared/lib/auth'
+import { showToast } from '@/shared/lib/toast'
 import { Percent, Gift, Plus, Pencil, Trash2, Check, GripVertical } from 'lucide-react'
 import {
   DndContext, closestCenter, MouseSensor, TouchSensor, useSensor, useSensors, DragOverlay,
@@ -126,14 +127,24 @@ export default function SettingsPage() {
   })
 
   const deleteMutation = useMutation({
-    mutationFn: (id) => apiFetch(`/api/sources/${id}`, { method: 'DELETE' }).then(r => r.json()),
+    mutationFn: (id) => apiFetch(`/api/sources/${id}`, { method: 'DELETE' }).then(async r => {
+      const d = await r.json()
+      if (!r.ok) throw new Error(d.error ?? "O'chirishda xatolik")
+      return d
+    }),
     onSuccess: () => { setDeleteId(null); invalidate() },
+    onError: (e) => showToast(e.message, 'error'),
   })
 
   const reorderMutation = useMutation({
     mutationFn: (ids) => apiFetch('/api/sources/reorder', {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids }),
-    }).then(r => r.json()),
+    }).then(async r => {
+      const d = await r.json()
+      if (!r.ok) throw new Error(d.error ?? 'Xatolik')
+      return d
+    }),
+    onError: (e) => showToast(e.message, 'error'),
   })
 
   const sensors = useSensors(

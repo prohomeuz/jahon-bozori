@@ -6,7 +6,8 @@ import { TrendingUp, ShoppingCart, Clock, LayoutGrid, Medal, Ban, Toilet, Store 
 
 /* ── Palette ──────────────────────────────────────────────────────────────── */
 const C = { SOLD: '#ef4444', RESERVED: '#f59e0b', EMPTY: '#22c55e', NOT_SALE: '#6b7280' }
-const LABEL = { SOLD: 'Sotilgan', RESERVED: 'Bron', EMPTY: "Bo'sh", NOT_SALE: 'Sotilmaydi' }
+const LABEL_UZ = { SOLD: 'Sotilgan', RESERVED: 'Bron', EMPTY: "Bo'sh", NOT_SALE: 'Sotilmaydi' }
+const LABEL_ZH = { SOLD: '已售出', RESERVED: '已預訂', EMPTY: '空置', NOT_SALE: '不出售' }
 const BLOCKS = ['A', 'B', 'C']
 
 /* ── Date helpers ─────────────────────────────────────────────────────────── */
@@ -48,7 +49,8 @@ function DonutChart({ segments, size = 110, stroke = 16 }) {
 }
 
 /* ── Block donut card ─────────────────────────────────────────────────────── */
-function BlockCard({ blockId, stats }) {
+function BlockCard({ blockId, stats, zh }) {
+  const LABEL = zh ? LABEL_ZH : LABEL_UZ
   const segs = [
     { value: stats.SOLD     ?? 0, color: C.SOLD },
     { value: stats.RESERVED ?? 0, color: C.RESERVED },
@@ -56,19 +58,18 @@ function BlockCard({ blockId, stats }) {
     { value: stats.NOT_SALE ?? 0, color: C.NOT_SALE },
   ]
   const total = segs.reduce((s, d) => s + d.value, 0)
-  const pct = v => total > 0 ? Math.round(v / total * 100) : 0
   return (
     <div className="bg-card border border-border rounded-2xl p-4 flex flex-col gap-3">
-      <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">{blockId}-Blok</p>
-      {/* Donut centered */}
+      <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+        {zh ? `${blockId}棟` : `${blockId}-Blok`}
+      </p>
       <div className="relative mx-auto">
         <DonutChart segments={segs} size={90} stroke={14} />
         <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
           <span className="text-base font-bold leading-none">{total}</span>
-          <span className="text-[9px] text-muted-foreground">jami</span>
+          <span className="text-[9px] text-muted-foreground">{zh ? '總計' : 'jami'}</span>
         </div>
       </div>
-      {/* Legend compact */}
       <div className="flex flex-col gap-1.5">
         {Object.entries(LABEL).map(([k, lbl], i) => (
           <div key={k} className="flex items-center gap-1.5">
@@ -83,15 +84,15 @@ function BlockCard({ blockId, stats }) {
 }
 
 /* ── Stacked horizontal bar ───────────────────────────────────────────────── */
-function StackedBar({ label, sold, reserved, empty, notSale = 0, maxTotal }) {
+function StackedBar({ label, sold, reserved, empty, notSale = 0, maxTotal, zh }) {
   const total = sold + reserved + empty + notSale
   const w = v => maxTotal > 0 ? (v / maxTotal * 100) : 0
 
   const segments = [
-    { key: 'sold',     value: sold,     color: C.SOLD,     labelText: "Sotilgan" },
-    { key: 'reserved', value: reserved, color: C.RESERVED, labelText: "Bron" },
-    { key: 'empty',    value: empty,    color: C.EMPTY,    labelText: "Bo'sh" },
-    { key: 'notSale',  value: notSale,  color: C.NOT_SALE, labelText: "Sotilmaydi" },
+    { key: 'sold',     value: sold,     color: C.SOLD,     labelText: zh ? '已售出' : 'Sotilgan' },
+    { key: 'reserved', value: reserved, color: C.RESERVED, labelText: zh ? '已預訂' : 'Bron' },
+    { key: 'empty',    value: empty,    color: C.EMPTY,    labelText: zh ? '空置'   : "Bo'sh" },
+    { key: 'notSale',  value: notSale,  color: C.NOT_SALE, labelText: zh ? '不出售' : 'Sotilmaydi' },
   ]
   const visible = segments.filter(s => s.value > 0)
   const isMulti = visible.length > 1
@@ -100,17 +101,11 @@ function StackedBar({ label, sold, reserved, empty, notSale = 0, maxTotal }) {
     <div className="flex items-center gap-3">
       <span className="text-xs text-muted-foreground w-5 text-right shrink-0 tabular-nums font-medium">{label}</span>
       <div className="flex-1 flex flex-col gap-1 min-w-0">
-        {/* Bar */}
         <div className="flex h-5 rounded-lg overflow-hidden bg-muted/40 w-full">
           {visible.map(({ key, value, color }) => (
-            <div
-              key={key}
-              style={{ width: `${w(value)}%`, background: color }}
-              className="h-full transition-all duration-500"
-            />
+            <div key={key} style={{ width: `${w(value)}%`, background: color }} className="h-full transition-all duration-500" />
           ))}
         </div>
-        {/* Always-visible breakdown — only when multiple segments exist */}
         {isMulti && (
           <div className="flex items-center gap-3">
             {visible.map(({ key, value, color, labelText }) => (
@@ -144,14 +139,13 @@ function StatCard({ label, value, color, icon: Icon }) {
 }
 
 /* ── Date range filter ────────────────────────────────────────────────────── */
-const PRESETS = [
-  { label: 'Bugun',    get: () => ({ from: today(), to: today() }) },
-  { label: 'Bu hafta', get: thisWeek },
-  { label: 'Bu oy',    get: thisMonth },
-  { label: 'Hammasi',  get: () => ({ from: '', to: '' }) },
-]
-
-function DateRangeFilter({ value, onChange }) {
+function DateRangeFilter({ value, onChange, zh }) {
+  const PRESETS = [
+    { label: zh ? '今天'  : 'Bugun',    get: () => ({ from: today(), to: today() }) },
+    { label: zh ? '本週'  : 'Bu hafta', get: thisWeek },
+    { label: zh ? '本月'  : 'Bu oy',    get: thisMonth },
+    { label: zh ? '全部'  : 'Hammasi',  get: () => ({ from: '', to: '' }) },
+  ]
   const { from, to } = value
   const activePreset = PRESETS.findIndex(p => {
     const v = p.get()
@@ -159,23 +153,16 @@ function DateRangeFilter({ value, onChange }) {
   })
   return (
     <div className="flex flex-col gap-2 w-full">
-      {/* Preset pills */}
       <div className="flex gap-1 p-1 bg-muted rounded-xl w-fit">
         {PRESETS.map((p, i) => (
-          <button
-            key={p.label}
-            onClick={() => onChange(p.get())}
+          <button key={p.label} onClick={() => onChange(p.get())}
             className={`px-3 py-2 rounded-lg text-xs font-semibold transition-colors ${
-              i === activePreset
-                ? 'bg-background text-foreground shadow-sm'
-                : 'text-muted-foreground hover:text-foreground'
-            }`}
-          >
+              i === activePreset ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+            }`}>
             {p.label}
           </button>
         ))}
       </div>
-      {/* Manual inputs */}
       <div className="flex items-center gap-2">
         <input type="date" value={from} max={to || today()}
           onChange={e => onChange({ from: e.target.value, to })}
@@ -189,10 +176,10 @@ function DateRangeFilter({ value, onChange }) {
   )
 }
 
-/* ── Manager leaderboard ──────────────────────────────────────────────────── */
+/* ── Manager leaderboard card ─────────────────────────────────────────────── */
 const MEDALS = ['🥇', '🥈', '🥉']
 
-function ManagerCard({ manager, rank, maxTotal }) {
+function ManagerCard({ manager, rank, maxTotal, zh }) {
   const { name, username, sotish, bron, total, last_at } = manager
   const sotishW = maxTotal > 0 ? (sotish / maxTotal * 100) : 0
   const bronW   = maxTotal > 0 ? (bron   / maxTotal * 100) : 0
@@ -201,7 +188,6 @@ function ManagerCard({ manager, rank, maxTotal }) {
 
   return (
     <div className={`bg-card border rounded-2xl p-4 flex flex-col gap-3 transition-shadow hover:shadow-sm ${rank === 0 ? 'border-amber-200 dark:border-amber-800' : 'border-border'}`}>
-      {/* Header */}
       <div className="flex items-center gap-3">
         <div className="relative shrink-0">
           <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold text-white ${
@@ -209,37 +195,33 @@ function ManagerCard({ manager, rank, maxTotal }) {
           }`}>
             {initials}
           </div>
-          {rank < 3 && (
-            <span className="absolute -top-1 -right-1 text-sm leading-none">{MEDALS[rank]}</span>
-          )}
+          {rank < 3 && <span className="absolute -top-1 -right-1 text-sm leading-none">{MEDALS[rank]}</span>}
         </div>
         <div className="flex-1 min-w-0">
           <p className="font-semibold text-sm truncate">{name || username}</p>
-          <p className="text-xs text-muted-foreground">So'nggi: {lastDate}</p>
+          <p className="text-xs text-muted-foreground">{zh ? `最近：${lastDate}` : `So'nggi: ${lastDate}`}</p>
         </div>
         <div className="text-right shrink-0">
           <p className="text-xl font-bold tabular-nums leading-none">{total}</p>
-          <p className="text-[10px] text-muted-foreground">jami</p>
+          <p className="text-[10px] text-muted-foreground">{zh ? '總計' : 'jami'}</p>
         </div>
       </div>
 
-      {/* Progress bar */}
       <div className="flex h-2 rounded-full overflow-hidden bg-muted/40 gap-px">
         {sotish > 0 && <div style={{ width: `${sotishW}%`, background: C.SOLD }}     className="h-full transition-all duration-700" />}
         {bron   > 0 && <div style={{ width: `${bronW}%`,   background: C.RESERVED }} className="h-full transition-all duration-700" />}
       </div>
 
-      {/* Stats row */}
       <div className="flex items-center gap-3">
         <div className="flex items-center gap-1.5 flex-1">
           <span className="w-2 h-2 rounded-full" style={{ background: C.SOLD }} />
-          <span className="text-xs text-muted-foreground">Sotish</span>
+          <span className="text-xs text-muted-foreground">{zh ? '銷售' : 'Sotish'}</span>
           <span className="text-xs font-bold ml-auto tabular-nums" style={{ color: C.SOLD }}>{sotish}</span>
         </div>
         <div className="w-px h-3 bg-border shrink-0" />
         <div className="flex items-center gap-1.5 flex-1">
           <span className="w-2 h-2 rounded-full" style={{ background: C.RESERVED }} />
-          <span className="text-xs text-muted-foreground">Bron</span>
+          <span className="text-xs text-muted-foreground">{zh ? '預訂' : 'Bron'}</span>
           <span className="text-xs font-bold ml-auto tabular-nums" style={{ color: C.RESERVED }}>{bron}</span>
         </div>
       </div>
@@ -248,7 +230,8 @@ function ManagerCard({ manager, rank, maxTotal }) {
 }
 
 /* ── Legend ───────────────────────────────────────────────────────────────── */
-function Legend() {
+function Legend({ zh }) {
+  const LABEL = zh ? LABEL_ZH : LABEL_UZ
   return (
     <div className="flex items-center gap-4">
       {Object.entries(C).map(([k, color]) => (
@@ -262,15 +245,13 @@ function Legend() {
 }
 
 /* ── Main ─────────────────────────────────────────────────────────────────── */
-const DETAIL_TABS = [
-  { key: 'bolim', label: "Bo'limlar" },
-  { key: 'floor', label: 'Qavatlar' },
-]
-
 export default function DashboardPage() {
   useRealtimeApts()
-  const user    = getUser()
-  const isAdmin = user?.role === 'admin'
+  const user      = getUser()
+  const isAdmin   = user?.role === 'admin'
+  const isNarxchi = user?.role === 'narxchi'
+  const zh        = isNarxchi
+  const isAdminLike = isAdmin || isNarxchi
 
   const [detailTab,       setDetailTab]       = useState('bolim')
   const [blockFilter,     setBlockFilter]     = useState('A')
@@ -299,7 +280,7 @@ export default function DashboardPage() {
       if (dateRange.to)   p.set('to',   dateRange.to)
       return apiFetch(`/api/stats/managers?${p}`).then(r => r.json())
     },
-    enabled: isAdmin,
+    enabled: isAdminLike,
   })
 
   const { data: sourceStats } = useQuery({
@@ -311,7 +292,7 @@ export default function DashboardPage() {
       if (sourceIncludeCancelled) p.set('cancelled', '1')
       return apiFetch(`/api/stats/sources?${p}`).then(r => r.json())
     },
-    enabled: isAdmin,
+    enabled: isAdminLike,
   })
 
   if (isLoading) return (
@@ -360,12 +341,14 @@ export default function DashboardPage() {
   const maxTotal = Math.max(...detailRows.map(r => r.sold + r.reserved + r.empty + r.notSale), 1)
   const maxManagerTotal = Math.max(...managers.map(m => m.total), 1)
 
+  const LABEL = zh ? LABEL_ZH : LABEL_UZ
+
   return (
     <div className="p-4 md:p-6 flex flex-col gap-6 w-full">
-      <h1 className="text-2xl font-bold">Dashboard</h1>
+      <h1 className="text-2xl font-bold">{zh ? '儀表板' : 'Dashboard'}</h1>
 
       {/* Stat cards — faqat salesmanager uchun */}
-      {!isAdmin && (
+      {!isAdminLike && (
         <div className="grid grid-cols-2 gap-3">
           <StatCard label="Sotish"        value={myStats.sotish} color={C.SOLD}     icon={ShoppingCart} />
           <StatCard label="Bron qilish"   value={myStats.bron}   color={C.RESERVED} icon={Clock} />
@@ -373,31 +356,27 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Bloklar donuts — 3 cols always (3 ta blok) */}
-      {isAdmin && (
+      {/* Bloklar donuts */}
+      {isAdminLike && (
         <section className="flex flex-col gap-3">
           <div className="flex items-center justify-between gap-3">
-            <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Bloklar bo'yicha</h2>
+            <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+              {zh ? '按棟分類' : "Bloklar bo'yicha"}
+            </h2>
             <div className="flex items-center bg-muted rounded-xl p-1 gap-0.5">
-              <button
-                onClick={() => setInventoryTab('all')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${inventoryTab === 'all' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
-              >
-                Jami
+              <button onClick={() => setInventoryTab('all')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${inventoryTab === 'all' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
+                {zh ? '全部' : 'Jami'}
               </button>
-              <button
-                onClick={() => setInventoryTab('shops')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${inventoryTab === 'shops' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
-              >
+              <button onClick={() => setInventoryTab('shops')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${inventoryTab === 'shops' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
                 <Store size={11} />
-                Do'konlar
+                {zh ? '商鋪' : "Do'konlar"}
               </button>
-              <button
-                onClick={() => setInventoryTab('wc')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${inventoryTab === 'wc' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
-              >
+              <button onClick={() => setInventoryTab('wc')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${inventoryTab === 'wc' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
                 <Toilet size={11} />
-                Hojatxonalar
+                {zh ? '衛生間' : 'Hojatxonalar'}
               </button>
             </div>
           </div>
@@ -405,36 +384,38 @@ export default function DashboardPage() {
           {/* Summary strip */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             {[
-              { label: 'Sotilgan',      value: activeTotal.SOLD,          color: C.SOLD },
-              { label: 'Bron',          value: activeTotal.RESERVED,      color: C.RESERVED },
-              { label: "Bo'sh",         value: activeTotal.EMPTY,         color: C.EMPTY },
-              { label: 'Sotilmaydi',    value: activeTotal.NOT_SALE ?? 0, color: C.NOT_SALE },
-            ].map(({ label, value, color }) => (
-              <div key={label} className="bg-card border border-border rounded-xl px-3 py-2.5 flex flex-col gap-0.5">
-                <span className="text-[10px] text-muted-foreground font-medium">{label}</span>
-                <span className="text-lg font-bold tabular-nums leading-tight" style={{ color }}>{value ?? 0}</span>
+              { key: 'SOLD',     value: activeTotal.SOLD          },
+              { key: 'RESERVED', value: activeTotal.RESERVED      },
+              { key: 'EMPTY',    value: activeTotal.EMPTY         },
+              { key: 'NOT_SALE', value: activeTotal.NOT_SALE ?? 0 },
+            ].map(({ key, value }) => (
+              <div key={key} className="bg-card border border-border rounded-xl px-3 py-2.5 flex flex-col gap-0.5">
+                <span className="text-[10px] text-muted-foreground font-medium">{LABEL[key]}</span>
+                <span className="text-lg font-bold tabular-nums leading-tight" style={{ color: C[key] }}>{value ?? 0}</span>
               </div>
             ))}
           </div>
-          {/* Jami bitimlar */}
+
           <div className="bg-card border border-border rounded-xl px-4 py-2.5 flex items-center justify-between">
-            <span className="text-xs text-muted-foreground font-medium">Jami bitimlar</span>
+            <span className="text-xs text-muted-foreground font-medium">{zh ? '成交總數' : 'Jami bitimlar'}</span>
             <span className="text-lg font-bold tabular-nums" style={{ color: '#6366f1' }}>{totalBookings}</span>
           </div>
 
           <div className="grid grid-cols-3 gap-3">
-            {BLOCKS.map(b => <BlockCard key={b} blockId={b} stats={activeBlocks[b] ?? {}} />)}
+            {BLOCKS.map(b => <BlockCard key={b} blockId={b} stats={activeBlocks[b] ?? {}} zh={zh} />)}
           </div>
         </section>
       )}
 
       {/* Bo'lim / Qavat detail */}
-      {isAdmin && (
+      {isAdminLike && (
         <section className="flex flex-col gap-3">
-          {/* Controls row */}
           <div className="flex items-center gap-3 flex-wrap">
             <div className="flex gap-1 p-1 bg-muted rounded-xl">
-              {DETAIL_TABS.map(t => (
+              {[
+                { key: 'bolim', label: zh ? '區域' : "Bo'limlar" },
+                { key: 'floor', label: zh ? '樓層' : 'Qavatlar'  },
+              ].map(t => (
                 <button key={t.key} onClick={() => setDetailTab(t.key)}
                   className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
                     detailTab === t.key ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
@@ -453,17 +434,20 @@ export default function DashboardPage() {
                 </button>
               ))}
             </div>
-            <Legend />
+            <Legend zh={zh} />
           </div>
 
           <div className="bg-card border border-border rounded-2xl p-5 flex flex-col gap-3">
             <p className="text-sm font-semibold text-muted-foreground">
-              {blockFilter}-blok · {detailTab === 'bolim' ? "bo'limlar" : 'qavatlar'} kesimida
+              {zh
+                ? `${blockFilter}棟 · 按${detailTab === 'bolim' ? '區域' : '樓層'}統計`
+                : `${blockFilter}-blok · ${detailTab === 'bolim' ? "bo'limlar" : 'qavatlar'} kesimida`
+              }
             </p>
             <div className="flex flex-col gap-2.5">
               {detailRows.length === 0
-                ? <p className="text-sm text-muted-foreground text-center py-6">Ma'lumot yo'q</p>
-                : detailRows.map((r, i) => <StackedBar key={i} {...r} maxTotal={maxTotal} />)
+                ? <p className="text-sm text-muted-foreground text-center py-6">{zh ? '暫無數據' : "Ma'lumot yo'q"}</p>
+                : detailRows.map((r, i) => <StackedBar key={i} {...r} maxTotal={maxTotal} zh={zh} />)
               }
             </div>
           </div>
@@ -471,13 +455,15 @@ export default function DashboardPage() {
       )}
 
       {/* Source stats */}
-      {isAdmin && (
+      {isAdminLike && (
         <section className="flex flex-col gap-4">
           <div className="flex items-center gap-2">
-            <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Mijoz manbalari</h2>
+            <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+              {zh ? '客戶來源' : 'Mijoz manbalari'}
+            </h2>
           </div>
 
-          <DateRangeFilter value={sourceDateRange} onChange={setSourceDateRange} />
+          <DateRangeFilter value={sourceDateRange} onChange={setSourceDateRange} zh={zh} />
 
           <label className="flex items-center gap-2.5 cursor-pointer w-fit">
             <span className={`w-5 h-5 rounded flex items-center justify-center border-2 shrink-0 transition-colors ${sourceIncludeCancelled ? 'bg-foreground border-foreground' : 'border-border bg-background'}`}>
@@ -488,17 +474,21 @@ export default function DashboardPage() {
               )}
             </span>
             <input type="checkbox" className="sr-only" checked={sourceIncludeCancelled} onChange={e => setSourceIncludeCancelled(e.target.checked)} />
-            <span className="text-sm text-muted-foreground">Bekor qilinganlarni ham kiriting</span>
+            <span className="text-sm text-muted-foreground">
+              {zh ? '包含已取消的' : 'Bekor qilinganlarni ham kiriting'}
+            </span>
           </label>
 
           {(() => {
             const rows = sourceStats?.rows ?? []
             const noSource = sourceStats?.noSource ?? 0
-            const allRows = noSource > 0 ? [...rows, { id: null, name: "Noma'lum", n: noSource }] : rows
+            const allRows = noSource > 0 ? [...rows, { id: null, name: zh ? '未知' : "Noma'lum", n: noSource }] : rows
             const total = allRows.reduce((s, r) => s + r.n, 0)
             if (total === 0) return (
               <div className="bg-card border border-border rounded-2xl p-10 text-center text-muted-foreground text-sm">
-                {sourceDateRange.from || sourceDateRange.to ? "Bu davrda bitim yo'q" : "Hali bitim yo'q"}
+                {sourceDateRange.from || sourceDateRange.to
+                  ? (zh ? '該時段暫無成交' : "Bu davrda bitim yo'q")
+                  : (zh ? '暫無成交記錄'   : "Hali bitim yo'q")}
               </div>
             )
             const palette = ['#3b82f6','#f59e0b','#10b981','#8b5cf6','#ef4444','#06b6d4','#f97316','#84cc16','#ec4899','#6b7280']
@@ -510,7 +500,7 @@ export default function DashboardPage() {
                     <DonutChart segments={segs} size={130} stroke={20} />
                     <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
                       <span className="text-xl font-bold leading-none">{total}</span>
-                      <span className="text-[10px] text-muted-foreground">jami</span>
+                      <span className="text-[10px] text-muted-foreground">{zh ? '總計' : 'jami'}</span>
                     </div>
                   </div>
                   <div className="flex flex-col gap-2.5 flex-1 min-w-0">
@@ -534,25 +524,27 @@ export default function DashboardPage() {
       )}
 
       {/* Manager leaderboard */}
-      {isAdmin && (
+      {isAdminLike && (
         <section className="flex flex-col gap-4">
-          {/* Title row */}
           <div className="flex items-center gap-2">
             <Medal size={16} className="text-muted-foreground" />
-            <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Menejerlar reytingi</h2>
+            <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+              {zh ? '銷售員排行' : 'Menejerlar reytingi'}
+            </h2>
           </div>
 
-          {/* Date filter — full width row */}
-          <DateRangeFilter value={dateRange} onChange={setDateRange} />
+          <DateRangeFilter value={dateRange} onChange={setDateRange} zh={zh} />
 
           {managers.length === 0 ? (
             <div className="bg-card border border-border rounded-2xl p-10 text-center text-muted-foreground text-sm">
-              {dateRange.from || dateRange.to ? "Bu davrda bitim yo'q" : "Hali bitim yo'q"}
+              {dateRange.from || dateRange.to
+                ? (zh ? '該時段暫無成交' : "Bu davrda bitim yo'q")
+                : (zh ? '暫無成交記錄'   : "Hali bitim yo'q")}
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {managers.map((m, i) => (
-                <ManagerCard key={m.id} manager={m} rank={i} maxTotal={maxManagerTotal} />
+                <ManagerCard key={m.id} manager={m} rank={i} maxTotal={maxManagerTotal} zh={zh} />
               ))}
             </div>
           )}

@@ -41,9 +41,9 @@ export async function createTokenPair(user) {
     SECRET, 'HS256'
   )
 
-  // refreshToken: admin — 30 kun; salesmanager — faqat bugungi 20:00 gacha
+  // refreshToken: admin/narxchi — 30 kun; salesmanager — faqat bugungi 20:00 gacha
   let refreshExp
-  if (user.role === 'admin') {
+  if (user.role === 'admin' || user.role === 'narxchi') {
     refreshExp = now + 60 * 60 * 24 * 30
   } else {
     // Bugungi 20:00 Tashkent vaqti (UTC+5 = 15:00 UTC)
@@ -77,17 +77,14 @@ export async function requireAuth(c, next) {
   try {
     const payload = await verify(auth.slice(7), SECRET, 'HS256')
 
-    if (payload.role === 'salesmanager') {
+    if (payload.role === 'salesmanager' || payload.role === 'narxchi') {
       const { db } = await import('./db.js')
       const row = db.prepare('SELECT is_active FROM users WHERE id=?').get(payload.sub)
       if (!row) return c.json({ error: 'Unauthorized' }, 401)
 
-      // Bloklangan foydalanuvchi faqat o'qish (GET) so'rovlarini amalga oshira oladi
-      if (!row.is_active && c.req.method !== 'GET') {
-        return c.json({ error: 'BLOCKED' }, 403)
-      }
+      if (!row.is_active) return c.json({ error: 'BLOCKED' }, 403)
 
-      if (!isWorkingHours() && !isLocalhostReq(c)) {
+      if (payload.role === 'salesmanager' && !isWorkingHours() && !isLocalhostReq(c)) {
         return c.json({ error: 'OUTSIDE_HOURS', message: "Tizim faqat 08:00–20:00 orasida ishlaydi" }, 403)
       }
     }
@@ -102,5 +99,17 @@ export async function requireAuth(c, next) {
 export function requireAdmin(c, next) {
   const user = c.get('user')
   if (user?.role !== 'admin') return c.json({ error: 'Forbidden' }, 403)
+  return next()
+}
+
+export function requireAdminOrNarxchi(c, next) {
+  const user = c.get('user')
+  if (user?.role !== 'admin' && user?.role !== 'narxchi') return c.json({ error: 'Forbidden' }, 403)
+  return next()
+}
+
+export function blockNarxchi(c, next) {
+  const user = c.get('user')
+  if (user?.role === 'narxchi') return c.json({ error: 'Forbidden' }, 403)
   return next()
 }

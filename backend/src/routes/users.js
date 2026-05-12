@@ -1,12 +1,13 @@
 import { Hono } from 'hono'
 import { db, q } from '../db.js'
-import { hashPassword } from '../auth.js'
-import { requireAuth, requireAdmin } from '../auth.js'
+import { hashPassword, requireAuth, requireAdmin, blockNarxchi } from '../auth.js'
 import { broadcast } from '../lib/sse.js'
 
 const app = new Hono()
+app.use('*', requireAuth, blockNarxchi)
 
 app.get('/', requireAuth, requireAdmin, (c) => c.json(q.allUsers.all()))
+app.get('/narxchi', requireAuth, requireAdmin, (c) => c.json(q.allNarxchi.all()))
 
 app.post('/', requireAuth, requireAdmin, async (c) => {
   const { name, password } = await c.req.json()
@@ -43,7 +44,7 @@ app.patch('/:id', requireAuth, requireAdmin, async (c) => {
 
 app.patch('/:id/active', requireAuth, requireAdmin, (c) => {
   const id = parseInt(c.req.param('id'))
-  const user = db.prepare("SELECT is_active FROM users WHERE id=? AND role='salesmanager'").get(id)
+  const user = db.prepare("SELECT is_active, role FROM users WHERE id=? AND role IN ('salesmanager','narxchi')").get(id)
   if (!user) return c.json({ error: 'Not found' }, 404)
   const newActive = user.is_active ? 0 : 1
   db.prepare('UPDATE users SET is_active=? WHERE id=?').run(newActive, id)

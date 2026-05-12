@@ -19,7 +19,7 @@ db.exec(`
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
     username   TEXT NOT NULL UNIQUE,
     password   TEXT NOT NULL,
-    role       TEXT NOT NULL CHECK(role IN ('admin', 'salesmanager')),
+    role       TEXT NOT NULL CHECK(role IN ('admin', 'salesmanager', 'narxchi')),
     name       TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL DEFAULT (datetime('now', '+5 hours'))
   );
@@ -128,6 +128,12 @@ try { db.exec(`CREATE TABLE IF NOT EXISTS apartment_pairs (
 )`) } catch {}
 // pair_group_id on bookings — birgalikda bron qilingan do'konlarni birlashtiradi
 try { db.exec(`ALTER TABLE bookings ADD COLUMN pair_group_id INTEGER`) } catch {}
+// Alohida do'kon narxlari — bo'lim narxini override qiladi
+try { db.exec(`CREATE TABLE IF NOT EXISTS apartment_prices (
+  apartment_id TEXT PRIMARY KEY,
+  price REAL NOT NULL,
+  updated_at TEXT NOT NULL DEFAULT (datetime('now', '+5 hours'))
+)`) } catch {}
 // Sources — mijoz qayerdan kelganini belgilaydi
 try { db.exec(`CREATE TABLE IF NOT EXISTS sources (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -414,6 +420,38 @@ try { db.exec(`UPDATE apartments SET notes = 'Burchak'                  WHERE no
 try { db.exec(`UPDATE apartments SET notes = 'Ko''cha bo''yi, Burchak'  WHERE notes = '临街铺、端头路口'`) } catch {}
 try { db.exec(`UPDATE apartments SET notes = 'Ko''cha bo''yi, Burchak'  WHERE notes = '临街商铺、端头路口'`) } catch {}
 
+// Migrate users table role CHECK to include 'narxchi'
+try {
+  const schema = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='users'").get()
+  if (schema?.sql && !schema.sql.includes('narxchi')) {
+    db.exec(`PRAGMA foreign_keys = OFF`)
+    db.exec(`BEGIN`)
+    db.exec(`
+      CREATE TABLE users_new (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        username     TEXT NOT NULL UNIQUE,
+        password     TEXT NOT NULL,
+        role         TEXT NOT NULL CHECK(role IN ('admin','salesmanager','narxchi')),
+        name         TEXT NOT NULL DEFAULT '',
+        created_at   TEXT NOT NULL DEFAULT (datetime('now', '+5 hours')),
+        telegram_id  TEXT,
+        plain_password TEXT,
+        is_active    INTEGER NOT NULL DEFAULT 1
+      )
+    `)
+    db.exec(`INSERT INTO users_new SELECT id,username,password,role,name,created_at,telegram_id,plain_password,is_active FROM users`)
+    db.exec(`DROP TABLE users`)
+    db.exec(`ALTER TABLE users_new RENAME TO users`)
+    db.exec(`COMMIT`)
+    db.exec(`PRAGMA foreign_keys = ON`)
+    console.log('[migration] users role CHECK updated to include narxchi')
+  }
+} catch (e) {
+  try { db.exec(`ROLLBACK`) } catch {}
+  try { db.exec(`PRAGMA foreign_keys = ON`) } catch {}
+  console.error('[migration] users role CHECK:', e.message)
+}
+
 // Sotuv shartnomasi raqamlari (HTKH20260504-001 format)
 db.exec(`CREATE TABLE IF NOT EXISTS contract_numbers (
   id      INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -428,6 +466,7 @@ export const q = {
   userById:            db.prepare('SELECT id, role, name, is_active, created_at FROM users WHERE id=:id'),
   insertUser:          db.prepare("INSERT INTO users (username, password, plain_password, role, name, telegram_id, created_at) VALUES (:plain_password, :password, :plain_password, :role, :name, NULL, datetime('now', '+5 hours'))"),
   allUsers:            db.prepare("SELECT id, name, plain_password, role, is_active, telegram_id, created_at FROM users WHERE role='salesmanager' ORDER BY created_at DESC"),
+  allNarxchi:          db.prepare("SELECT id, name, plain_password, role, is_active, created_at FROM users WHERE role='narxchi' ORDER BY created_at DESC"),
   userTelegramId:      db.prepare('SELECT telegram_id FROM users WHERE id=:id'),
 
   // telegram subscribers
@@ -525,6 +564,11 @@ export const q = {
   allSettings:  db.prepare("SELECT key, value FROM settings"),
   getSetting:   db.prepare("SELECT value FROM settings WHERE key=:key"),
   upsertSetting: db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES (:key, :value)"),
+
+  // alohida do'kon narxlari
+  getAptCustomPrice:    db.prepare("SELECT price FROM apartment_prices WHERE apartment_id = :apt"),
+  upsertAptCustomPrice: db.prepare("INSERT OR REPLACE INTO apartment_prices (apartment_id, price, updated_at) VALUES (:apt, :price, datetime('now', '+5 hours'))"),
+  deleteAptCustomPrice: db.prepare("DELETE FROM apartment_prices WHERE apartment_id = :apt"),
 
   // prices (do'konlar)
   getPrice:        db.prepare("SELECT price FROM prices WHERE block=:block AND bolim=:bolim AND floor=:floor"),

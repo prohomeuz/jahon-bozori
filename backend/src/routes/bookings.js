@@ -1,10 +1,11 @@
 import { Hono } from 'hono'
 import { db, q } from '../db.js'
-import { requireAuth, requireAdmin } from '../auth.js'
+import { requireAuth, requireAdmin, blockNarxchi } from '../auth.js'
 import { broadcast } from '../lib/sse.js'
 import { proxiedFetch, OWNER_CHAT_ID } from '../lib/telegram.js'
 
 const app = new Hono()
+app.use('*', requireAuth, blockNarxchi)
 
 function generateContractNumber(bookingId, dateStr) {
   const { lastInsertRowid } = q.insertContractNum.run({ booking_id: bookingId, contract_number: '__TEMP__' })
@@ -122,44 +123,53 @@ app.post('/', requireAuth, async (c) => {
       const lock = db.prepare("SELECT reason FROM sales_locks WHERE block=? AND bolim=? AND floor=?").get(apt1.block, apt1.bolim, apt1.floor)
       if (lock) { db.exec('ROLLBACK'); return c.json({ error: `Sotuv to'xtatilgan: ${lock.reason}` }, 403) }
 
+      // apt1 narxi: alohida narx → bolim narxi
+      const customPrice1 = q.getAptCustomPrice.get({ apt: apartment_id })
       const priceRow1 = apt1.is_wc ? q.getWcPrice.get({ block: apt1.block, bolim: apt1.bolim, floor: apt1.floor }) : q.getPrice.get({ block: apt1.block, bolim: apt1.bolim, floor: apt1.floor })
-      const systemNarxM2 = priceRow1?.price ?? (apt1.is_wc ? 2000 : 1000)
+      const systemNarxM2_1 = customPrice1?.price ?? (priceRow1?.price ?? (apt1.is_wc ? 2000 : 1000))
+
+      // apt2 narxi: alohida narx → bolim narxi
+      const customPrice2 = q.getAptCustomPrice.get({ apt: pair_with })
+      const priceRow2 = q.getPrice.get({ block: apt2.block, bolim: apt2.bolim, floor: apt2.floor })
+      const systemNarxM2_2 = customPrice2?.price ?? (priceRow2?.price ?? 1000)
 
       const boshlangichNum = Number(String(boshlangich).replace(/\s/g, '')) || 0
       const half1 = Math.round(boshlangichNum / 2)
       const half2 = boshlangichNum - half1
 
-      const narxM2Num    = systemNarxM2
       const chegirmaM2Num = Number(String(safe_chegirma_m2 || '').replace(/\s/g, '')) || 0
-      const yakuniyM2    = narxM2Num > 0 ? Math.max(0, narxM2Num - chegirmaM2Num) : 0
+      const yakuniyM2_1 = systemNarxM2_1 > 0 ? Math.max(0, systemNarxM2_1 - chegirmaM2Num) : 0
+      const yakuniyM2_2 = systemNarxM2_2 > 0 ? Math.max(0, systemNarxM2_2 - chegirmaM2Num) : 0
+
       let umumiy1, umumiy2
-      if (yakuniyM2 > 0) {
-        umumiy1 = String(Math.round(yakuniyM2 * apt1.size))
-        umumiy2 = String(Math.round(yakuniyM2 * apt2.size))
+      if (yakuniyM2_1 > 0 || yakuniyM2_2 > 0) {
+        umumiy1 = String(Math.round(yakuniyM2_1 * apt1.size))
+        umumiy2 = String(Math.round(yakuniyM2_2 * apt2.size))
       } else if (umumiy) {
         const umumiyNum = Number(String(umumiy).replace(/\s/g, '')) || 0
-        const u1 = Math.round(umumiyNum / 2)
+        const totalSize = apt1.size + apt2.size
+        const u1 = totalSize > 0 ? Math.round(umumiyNum * apt1.size / totalSize) : Math.round(umumiyNum / 2)
         umumiy1 = String(u1)
         umumiy2 = String(umumiyNum - u1)
       } else {
         umumiy1 = null; umumiy2 = null
       }
 
-      const newStatus    = type === 'sotish' ? 'SOLD' : 'RESERVED'
-      const sharedFields = {
+      const newStatus = type === 'sotish' ? 'SOLD' : 'RESERVED'
+      const sharedBase = {
         user_id: effective_user_id, type, ism, familiya, oylar: parseInt(oylar),
         passport: passport ?? null, manzil: manzil ?? null, phone: phone ?? null,
-        passport_place: passport_place ?? null, narx_m2: String(systemNarxM2),
+        passport_place: passport_place ?? null,
         chegirma_m2: safe_chegirma_m2, asl_narx_m2: safe_asl_narx_m2,
         bonus_enabled: bonusEnabledNow ? 1 : 0,
         source_id: source_id ? parseInt(source_id) : null,
       }
 
-      q.insertBooking.run({ ...sharedFields, apartment_id, boshlangich: String(half1), umumiy: umumiy1 })
+      q.insertBooking.run({ ...sharedBase, apartment_id, boshlangich: String(half1), umumiy: umumiy1, narx_m2: String(systemNarxM2_1) })
       const booking1 = q.lastBooking.get()
       db.prepare("UPDATE bookings SET pair_group_id=? WHERE id=?").run(booking1.id, booking1.id)
 
-      q.insertBooking.run({ ...sharedFields, apartment_id: pair_with, boshlangich: String(half2), umumiy: umumiy2 })
+      q.insertBooking.run({ ...sharedBase, apartment_id: pair_with, boshlangich: String(half2), umumiy: umumiy2, narx_m2: String(systemNarxM2_2) })
       const booking2 = q.lastBooking.get()
       db.prepare("UPDATE bookings SET pair_group_id=? WHERE id=?").run(booking1.id, booking2.id)
 

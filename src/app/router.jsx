@@ -10,6 +10,12 @@ function AdminOnly({ children }) {
   return children
 }
 
+function NotNarxchi({ children }) {
+  const user = getUser()
+  if (user?.role === 'narxchi') return <Navigate to="/admin/prices" replace />
+  return children
+}
+
 const HomePage      = lazy(() => import('@/pages/home/ui/HomePage'))
 const BlockPage     = lazy(() => import('@/pages/block/ui/BlockPage'))
 const BolimPage     = lazy(() => import('@/pages/bolim/ui/BolimPage'))
@@ -71,10 +77,10 @@ export default function Router() {
           <Route element={<ProtectedRoute />}>
             <Route path="/admin" element={<AdminLayout />}>
               <Route index element={<DashboardPage />} />
-              <Route path="bookings" element={<BookingsPage />} />
-              <Route path="managers" element={<ManagersPage />} />
+              <Route path="bookings" element={<NotNarxchi><BookingsPage /></NotNarxchi>} />
+              <Route path="managers" element={<AdminOnly><ManagersPage /></AdminOnly>} />
               <Route path="prices" element={<PricesPage />} />
-              <Route path="joylar" element={<JoylarPage />} />
+              <Route path="joylar" element={<NotNarxchi><JoylarPage /></NotNarxchi>} />
               <Route path="sales-lock" element={<AdminOnly><SalesLockPage /></AdminOnly>} />
               <Route path="settings" element={<AdminOnly><SettingsPage /></AdminOnly>} />
             </Route>

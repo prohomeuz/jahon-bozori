@@ -1,4 +1,3 @@
-import GENPLAN from '@/assets/genplan.webp'
 import ABLOK from '@/assets/blocks/A-BLOK.webp'
 import BBLOK from '@/assets/blocks/B-BLOK.webp'
 import CBLOK from '@/assets/blocks/C-BLOK.webp'
@@ -8,13 +7,8 @@ import { useNavigate, useSearchParams } from 'react-router'
 import { imgCache } from '@/shared/lib/imgCache'
 import { apiFetch, getUser } from '@/shared/lib/auth'
 import { BLOCK_BUILDINGS, BLOCK_VIEW_BOX } from '@/pages/block/config/buildings'
-import { Check, X } from 'lucide-react'
-
-const GENPLAN_BLOCKS = [
-  { id: 'A', points: '3081,2161 2935,2414 3004,2472 3811,2579 3928,2521 3996,2268', textX: 3459, textY: 2403, delay: '0s' },
-  { id: 'B', points: '4191,2287 5096,2394 5077,2686 4970,2735 4172,2628 4094,2531', textX: 4600, textY: 2544, delay: '1.3s' },
-  { id: 'C', points: '5194,2414 5174,2706 5262,2774 6118,2891 6206,2842 6216,2774 6157,2521', textX: 5761, textY: 2703, delay: '2.6s' },
-]
+import { Check, X, ArrowRight } from 'lucide-react'
+import { ApartmentPriceSheet } from './ApartmentPriceSheet'
 
 const BLOCK_META = {
   A: { label: 'A-BLOK', image: ABLOK },
@@ -22,44 +16,42 @@ const BLOCK_META = {
   C: { label: 'C-BLOK', image: CBLOK },
 }
 
-// ─── Step 1: Genplan ──────────────────────────────────────────────────────────
+// ─── Step 0: Landing ─────────────────────────────────────────────────────────
 
-function GenplanStep({ onSelect }) {
-  const [loaded, setLoaded] = useState(() => imgCache.has(GENPLAN))
-  const [hovered, setHovered] = useState(null)
-
+function LandingStep({ onBolim, onAlohida, zh }) {
   return (
-    <div className="absolute inset-0 bg-black overflow-hidden">
-      <div className="w-full h-full">
-        <img src={GENPLAN} className="absolute inset-0 w-full h-full object-contain" draggable={false}
-          onLoad={() => { imgCache.add(GENPLAN); setLoaded(true) }}
-          style={{ filter: loaded ? 'none' : 'blur(20px)', opacity: loaded ? 1 : 0.4, transition: 'filter .6s, opacity .6s' }}
-        />
-        <svg viewBox="0 0 7000 3892" preserveAspectRatio="xMidYMid meet" className="absolute inset-0 w-full h-full">
-            {GENPLAN_BLOCKS.map(b => (
-              <g key={b.id}>
-                <polygon points={b.points} fill="none" stroke="rgba(255,255,255,0.45)" strokeWidth={10} strokeLinejoin="round" pointerEvents="none" />
-                <polygon points={b.points}
-                  fill={hovered === b.id ? 'white' : 'black'}
-                  fillOpacity={hovered === b.id ? 0.12 : undefined}
-                  stroke="rgba(0,0,0,0.75)" strokeWidth={2} strokeLinejoin="round"
-                  className={hovered === b.id ? '' : 'block-pulse'}
-                  style={{ cursor: 'pointer', animationDelay: b.delay }}
-                  onMouseEnter={() => setHovered(b.id)} onMouseLeave={() => setHovered(null)}
-                  onClick={() => onSelect(b.id)}
-                />
-                <circle cx={b.textX} cy={b.textY} r={152} fill="none" stroke="white" strokeWidth={10} opacity={0.9} pointerEvents="none" />
-                <circle cx={b.textX} cy={b.textY} r={138} fill="rgba(0,0,0,0.82)" pointerEvents="none" />
-                <text x={b.textX} y={b.textY} textAnchor="middle" dominantBaseline="middle"
-                  fontSize={120} fontWeight="bold" fontFamily="ui-monospace,monospace" fill="white" pointerEvents="none">
-                  {b.id}
-                </text>
-              </g>
-            ))}
-          </svg>
+    <div className="absolute inset-0 bg-background flex flex-col">
+      <div className="px-6 pt-8 pb-4 border-b border-border">
+        <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">{zh ? '定價設定' : 'Narx belgilash'}</p>
+        <p className="text-2xl font-black text-foreground mt-1">{zh ? '請選擇定價類型' : 'Narx turini tanlang'}</p>
       </div>
-      <div className="absolute top-6 left-1/2 -translate-x-1/2 px-5 py-2 rounded-full bg-black/70 backdrop-blur-sm border border-white/10 text-white text-sm font-medium pointer-events-none">
-        Narx belgilash uchun blokni tanlang
+      <div className="p-6 grid grid-cols-2 gap-4">
+        <button onClick={onBolim}
+          className="flex flex-col gap-4 p-8 rounded-2xl bg-card border border-border hover:border-amber-300 hover:shadow-md hover:shadow-amber-100 transition-all text-left group relative">
+          <div className="w-12 h-12 rounded-xl bg-amber-100 flex items-center justify-center">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-amber-600">
+              <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
+            </svg>
+          </div>
+          <div>
+            <p className="font-bold text-foreground text-lg group-hover:text-amber-600 transition-colors">{zh ? '按區域定價' : "Bo'lim narxlash"}</p>
+            <p className="text-sm text-muted-foreground mt-1.5">{zh ? '按棟按樓層設定整體價格' : "Blok bo'yicha, qavat bo'yicha umumiy narx"}</p>
+          </div>
+          <ArrowRight size={18} className="absolute bottom-7 right-7 text-amber-400 opacity-0 group-hover:opacity-100 translate-x-1 group-hover:translate-x-0 transition-all" />
+        </button>
+        <button onClick={onAlohida}
+          className="flex flex-col gap-4 p-8 rounded-2xl bg-card border border-border hover:border-sky-300 hover:shadow-md hover:shadow-sky-100 transition-all text-left group relative">
+          <div className="w-12 h-12 rounded-xl bg-sky-100 flex items-center justify-center">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-sky-600">
+              <path d="M3 3h18v18H3z"/><path d="M3 9h18M3 15h18M9 3v18"/>
+            </svg>
+          </div>
+          <div>
+            <p className="font-bold text-foreground text-lg group-hover:text-sky-600 transition-colors">{zh ? '單獨定價' : 'Alohida narxlash'}</p>
+            <p className="text-sm text-muted-foreground mt-1.5">{zh ? '為每個商鋪單獨設定價格' : "Har bir do'kon uchun alohida narx"}</p>
+          </div>
+          <ArrowRight size={18} className="absolute bottom-7 right-7 text-sky-400 opacity-0 group-hover:opacity-100 translate-x-1 group-hover:translate-x-0 transition-all" />
+        </button>
       </div>
     </div>
   )
@@ -69,7 +61,7 @@ function GenplanStep({ onSelect }) {
 
 const WC_BOLIMS = [1, 3]
 
-function BlockStep({ blockId, onSwitchBlock, grouped, groupedWc, mode, onModeChange }) {
+function BlockStep({ blockId, onSwitchBlock, onBack, grouped, groupedWc, mode, onModeChange, zh }) {
   const meta = BLOCK_META[blockId]
   const [loaded, setLoaded] = useState(() => imgCache.has(meta?.image))
   const [hovered, setHovered] = useState(null)
@@ -176,8 +168,41 @@ function BlockStep({ blockId, onSwitchBlock, grouped, groupedWc, mode, onModeCha
   }, [panelOpen, editVal, selected, activeFloor])
 
   return (
-    <div className="absolute inset-0 bg-black overflow-hidden">
-      <div className="w-full h-full">
+    <div className="absolute inset-0 bg-black flex flex-col overflow-hidden">
+
+      {/* ── Top bar ── */}
+      <div className="shrink-0 flex items-center gap-4 px-4 py-3 bg-black/90 border-b border-white/8 z-20">
+        <button onClick={onBack}
+          className="flex items-center gap-1.5 text-white/60 hover:text-white text-sm transition-colors shrink-0">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+          {zh ? '返回' : 'Orqaga'}
+        </button>
+
+        <div className="flex-1 flex justify-center">
+          <div className="flex gap-1 p-1 bg-white/10 rounded-xl">
+            <button onClick={() => onModeChange('dokonlar')}
+              className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${mode === 'dokonlar' ? 'bg-white text-black' : 'text-white/60 hover:text-white'}`}>
+              {zh ? '商鋪' : "Do'konlar"}
+            </button>
+            <button onClick={() => onModeChange('wc')}
+              className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${mode === 'wc' ? 'bg-sky-400 text-sky-950' : 'text-white/60 hover:text-white'}`}>
+              {zh ? '衛生間' : 'WC'}
+            </button>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 shrink-0">
+          {['A','B','C'].map(bid => (
+            <button key={bid} onClick={() => bid !== blockId ? onSwitchBlock(bid) : null}
+              className={`w-10 h-10 rounded-xl text-sm font-bold shadow-xl transition-all active:scale-95 ${bid === blockId ? 'bg-white text-black scale-110 shadow-white/20' : 'bg-white/10 text-white hover:bg-white/20'}`}>
+              {bid}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Image area ── */}
+      <div className="flex-1 relative overflow-hidden">
           <img src={meta.image} className="absolute inset-0 w-full h-full object-contain" draggable={false}
             onLoad={() => { imgCache.add(meta.image); setLoaded(true) }}
             style={{ filter: loaded ? 'none' : 'blur(20px)', opacity: loaded ? 1 : 0.4, transition: 'filter .6s, opacity .6s' }}
@@ -276,35 +301,15 @@ function BlockStep({ blockId, onSwitchBlock, grouped, groupedWc, mode, onModeCha
               )
             })}
           </svg>
-      </div>
 
-      {/* Top hint */}
-      {!panelOpen && (
-        <div className="absolute top-6 left-1/2 -translate-x-1/2 px-5 py-2 rounded-full bg-black/70 backdrop-blur-sm border border-white/10 text-white text-sm font-medium pointer-events-none">
-          {mode === 'wc' ? "WC narxini o'zgartirish uchun bo'limni tanlang" : "Narx o'zgartirish uchun bo'limni tanlang"}
-        </div>
-      )}
-
-      {/* Top left mode switcher */}
-      <div className="absolute top-6 left-6 flex gap-1 p-1 bg-black/70 backdrop-blur-sm border border-white/10 rounded-xl">
-        <button onClick={() => onModeChange('dokonlar')}
-          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${mode === 'dokonlar' ? 'bg-white text-black' : 'text-white/60 hover:text-white'}`}>
-          Do'konlar
-        </button>
-        <button onClick={() => onModeChange('wc')}
-          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${mode === 'wc' ? 'bg-sky-400 text-sky-950' : 'text-white/60 hover:text-white'}`}>
-          WC
-        </button>
-      </div>
-
-      {/* Top right block switcher */}
-      <div className="absolute top-6 right-6 flex items-center gap-2">
-        {['A','B','C'].map(bid => (
-          <button key={bid} onClick={() => bid !== blockId ? onSwitchBlock(bid) : null}
-            className={`w-12 h-12 rounded-2xl text-base font-bold shadow-xl transition-all active:scale-95 ${bid === blockId ? 'bg-white text-black scale-110 shadow-white/20' : 'bg-black/80 text-white backdrop-blur-sm hover:bg-black/60'}`}>
-            {bid}
-          </button>
-        ))}
+        {/* Hint overlay */}
+        {!panelOpen && (
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 px-5 py-2 rounded-full bg-black/70 backdrop-blur-sm border border-white/10 text-white text-sm font-medium pointer-events-none">
+            {zh
+              ? (mode === 'wc' ? '請選擇區域以修改衛生間價格' : '請選擇區域以修改價格')
+              : (mode === 'wc' ? "WC narxini o'zgartirish uchun bo'limni tanlang" : "Narx o'zgartirish uchun bo'limni tanlang")}
+          </div>
+        )}
       </div>
 
       {/* Inline price edit panel */}
@@ -334,8 +339,8 @@ function BlockStep({ blockId, onSwitchBlock, grouped, groupedWc, mode, onModeCha
                   {selected?.bolimNum}
                 </span>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-black text-foreground leading-tight truncate">{blockId}-BLOK · {selected?.bolimNum}-bo'lim</p>
-                  <p className="text-xs text-muted-foreground">{activeFloor}-qavat {mode === 'wc' ? 'WC' : "do'kon"} narxi</p>
+                  <p className="text-sm font-black text-foreground leading-tight truncate">{zh ? `${blockId}棟 · ${selected?.bolimNum}區` : `${blockId}-BLOK · ${selected?.bolimNum}-bo'lim`}</p>
+                  <p className="text-xs text-muted-foreground">{zh ? `第${activeFloor}層 ${mode === 'wc' ? '衛生間' : '商鋪'}價格` : `${activeFloor}-qavat ${mode === 'wc' ? 'WC' : "do'kon"} narxi`}</p>
                 </div>
               </div>
 
@@ -345,7 +350,7 @@ function BlockStep({ blockId, onSwitchBlock, grouped, groupedWc, mode, onModeCha
                   {selectedFloors.map(f => (
                     <button key={f} onClick={() => changeFloor(f)}
                       className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all touch-manipulation ${activeFloor === f ? 'bg-amber-400 text-amber-900 shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
-                      {f}-qavat
+                      {zh ? `第${f}層` : `${f}-qavat`}
                     </button>
                   ))}
                 </div>
@@ -399,29 +404,33 @@ export default function PricesPage() {
   const navigate = useNavigate()
   const [params, setParams] = useSearchParams()
   const user = getUser()
+  const zh = user?.role === 'narxchi'
   const [mode, setMode] = useState('dokonlar') // 'dokonlar' | 'wc'
 
-  const step    = params.get('step')  ?? 'genplan'
+  const step    = params.get('step')  ?? 'landing'
   const blockId = params.get('block') ?? 'A'
 
   function goBlock(bid) { setParams({ step: 'block', block: bid }, { replace: true }) }
+  function goLanding()  { setParams({ step: 'landing' }, { replace: true }) }
 
   useEffect(() => {
-    if (user?.role !== 'admin') navigate('/admin', { replace: true })
+    if (user?.role !== 'admin' && user?.role !== 'narxchi') navigate('/admin', { replace: true })
   }, [])
+
+  const canFetch = user?.role === 'admin' || user?.role === 'narxchi'
 
   const { data: allPrices = [] } = useQuery({
     queryKey: ['prices-all'],
     queryFn: () => apiFetch('/api/prices/all').then(r => r.json()),
     staleTime: 60_000,
-    enabled: user?.role === 'admin',
+    enabled: canFetch,
   })
 
   const { data: allWcPrices = [] } = useQuery({
     queryKey: ['prices-all-wc'],
     queryFn: () => apiFetch('/api/prices/all?is_wc=1').then(r => r.json()),
     staleTime: 60_000,
-    enabled: user?.role === 'admin',
+    enabled: canFetch,
   })
 
   function buildGrouped(rows) {
@@ -437,10 +446,17 @@ export default function PricesPage() {
   const grouped   = buildGrouped(allPrices)
   const groupedWc = buildGrouped(allWcPrices)
 
-  if (!user || user.role !== 'admin') return null
+  if (!user || !canFetch) return null
 
-  if (step === 'genplan') {
-    return <GenplanStep onSelect={goBlock} />
+  if (!step || step === 'landing') {
+    return <LandingStep zh={zh}
+      onBolim={() => goBlock('A')}
+      onAlohida={() => setParams({ step: 'excel' }, { replace: true })}
+    />
+  }
+
+  if (step === 'excel') {
+    return <ApartmentPriceSheet onBack={goLanding} zh={zh} />
   }
 
   return (
@@ -448,10 +464,12 @@ export default function PricesPage() {
       key={blockId}
       blockId={blockId}
       onSwitchBlock={goBlock}
+      onBack={goLanding}
       grouped={grouped}
       groupedWc={groupedWc}
       mode={mode}
       onModeChange={setMode}
+      zh={zh}
     />
   )
 }

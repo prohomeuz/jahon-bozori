@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import { db, q } from '../db.js'
-import { requireAuth, requireAdmin } from '../auth.js'
+import { requireAuth, requireAdmin, requireAdminOrNarxchi } from '../auth.js'
 import { broadcast } from '../lib/sse.js'
 import { proxiedFetch } from '../lib/telegram.js'
 
@@ -136,17 +136,70 @@ app.get('/prices', requireAuth, (c) => {
   const bolim = parseInt(c.req.query('bolim'))
   const floor = parseInt(c.req.query('floor'))
   const isWc  = c.req.query('is_wc') === '1'
+  const apt   = c.req.query('apt')
   if (!block || isNaN(bolim) || isNaN(floor)) return c.json({ error: 'block, bolim, floor required' }, 400)
+  if (apt) {
+    const custom = q.getAptCustomPrice.get({ apt })
+    if (custom) return c.json({ price: custom.price })
+  }
   const row = isWc ? q.getWcPrice.get({ block, bolim, floor }) : q.getPrice.get({ block, bolim, floor })
   return c.json({ price: row?.price ?? (isWc ? 2000 : 1000) })
 })
 
-app.get('/prices/all', requireAuth, requireAdmin, (c) => {
+app.get('/apartment-prices', requireAuth, requireAdminOrNarxchi, (c) => {
+  const block = c.req.query('block')
+  const floor = parseInt(c.req.query('floor'))
+  if (!block || isNaN(floor)) return c.json({ error: 'block, floor required' }, 400)
+  const rows = db.prepare(`
+    SELECT
+      a.id   AS apartment_id,
+      a.bolim,
+      a.size,
+      a.status,
+      a.is_wc,
+      CASE WHEN a.is_wc = 1
+        THEN COALESCE(wp.price, 2000)
+        ELSE COALESCE(p.price, 1000)
+      END AS general_price,
+      ap.price AS custom_price
+    FROM apartments a
+    LEFT JOIN prices    p  ON p.block  = a.block AND p.bolim  = a.bolim AND p.floor  = a.floor
+    LEFT JOIN wc_prices wp ON wp.block = a.block AND wp.bolim = a.bolim AND wp.floor = a.floor
+    LEFT JOIN apartment_prices ap ON ap.apartment_id = a.id
+    WHERE a.block = ? AND a.floor = ?
+    ORDER BY a.is_wc, a.bolim, a.id
+  `).all(block, floor)
+  return c.json(rows)
+})
+
+app.post('/apartment-prices/batch', requireAuth, requireAdminOrNarxchi, async (c) => {
+  const { items } = await c.req.json()
+  if (!Array.isArray(items)) return c.json({ error: 'items array required' }, 400)
+  db.exec('BEGIN')
+  try {
+    for (const { apartment_id, price } of items) {
+      if (!apartment_id) continue
+      if (price == null || price === '') {
+        q.deleteAptCustomPrice.run({ apt: apartment_id })
+      } else {
+        const num = Number(price)
+        if (!isNaN(num) && num >= 0) q.upsertAptCustomPrice.run({ apt: apartment_id, price: num })
+      }
+    }
+    db.exec('COMMIT')
+  } catch (e) {
+    db.exec('ROLLBACK')
+    return c.json({ error: e.message }, 500)
+  }
+  return c.json({ ok: true })
+})
+
+app.get('/prices/all', requireAuth, requireAdminOrNarxchi, (c) => {
   const isWc = c.req.query('is_wc') === '1'
   return c.json(isWc ? q.allWcPrices.all() : q.allPrices.all())
 })
 
-app.patch('/prices', requireAuth, requireAdmin, async (c) => {
+app.patch('/prices', requireAuth, requireAdminOrNarxchi, async (c) => {
   const { block, bolim, floor, price, isWc } = await c.req.json()
   if (!block || bolim == null || floor == null || price == null) return c.json({ error: 'block, bolim, floor, price required' }, 400)
   if (typeof price !== 'number' || price < 0) return c.json({ error: 'price must be non-negative number' }, 400)
