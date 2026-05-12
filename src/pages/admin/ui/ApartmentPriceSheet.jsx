@@ -171,6 +171,7 @@ function group(rows, key) {
 
 export function ApartmentPriceSheet({ onBack }) {
   const [sheetId, setSheetId]       = useState('A-1')
+  const [typeTab, setTypeTab]       = useState('shops') // 'shops' | 'wc'
   const [allDrafts, setAllDrafts]   = useState({})
   const [editId, setEditId]         = useState(null)
   const [editVal, setEditVal]       = useState('')
@@ -188,7 +189,7 @@ export function ApartmentPriceSheet({ onBack }) {
     staleTime: 30_000,
   })
 
-  useEffect(() => { setEditId(null) }, [sheetId])
+  useEffect(() => { setEditId(null); setTypeTab('shops') }, [sheetId])
 
   const totalDrafts = Object.values(allDrafts).reduce((s, d) => s + Object.keys(d).length, 0)
 
@@ -315,10 +316,8 @@ export function ApartmentPriceSheet({ onBack }) {
     )
   }
 
-  const shops = rows.filter(r => !r.is_wc)
-  const wcs   = rows.filter(r => r.is_wc)
-  const { keys: shopBolims, map: shopMap } = group(shops, 'bolim')
-  const { keys: wcBolims,   map: wcMap   } = group(wcs,   'bolim')
+  const visibleRows = rows.filter(r => typeTab === 'wc' ? r.is_wc : !r.is_wc)
+  const { keys: bolims, map: bolimMap } = group(visibleRows, 'bolim')
 
   return (
     <>
@@ -336,10 +335,23 @@ export function ApartmentPriceSheet({ onBack }) {
             <ArrowLeft size={17} />
           </button>
 
-          {/* Title */}
-          <div className="text-center">
+          {/* Title + type switcher */}
+          <div className="flex flex-col items-center gap-2">
             <p className="text-sm font-bold text-foreground leading-tight">Alohida narxlash</p>
-            <p className="text-[11px] text-muted-foreground mt-0.5">Har bir do'kon uchun maxsus narx</p>
+            <div className="flex items-center gap-0.5 p-0.5 bg-muted rounded-lg">
+              <button
+                onClick={() => setTypeTab('shops')}
+                className={`px-3 py-1 rounded-md text-xs font-semibold transition-all ${typeTab === 'shops' ? 'bg-white text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+              >
+                Do'konlar
+              </button>
+              <button
+                onClick={() => setTypeTab('wc')}
+                className={`px-3 py-1 rounded-md text-xs font-semibold transition-all ${typeTab === 'wc' ? 'bg-white text-sky-600 shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+              >
+                Hojatxonalar
+              </button>
+            </div>
           </div>
 
           {/* Save button */}
@@ -382,28 +394,18 @@ export function ApartmentPriceSheet({ onBack }) {
                 </tr>
               </thead>
               <tbody>
-                {shopBolims.flatMap(bolim => [
-                  <tr key={`sh-${bolim}`}>
-                    <td colSpan={6} className="sticky top-10 z-5 px-4 py-2" style={{ background: '#f3f4f6', boxShadow: 'inset 3px 0 0 0 #9ca3af' }}>
-                      <span className="text-[11px] font-bold text-gray-600 uppercase tracking-wider">{bolim}-bo'lim</span>
+                {bolims.flatMap(bolim => [
+                  <tr key={`sec-${bolim}`}>
+                    <td colSpan={6} className="sticky top-10 z-5 px-4 py-2"
+                      style={typeTab === 'wc'
+                        ? { background: '#e0f2fe', boxShadow: 'inset 3px 0 0 0 #0ea5e9' }
+                        : { background: '#f3f4f6', boxShadow: 'inset 3px 0 0 0 #9ca3af' }}>
+                      <span className={`text-[11px] font-bold uppercase tracking-wider ${typeTab === 'wc' ? 'text-sky-600' : 'text-gray-600'}`}>
+                        {bolim}-bo'lim
+                      </span>
                     </td>
                   </tr>,
-                  ...shopMap[bolim].map(renderRow),
-                ])}
-                {wcBolims.length > 0 && (
-                  <tr>
-                    <td colSpan={6} className="sticky top-10 z-5 px-4 py-2" style={{ background: '#e0f2fe', boxShadow: 'inset 3px 0 0 0 #0ea5e9' }}>
-                      <span className="text-[11px] font-bold text-sky-600 uppercase tracking-wider">Hojatxonalar</span>
-                    </td>
-                  </tr>
-                )}
-                {wcBolims.flatMap(bolim => [
-                  <tr key={`wch-${bolim}`}>
-                    <td colSpan={6} className="sticky top-10 z-5 px-6 py-1.5" style={{ background: '#e0f2fe', boxShadow: 'inset 3px 0 0 0 #7dd3fc' }}>
-                      <span className="text-[11px] font-semibold text-sky-600 uppercase tracking-wider">{bolim}-bo'lim</span>
-                    </td>
-                  </tr>,
-                  ...wcMap[bolim].map(renderRow),
+                  ...bolimMap[bolim].map(renderRow),
                 ])}
               </tbody>
             </table>
