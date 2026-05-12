@@ -198,7 +198,7 @@ export function ApartmentPriceSheet({ onBack }) {
             <tbody>
               {shopBolims.flatMap(bolim => [
                 <tr key={`sh-${bolim}`}>
-                  <td colSpan={4} className="sticky top-[41px] z-[5] bg-gray-100 border-y border-gray-200 px-4 py-1.5 text-[11px] font-black text-gray-400 uppercase tracking-widest">
+                  <td colSpan={4} className="sticky top-10.25 z-5 bg-gray-100 border-y border-gray-200 px-4 py-1.5 text-[11px] font-black text-gray-400 uppercase tracking-widest">
                     {bolim}-bo'lim
                   </td>
                 </tr>,
@@ -206,14 +206,14 @@ export function ApartmentPriceSheet({ onBack }) {
               ])}
               {wcBolims.length > 0 && (
                 <tr>
-                  <td colSpan={4} className="sticky top-[41px] z-[5] bg-sky-50 border-y-2 border-sky-200 px-4 py-1.5 text-[11px] font-black text-sky-500 uppercase tracking-widest">
+                  <td colSpan={4} className="sticky top-10.25 z-5 bg-sky-50 border-y-2 border-sky-200 px-4 py-1.5 text-[11px] font-black text-sky-500 uppercase tracking-widest">
                     Hojatxonalar
                   </td>
                 </tr>
               )}
               {wcBolims.flatMap(bolim => [
                 <tr key={`wch-${bolim}`}>
-                  <td colSpan={4} className="sticky top-[41px] z-[5] bg-sky-50/60 border-b border-sky-100 px-6 py-1 text-[11px] font-semibold text-sky-400">
+                  <td colSpan={4} className="sticky top-10.25 z-5 bg-sky-50/60 border-b border-sky-100 px-6 py-1 text-[11px] font-semibold text-sky-400">
                     {bolim}-bo'lim
                   </td>
                 </tr>,
