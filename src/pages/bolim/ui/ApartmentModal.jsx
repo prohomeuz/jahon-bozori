@@ -267,7 +267,12 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
     if (phoneDigits.length < 9) e.telefon = phoneDigits.length === 0 ? 'Telefon raqam kiritilishi shart' : "Telefon raqam to'liq emas"
     const boshlVal = Number(String(form.boshlangich || '').replace(/\s/g, ''))
     if (!boshlVal) e.boshlangich = boshlVal === 0 && form.boshlangich ? "Summa noldan katta bo'lishi shart" : "Boshlang'ich to'lov kiritilishi shart"
-    if (type === 'bron' && sources.length > 0 && !form.source_id) e.source_id = "Manbaa tanlanishi shart"
+    if (sources.length > 0 && !form.source_id) e.source_id = "Manbaa tanlanishi shart"
+    if (type === 'sotish') {
+      if (!form.passport?.trim()) e.passport = "To'ldirilishi shart"
+      if (!form.passport_place?.trim()) e.passport_place = "To'ldirilishi shart"
+      if (!form.manzil?.trim()) e.manzil = "To'ldirilishi shart"
+    }
     return e
   }
 
@@ -768,12 +773,13 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
           <Field label="Ism" placeholder="Abdulloh" value={sotishForm.ism} onChange={setSotishCap('ism')} autoComplete="given-name" error={sotishErrors.ism} />
           <Field label="Familiya" placeholder="Karimov" value={sotishForm.familiya} onChange={setSotishCap('familiya')} autoComplete="family-name" error={sotishErrors.familiya} />
           <PhoneField label="Telefon raqam" value={sotishForm.telefon} isOpen={phoneTarget === 'sotish'} onOpenNumpad={() => setPhoneTarget('sotish')} error={sotishErrors.telefon} />
+          <SourceSelector value={sotishForm.source_id} onChange={id => setSotishForm(f => ({ ...f, source_id: id }))} errors={sotishErrors} />
           <FormSummaryCard form={sotishForm} errors={sotishErrors} />
           <div className="grid grid-cols-2 gap-4">
-            <PassportField label="Passport seriya/raqam" value={sotishForm.passport} onChange={v => setSotishForm(f => ({ ...f, passport: v }))} />
-            <Field label="Passport berilgan joy" placeholder="Toshkent sh. IIB" value={sotishForm.passport_place} onChange={setSotish('passport_place')} />
+            <PassportField label="Passport seriya/raqam" value={sotishForm.passport} onChange={v => setSotishForm(f => ({ ...f, passport: v }))} error={sotishErrors.passport} />
+            <Field label="Passport berilgan joy" placeholder="Toshkent sh. IIB" value={sotishForm.passport_place} onChange={setSotish('passport_place')} error={sotishErrors.passport_place} />
           </div>
-          <Field label="Manzil" placeholder="Toshkent, Chilonzor" value={sotishForm.manzil} onChange={setSotish('manzil')} />
+          <Field label="Manzil" placeholder="Toshkent, Chilonzor" value={sotishForm.manzil} onChange={setSotish('manzil')} error={sotishErrors.manzil} />
         </div>
       )}
       <div className="flex items-stretch" style={{ flex: '0 0 30%' }}>
@@ -898,11 +904,11 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
 
       <div className="flex flex-col flex-1 min-h-0">
         {tab === 'bron' ? (
-          <form id="bron-form" onSubmit={e => { e.preventDefault(); const errs = getErrors(bronForm); if (Object.keys(errs).length > 0) { setBronShowErrors(true); return }; setConfirmPending('bron') }} className="flex flex-col flex-1 min-h-0">
+          <form id="bron-form" onSubmit={e => { e.preventDefault(); const errs = getErrors(bronForm, 'bron'); if (Object.keys(errs).length > 0) { setBronShowErrors(true); return }; setConfirmPending('bron') }} className="flex flex-col flex-1 min-h-0">
             {bronFields}
           </form>
         ) : (
-          <form id="sotish-form" onSubmit={e => { e.preventDefault(); const errs = getErrors(sotishForm); if (Object.keys(errs).length > 0) { setSotishShowErrors(true); return }; setConfirmPending('sotish') }} className="flex flex-col flex-1 min-h-0">
+          <form id="sotish-form" onSubmit={e => { e.preventDefault(); const errs = getErrors(sotishForm, 'sotish'); if (Object.keys(errs).length > 0) { setSotishShowErrors(true); return }; setConfirmPending('sotish') }} className="flex flex-col flex-1 min-h-0">
             {sotishFields}
           </form>
         )}
