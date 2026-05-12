@@ -67,28 +67,21 @@ async function drawHighlight(imgSrc, rect, viewBox) {
   ctx.drawImage(img, 0, 0)
   if (!rect || !viewBox) return canvas.toDataURL('image/png')
   const [, , vw, vh] = viewBox.split(' ').map(Number)
-  const sx = img.naturalWidth / vw, sy = img.naturalHeight / vh
-  let bboxVb
+  const sx = img.naturalWidth / vw
+  const sy = img.naturalHeight / vh
   if (rect.d) {
     ctx.save(); ctx.scale(sx, sy)
-    ctx.fillStyle = 'rgba(251,191,36,0.30)'; ctx.fill(new Path2D(rect.d))
-    ctx.strokeStyle = 'rgb(245,158,11)'; ctx.lineWidth = vw / 90; ctx.stroke(new Path2D(rect.d))
-    ctx.restore(); bboxVb = pathBBox(rect.d)
+    ctx.fillStyle = 'rgba(239,68,68,0.22)'; ctx.fill(new Path2D(rect.d))
+    ctx.strokeStyle = '#dc2626'; ctx.lineWidth = vw / 90; ctx.stroke(new Path2D(rect.d))
+    ctx.restore()
   } else {
     const lw = Math.max(4, img.naturalWidth / 250)
-    ctx.fillStyle = 'rgba(251,191,36,0.30)'
+    ctx.fillStyle = 'rgba(239,68,68,0.22)'
     ctx.fillRect(rect.x * sx, rect.y * sy, rect.width * sx, rect.height * sy)
-    ctx.strokeStyle = 'rgb(245,158,11)'; ctx.lineWidth = lw
+    ctx.strokeStyle = '#dc2626'; ctx.lineWidth = lw
     ctx.strokeRect(rect.x * sx, rect.y * sy, rect.width * sx, rect.height * sy)
-    bboxVb = { x: rect.x, y: rect.y, width: rect.width, height: rect.height }
   }
-  const padY = bboxVb.height * sy * 1.5
-  const cy = Math.max(0, bboxVb.y * sy - padY)
-  const ch = Math.min(img.naturalHeight - cy, bboxVb.height * sy + padY * 2)
-  const cropped = document.createElement('canvas')
-  cropped.width = img.naturalWidth; cropped.height = ch
-  cropped.getContext('2d').drawImage(canvas, 0, cy, img.naturalWidth, ch, 0, 0, img.naturalWidth, ch)
-  return cropped.toDataURL('image/png')
+  return canvas.toDataURL('image/png')
 }
 
 // ─── Location modal ───────────────────────────────────────────────────────────
@@ -113,42 +106,45 @@ function LocationModal({ address, block, floor, bolim, onClose }) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-6"
-      style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)' }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-8"
+      style={{ background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(6px)' }}
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-2xl shadow-2xl overflow-hidden w-full max-w-xl"
+        className="bg-white rounded-3xl shadow-2xl overflow-hidden w-full max-w-2xl"
+        style={{ boxShadow: '0 32px 80px rgba(0,0,0,0.28)' }}
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-3.5 border-b border-gray-100">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center shrink-0">
-              <MapPin size={14} className="text-amber-600" />
+        <div className="flex items-center justify-between px-5 py-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-amber-100 flex items-center justify-center shrink-0">
+              <MapPin size={16} className="text-amber-500" />
             </div>
             <div>
-              <p className="text-sm font-bold text-gray-900">
+              <p className="text-base font-black text-gray-900 leading-tight">
                 {block}-blok · {bolim}-bo'lim · {floor}-qavat
               </p>
-              <p className="text-xs text-gray-400 mt-0.5">Do'kon № <span className="font-bold text-amber-600">{aptNum}</span></p>
+              <p className="text-sm text-gray-400 mt-0.5">
+                Do'kon № <span className="font-bold text-amber-500">{aptNum}</span>
+              </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="w-7 h-7 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition-colors"
+            className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition-colors"
           >
-            <X size={13} strokeWidth={2.5} className="text-gray-500" />
+            <X size={14} strokeWidth={2.5} className="text-gray-500" />
           </button>
         </div>
 
-        {/* Image */}
-        <div className="bg-gray-50 min-h-32">
+        {/* Floor plan image */}
+        <div className="mx-4 mb-4 rounded-2xl overflow-hidden bg-gray-50 border border-gray-100">
           {dataUrl ? (
-            <img src={dataUrl} alt={address} className="w-full object-contain" />
+            <img src={dataUrl} alt={address} className="w-full object-contain block" />
           ) : (
-            <div className="h-40 flex items-center justify-center">
-              <div className="w-5 h-5 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
+            <div className="h-52 flex items-center justify-center">
+              <div className="w-6 h-6 border-2 border-red-400 border-t-transparent rounded-full animate-spin" />
             </div>
           )}
         </div>
