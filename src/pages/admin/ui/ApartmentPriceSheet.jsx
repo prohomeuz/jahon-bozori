@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router'
 import { apiFetch } from '@/shared/lib/auth'
@@ -220,6 +220,12 @@ function fmt(n) {
   return Number(n).toLocaleString('ru-RU')
 }
 
+function formatInputVal(raw) {
+  if (!raw) return ''
+  if (raw.length <= 3) return raw
+  return raw.slice(0, -3) + ' ' + raw.slice(-3)
+}
+
 function group(rows, key) {
   const keys = [...new Set(rows.map(r => r[key]))].sort((a, b) => a - b)
   const map = {}
@@ -244,6 +250,8 @@ export function ApartmentPriceSheet({ onBack }) {
   const [savedFlash, setSavedFlash] = useState(false)
   const [locPreview, setLocPreview] = useState(null)
   const qc = useQueryClient()
+  const flatRowsRef    = useRef([])
+  const committingRef  = useRef(false)
 
   const sheet      = SHEETS.find(s => s.id === sheetId)
   const sheetDrafts = allDrafts[sheetId] ?? {}
@@ -266,10 +274,10 @@ export function ApartmentPriceSheet({ onBack }) {
   function startEdit(row) {
     const cur = getEffective(row)
     setEditId(row.apartment_id)
-    setEditVal(cur != null ? String(cur) : '')
+    setEditVal(cur != null ? String(Math.round(cur)) : '')
   }
 
-  function commitEdit(aptId) {
+  function commitEdit(aptId, direction = null) {
     const raw = editVal.trim().replace(/\s/g, '')
     if (raw === '') {
       setAllDrafts(d => ({ ...d, [sheetId]: { ...(d[sheetId] ?? {}), [aptId]: null } }))
@@ -277,6 +285,20 @@ export function ApartmentPriceSheet({ onBack }) {
       const num = Number(raw)
       if (!isNaN(num) && num > 0) {
         setAllDrafts(d => ({ ...d, [sheetId]: { ...(d[sheetId] ?? {}), [aptId]: num } }))
+      }
+    }
+    if (direction !== null) {
+      const flatRows = flatRowsRef.current
+      const idx = flatRows.findIndex(r => r.apartment_id === aptId)
+      const nextIdx = direction === 'next' ? idx + 1 : idx - 1
+      if (nextIdx >= 0 && nextIdx < flatRows.length) {
+        const nextRow = flatRows[nextIdx]
+        const nextEff = (allDrafts[sheetId] !== undefined && nextRow.apartment_id in (allDrafts[sheetId] ?? {}))
+          ? allDrafts[sheetId][nextRow.apartment_id]
+          : nextRow.custom_price
+        setEditId(nextRow.apartment_id)
+        setEditVal(nextEff != null ? String(nextEff) : '')
+        return
       }
     }
     setEditId(null)
@@ -311,31 +333,24 @@ export function ApartmentPriceSheet({ onBack }) {
   }
 
   function renderRow(row) {
-    const id       = row.apartment_id
-    const aptNum   = id.split('-').pop()
-    const isDirty  = id in sheetDrafts
-    const isEdit   = editId === id
-    const eff      = getEffective(row)
-    const hasCustom = row.custom_price != null
+    const id          = row.apartment_id
+    const aptNum      = id.split('-').pop()
+    const isDirty     = id in sheetDrafts
+    const isEdit      = editId === id
+    const eff         = getEffective(row)
+    const hasCustom   = row.custom_price != null
+    const isCustomized = (isDirty && sheetDrafts[id] != null) || (!isDirty && hasCustom)
+    const displayVal  = eff != null ? eff : row.general_price
 
     return (
-      <tr key={id} className={`border-b border-gray-100 group/row ${isDirty ? 'bg-amber-50/60' : 'hover:bg-gray-50/40'}`}>
-        {/* № */}
+      <tr key={id} onClick={() => { if (editId !== id) startEdit(row) }} className={`border-b border-gray-100 cursor-default ${isDirty ? 'bg-amber-50/60' : 'hover:bg-gray-50/40'}`}>
         <td className="px-4 py-2 font-mono font-bold text-sm text-gray-800 w-14 shrink-0">{aptNum}</td>
-
-        {/* Maydon */}
         <td className="px-4 py-2 text-sm text-gray-400 tabular-nums w-20 shrink-0 whitespace-nowrap">{row.size} m²</td>
-
-        {/* Umumiy narx */}
         <td className="px-4 py-2 text-sm font-mono text-gray-400 tabular-nums w-32 shrink-0 whitespace-nowrap">{fmt(row.general_price)} $</td>
-
-        {/* Spacer */}
         <td />
-
-        {/* Joylashuv — underlined, clickable */}
         <td className="px-3 py-2 w-56 shrink-0">
           <button
-            onClick={() => setLocPreview({ address: id, block: sheet.block, floor: sheet.floor, bolim: row.bolim, isWc: !!row.is_wc })}
+            onClick={e => { e.stopPropagation(); setLocPreview({ address: id, block: sheet.block, floor: sheet.floor, bolim: row.bolim, isWc: !!row.is_wc }) }}
             className="inline-flex items-center gap-1.5 text-xs text-gray-400 underline underline-offset-2 decoration-dashed hover:text-amber-600 hover:decoration-amber-400 transition-colors"
           >
             <MapPin size={11} className="shrink-0" />
@@ -343,39 +358,46 @@ export function ApartmentPriceSheet({ onBack }) {
             {row.is_wc ? <span className="ml-1 text-sky-500 font-bold no-underline">WC</span> : null}
           </button>
         </td>
-
-        {/* Alohida narx */}
-        <td className="px-4 py-1.5 text-right w-48 shrink-0">
-          {isEdit ? (
-            <input
-              autoFocus
-              value={editVal}
-              onChange={e => setEditVal(e.target.value)}
-              onBlur={() => commitEdit(id)}
-              onKeyDown={e => {
-                if (e.key === 'Enter')  { e.preventDefault(); commitEdit(id) }
-                if (e.key === 'Escape') setEditId(null)
-              }}
-              placeholder="bo'sh = umumiy narx"
-              className="w-44 px-2 py-1 rounded border border-amber-400 ring-1 ring-amber-200 bg-white font-mono text-sm focus:outline-none tabular-nums text-right"
-            />
-          ) : (
-            <button
-              onClick={() => startEdit(row)}
-              className={`px-3 py-1 rounded text-sm font-mono tabular-nums transition-colors
-                ${isDirty
-                  ? 'bg-amber-100 border border-amber-300 text-amber-900 font-bold'
-                  : hasCustom
-                    ? 'bg-slate-50 border border-slate-200 text-slate-700 font-semibold'
-                    : 'text-gray-300 hover:text-gray-500 hover:bg-gray-50 border border-transparent'}`}
-            >
-              {eff != null
-                ? `${fmt(eff)} $`
-                : isDirty
-                  ? <span className="text-gray-400 text-xs italic">umumiy</span>
-                  : '—'}
-            </button>
-          )}
+        <td className="px-4 py-0 text-right w-48 shrink-0">
+          <div className="h-9 flex items-center justify-end">
+            {isEdit ? (
+              <input
+                autoFocus
+                value={formatInputVal(editVal)}
+                placeholder={fmt(row.general_price)}
+                onChange={() => {}}
+                onPaste={e => { e.preventDefault(); const d = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 5); setEditVal(d) }}
+                onBlur={() => { if (committingRef.current) { committingRef.current = false; return } commitEdit(id) }}
+                onKeyDown={e => {
+                  if (/^\d$/.test(e.key)) {
+                    e.preventDefault()
+                    setEditVal(prev => prev.length < 5 ? prev + e.key : prev)
+                  } else if (e.key === 'Backspace') {
+                    e.preventDefault()
+                    setEditVal(prev => prev.slice(0, -1))
+                  } else if (e.key === 'Enter' || e.key === 'ArrowDown') {
+                    e.preventDefault(); committingRef.current = true; commitEdit(id, 'next')
+                  } else if (e.key === 'ArrowUp') {
+                    e.preventDefault(); committingRef.current = true; commitEdit(id, 'prev')
+                  } else if (e.key === 'Escape') {
+                    setEditId(null)
+                  } else {
+                    e.preventDefault()
+                  }
+                }}
+                className="w-44 h-8 px-3 border border-amber-400 ring-2 ring-amber-400/40 bg-white font-mono text-sm focus:outline-none tabular-nums text-right"
+              />
+            ) : (
+              <button
+                className={`w-44 h-8 px-3 border text-sm font-mono tabular-nums text-right transition-colors
+                  ${isCustomized
+                    ? 'border-gray-200 text-amber-600 font-bold bg-white hover:border-amber-300'
+                    : 'border-gray-200 text-gray-500 bg-white hover:border-gray-300'}`}
+              >
+                {fmt(displayVal)} $
+              </button>
+            )}
+          </div>
         </td>
       </tr>
     )
@@ -383,6 +405,7 @@ export function ApartmentPriceSheet({ onBack }) {
 
   const visibleRows = rows.filter(r => typeTab === 'wc' ? r.is_wc : !r.is_wc)
   const { keys: bolims, map: bolimMap } = group(visibleRows, 'bolim')
+  flatRowsRef.current = bolims.flatMap(b => bolimMap[b] ?? [])
 
   return (
     <>

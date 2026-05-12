@@ -71,6 +71,7 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
   const [phoneTarget, setPhoneTarget]   = useState(null)
   const [sendSms, setSendSms]           = useState(false)
   const [pairPartner, setPairPartner]   = useState(null)
+  const [pairNarxM2, setPairNarxM2]     = useState(0)
   const [bookWithPair, setBookWithPair] = useState(false)
   const [sources, setSources]           = useState([])
 
@@ -131,12 +132,19 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
     const narxVal   = Number(String(calc.narxM2).replace(/\s/g, ''))
     const downVal   = Number(String(calc.boshlangich).replace(/\s/g, ''))
     const months    = parseInt(calc.oylar) || 12
-    const baseTotal = Math.round(narxVal * effectiveAptSize)
+    const isPair    = bookWithPair && pairPartner
+    const pNarx     = isPair && pairNarxM2 > 0 ? pairNarxM2 : narxVal
+    const baseTotal = isPair
+      ? Math.round(narxVal * apartment.size + pNarx * pairPartner.size)
+      : Math.round(narxVal * apartment.size)
     const pctOfBase = baseTotal > 0 && downVal > 0 ? Math.floor((downVal / baseTotal) * 100) : 0
     const pctBracket = apartment.is_wc ? null : (CHEGIRMA_BRACKETS.find(p => pctOfBase >= p) ?? null)
     const chegirma  = (apartment.is_wc || !chegirmaEnabled) ? 0 : (pctBracket ? CHEGIRMA_TABLE[pctBracket] : 0)
     const yakuniy   = narxVal > 0 ? Math.max(0, narxVal - chegirma) : 0
-    const total     = Math.round(yakuniy * effectiveAptSize)
+    const yakuniy2  = pNarx > 0   ? Math.max(0, pNarx - chegirma)   : 0
+    const total     = isPair
+      ? Math.round(yakuniy * apartment.size + yakuniy2 * pairPartner.size)
+      : Math.round(yakuniy * apartment.size)
     const percent   = Math.min(100, pctOfBase)
     const qolgan    = Math.max(0, total - downVal)
     const qolganDisplay = qolgan > 0 ? qolgan : (pctOfBase < 100 ? Math.max(0, baseTotal - downVal) : 0)
@@ -144,7 +152,7 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
     const bonusBracket = BONUS_BRACKETS.find(p => pctOfBase >= p) ?? null
     const bonus     = (apartment.is_wc || !bonusEnabled) ? null : (bonusBracket ? BONUS_TABLE[bonusBracket] : null)
     return { narxVal, downVal, months, baseTotal, pctOfBase, pctBracket, chegirma, yakuniy, total, percent, qolgan, monthly, bonus }
-  }, [calc.narxM2, calc.boshlangich, calc.oylar, effectiveAptSize, apartment.is_wc, chegirmaEnabled, bonusEnabled])
+  }, [calc.narxM2, calc.boshlangich, calc.oylar, apartment.size, apartment.is_wc, bookWithPair, pairPartner, pairNarxM2, chegirmaEnabled, bonusEnabled])
 
   const { pctBracket: currentBracket } = calcDerived
   useEffect(() => {
@@ -195,13 +203,22 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
   }, [])
 
   useEffect(() => {
-    setPairPartner(null); setBookWithPair(false)
+    setPairPartner(null); setPairNarxM2(0); setBookWithPair(false)
     if (apartment.is_wc) return
     apiFetch(`/api/apartments/${apartment.address}/pair`)
       .then(r => r.json())
-      .then(partner => { if (partner && partner.status === 'EMPTY') setPairPartner(partner) })
+      .then(partner => {
+        if (partner && partner.status === 'EMPTY') {
+          setPairPartner(partner)
+          const [pBlock, pBolimStr] = partner.address.split('-')
+          apiFetch(`/api/prices?block=${pBlock}&bolim=${parseInt(pBolimStr)}&floor=${floor}&apt=${partner.address}`)
+            .then(r => r.json())
+            .then(({ price }) => { if (price) setPairNarxM2(price) })
+            .catch(() => {})
+        }
+      })
       .catch(() => {})
-  }, [apartment.address, apartment.is_wc])
+  }, [apartment.address, apartment.is_wc, floor])
 
   useEffect(() => {
     const handler = (e) => { if (e.key === 'Escape') onClose() }
