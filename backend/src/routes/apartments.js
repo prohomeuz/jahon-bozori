@@ -175,7 +175,8 @@ app.get('/apartment-prices', requireAuth, requireAdmin, (c) => {
 app.post('/apartment-prices/batch', requireAuth, requireAdmin, async (c) => {
   const { items } = await c.req.json()
   if (!Array.isArray(items)) return c.json({ error: 'items array required' }, 400)
-  const run = db.transaction(() => {
+  db.exec('BEGIN')
+  try {
     for (const { apartment_id, price } of items) {
       if (!apartment_id) continue
       if (price == null || price === '') {
@@ -185,8 +186,11 @@ app.post('/apartment-prices/batch', requireAuth, requireAdmin, async (c) => {
         if (!isNaN(num) && num >= 0) q.upsertAptCustomPrice.run({ apt: apartment_id, price: num })
       }
     }
-  })
-  run()
+    db.exec('COMMIT')
+  } catch (e) {
+    db.exec('ROLLBACK')
+    return c.json({ error: e.message }, 500)
+  }
   return c.json({ ok: true })
 })
 

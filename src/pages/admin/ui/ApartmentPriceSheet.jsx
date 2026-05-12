@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from '@/shared/lib/auth'
-import { ArrowLeft, Check, Save } from 'lucide-react'
+import { ArrowLeft, Check, Save, X, MapPin } from 'lucide-react'
 
 const SHEETS = [
   { id: 'A-1', block: 'A', floor: 1, label: 'A  1-qavat' },
@@ -12,6 +12,152 @@ const SHEETS = [
   { id: 'C-2', block: 'C', floor: 2, label: 'C  2-qavat' },
 ]
 
+// ─── Location highlight helpers (same logic as ShopsPage) ────────────────────
+
+const allBlockImgs = import.meta.glob('@/assets/blocks/**/*.{png,jpg,webp}', { eager: true })
+
+function loadImg(blockId, floor, bolimNum) {
+  const filename = String(bolimNum)
+  return Object.entries(allBlockImgs).find(([p]) => {
+    const parts = p.split('/')
+    const name = parts.pop().replace(/\.[^.]+$/, '')
+    const floorDir = parts.pop()
+    const blockDir = parts.pop()
+    return name === filename && floorDir === String(floor) && blockDir === blockId
+  })?.[1]?.default
+}
+
+async function getAptRect(blockId, floor, bolimNum, address) {
+  try {
+    const LOADERS = {
+      A: [
+        () => import('../../bolim/config/aRectOverlays').then(m => m.A_RECT_OVERLAYS),
+        () => import('../../bolim/config/aFloor2RectOverlays').then(m => m.A_FLOOR2_RECT_OVERLAYS),
+      ],
+      B: [
+        () => import('../../bolim/config/bRectOverlays').then(m => m.B_RECT_OVERLAYS),
+        () => import('../../bolim/config/bFloor2RectOverlays').then(m => m.B_FLOOR2_RECT_OVERLAYS),
+      ],
+      C: [
+        () => import('../../bolim/config/cRectOverlays').then(m => m.C_RECT_OVERLAYS),
+        () => import('../../bolim/config/cFloor2RectOverlays').then(m => m.C_FLOOR2_RECT_OVERLAYS),
+      ],
+    }
+    const overlays = await LOADERS[blockId]?.[floor === 2 ? 1 : 0]?.()
+    const bolimData = overlays?.[bolimNum]
+    if (!bolimData) return null
+    const rect = bolimData.rects?.find(r => r.id === address)
+    return rect ? { rect, viewBox: bolimData.viewBox } : null
+  } catch { return null }
+}
+
+function pathBBox(d) {
+  const nums = d.match(/[-\d.]+/g)?.map(Number) ?? []
+  const xs = [], ys = []
+  for (let i = 0; i + 1 < nums.length; i += 2) { xs.push(nums[i]); ys.push(nums[i + 1]) }
+  return { x: Math.min(...xs), y: Math.min(...ys), width: Math.max(...xs) - Math.min(...xs), height: Math.max(...ys) - Math.min(...ys) }
+}
+
+async function drawHighlight(imgSrc, rect, viewBox) {
+  const img = new Image()
+  await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = imgSrc })
+  const canvas = document.createElement('canvas')
+  canvas.width = img.naturalWidth; canvas.height = img.naturalHeight
+  const ctx = canvas.getContext('2d')
+  ctx.drawImage(img, 0, 0)
+  if (!rect || !viewBox) return canvas.toDataURL('image/png')
+  const [, , vw, vh] = viewBox.split(' ').map(Number)
+  const sx = img.naturalWidth / vw, sy = img.naturalHeight / vh
+  let bboxVb
+  if (rect.d) {
+    ctx.save(); ctx.scale(sx, sy)
+    ctx.fillStyle = 'rgba(251,191,36,0.30)'; ctx.fill(new Path2D(rect.d))
+    ctx.strokeStyle = 'rgb(245,158,11)'; ctx.lineWidth = vw / 90; ctx.stroke(new Path2D(rect.d))
+    ctx.restore(); bboxVb = pathBBox(rect.d)
+  } else {
+    const lw = Math.max(4, img.naturalWidth / 250)
+    ctx.fillStyle = 'rgba(251,191,36,0.30)'
+    ctx.fillRect(rect.x * sx, rect.y * sy, rect.width * sx, rect.height * sy)
+    ctx.strokeStyle = 'rgb(245,158,11)'; ctx.lineWidth = lw
+    ctx.strokeRect(rect.x * sx, rect.y * sy, rect.width * sx, rect.height * sy)
+    bboxVb = { x: rect.x, y: rect.y, width: rect.width, height: rect.height }
+  }
+  const padY = bboxVb.height * sy * 1.5
+  const cy = Math.max(0, bboxVb.y * sy - padY)
+  const ch = Math.min(img.naturalHeight - cy, bboxVb.height * sy + padY * 2)
+  const cropped = document.createElement('canvas')
+  cropped.width = img.naturalWidth; cropped.height = ch
+  cropped.getContext('2d').drawImage(canvas, 0, cy, img.naturalWidth, ch, 0, 0, img.naturalWidth, ch)
+  return cropped.toDataURL('image/png')
+}
+
+// ─── Location modal ───────────────────────────────────────────────────────────
+
+function LocationModal({ address, block, floor, bolim, onClose }) {
+  const [dataUrl, setDataUrl] = useState(null)
+  const aptNum = address.split('-').pop()
+
+  useEffect(() => {
+    const src = loadImg(block, floor, bolim)
+    if (!src) return
+    getAptRect(block, floor, bolim, address)
+      .then(overlay => drawHighlight(src, overlay?.rect ?? null, overlay?.viewBox ?? null))
+      .then(setDataUrl)
+  }, [address])
+
+  useEffect(() => {
+    function onKey(e) { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-6"
+      style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)' }}
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-2xl shadow-2xl overflow-hidden w-full max-w-xl"
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-3.5 border-b border-gray-100">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center shrink-0">
+              <MapPin size={14} className="text-amber-600" />
+            </div>
+            <div>
+              <p className="text-sm font-bold text-gray-900">
+                {block}-blok · {bolim}-bo'lim · {floor}-qavat
+              </p>
+              <p className="text-xs text-gray-400 mt-0.5">Do'kon № <span className="font-bold text-amber-600">{aptNum}</span></p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="w-7 h-7 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition-colors"
+          >
+            <X size={13} strokeWidth={2.5} className="text-gray-500" />
+          </button>
+        </div>
+
+        {/* Image */}
+        <div className="bg-gray-50 min-h-32">
+          {dataUrl ? (
+            <img src={dataUrl} alt={address} className="w-full object-contain" />
+          ) : (
+            <div className="h-40 flex items-center justify-center">
+              <div className="w-5 h-5 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function fmt(n) {
   if (n == null) return ''
@@ -25,16 +171,19 @@ function group(rows, key) {
   return { keys, map }
 }
 
+// ─── Main component ───────────────────────────────────────────────────────────
+
 export function ApartmentPriceSheet({ onBack }) {
-  const [sheetId, setSheetId]     = useState('A-1')
-  const [allDrafts, setAllDrafts] = useState({}) // { sheetId: { apt_id: number | null } }
-  const [editId, setEditId]       = useState(null)
-  const [editVal, setEditVal]     = useState('')
-  const [saving, setSaving]       = useState(false)
+  const [sheetId, setSheetId]       = useState('A-1')
+  const [allDrafts, setAllDrafts]   = useState({})
+  const [editId, setEditId]         = useState(null)
+  const [editVal, setEditVal]       = useState('')
+  const [saving, setSaving]         = useState(false)
   const [savedFlash, setSavedFlash] = useState(false)
+  const [locPreview, setLocPreview] = useState(null)
   const qc = useQueryClient()
 
-  const sheet = SHEETS.find(s => s.id === sheetId)
+  const sheet      = SHEETS.find(s => s.id === sheetId)
   const sheetDrafts = allDrafts[sheetId] ?? {}
 
   const { data: rows = [], isLoading } = useQuery({
@@ -48,8 +197,7 @@ export function ApartmentPriceSheet({ onBack }) {
   const totalDrafts = Object.values(allDrafts).reduce((s, d) => s + Object.keys(d).length, 0)
 
   function getEffective(row) {
-    const id = row.apartment_id
-    if (id in sheetDrafts) return sheetDrafts[id]
+    if (row.apartment_id in sheetDrafts) return sheetDrafts[row.apartment_id]
     return row.custom_price
   }
 
@@ -101,25 +249,41 @@ export function ApartmentPriceSheet({ onBack }) {
   }
 
   function renderRow(row) {
-    const id      = row.apartment_id
-    const aptNum  = id.split('-').pop()
-    const isDirty = id in sheetDrafts
-    const isEdit  = editId === id
-    const eff     = getEffective(row)
+    const id       = row.apartment_id
+    const aptNum   = id.split('-').pop()
+    const isDirty  = id in sheetDrafts
+    const isEdit   = editId === id
+    const eff      = getEffective(row)
     const hasCustom = row.custom_price != null
 
     return (
-      <tr key={id} className={`border-b border-gray-100 ${isDirty ? 'bg-amber-50/60' : 'hover:bg-gray-50/40'}`}>
-        <td className="px-4 py-2 font-mono font-bold text-sm text-gray-800 w-14">{aptNum}</td>
-        <td className="px-4 py-2 w-52">
-          <span className="text-xs text-gray-500 font-medium">
+      <tr key={id} className={`border-b border-gray-100 group/row ${isDirty ? 'bg-amber-50/60' : 'hover:bg-gray-50/40'}`}>
+        {/* № */}
+        <td className="px-4 py-2 font-mono font-bold text-sm text-gray-800 w-14 shrink-0">{aptNum}</td>
+
+        {/* Maydon */}
+        <td className="px-4 py-2 text-sm text-gray-400 tabular-nums w-20 shrink-0 whitespace-nowrap">{row.size} m²</td>
+
+        {/* Umumiy narx */}
+        <td className="px-4 py-2 text-sm font-mono text-gray-400 tabular-nums w-32 shrink-0 whitespace-nowrap">{fmt(row.general_price)} $</td>
+
+        {/* Spacer */}
+        <td />
+
+        {/* Joylashuv — underlined, clickable */}
+        <td className="px-3 py-2 w-56 shrink-0">
+          <button
+            onClick={() => setLocPreview({ address: id, block: sheet.block, floor: sheet.floor, bolim: row.bolim })}
+            className="inline-flex items-center gap-1.5 text-xs text-gray-400 underline underline-offset-2 decoration-dashed hover:text-amber-600 hover:decoration-amber-400 transition-colors"
+          >
+            <MapPin size={11} className="shrink-0" />
             {sheet.block}-blok · {row.bolim}-bo'lim · {sheet.floor}-qavat
-            {row.is_wc ? <span className="ml-1.5 text-sky-500 font-bold">WC</span> : null}
-          </span>
+            {row.is_wc ? <span className="ml-1 text-sky-500 font-bold no-underline">WC</span> : null}
+          </button>
         </td>
-        <td className="px-4 py-2 text-sm text-gray-400 tabular-nums w-20">{row.size} m²</td>
-        <td className="px-4 py-2 text-sm font-mono text-gray-400 tabular-nums w-28">{fmt(row.general_price)} $</td>
-        <td className="px-4 py-1.5 text-right">
+
+        {/* Alohida narx */}
+        <td className="px-4 py-1.5 text-right w-48 shrink-0">
           {isEdit ? (
             <input
               autoFocus
@@ -161,90 +325,95 @@ export function ApartmentPriceSheet({ onBack }) {
   const { keys: wcBolims,   map: wcMap   } = group(wcs,   'bolim')
 
   return (
-    <div className="flex flex-col h-full bg-background" style={{ minHeight: 0 }}>
-      {/* Top bar */}
-      <div className="flex items-center gap-3 px-5 py-3 border-b border-border shrink-0">
-        <button onClick={onBack}
-          className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
-          <ArrowLeft size={16} />
-          Orqaga
-        </button>
-        <span className="text-sm font-bold flex-1 text-center text-foreground">Do'kon bo'yicha alohida narxlash</span>
-        <button
-          onClick={handleSave}
-          disabled={!totalDrafts || saving}
-          className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold transition-all active:scale-95
-            ${savedFlash
-              ? 'bg-green-500 text-white'
-              : totalDrafts
-                ? 'bg-amber-500 hover:bg-amber-600 text-white'
-                : 'bg-muted text-muted-foreground cursor-not-allowed'}`}
-        >
-          {savedFlash ? <Check size={15} /> : <Save size={15} />}
-          {savedFlash ? 'Saqlandi!' : saving ? 'Saqlanmoqda...' : `Saqlash${totalDrafts ? ` (${totalDrafts})` : ''}`}
-        </button>
-      </div>
+    <>
+      {locPreview && <LocationModal {...locPreview} onClose={() => setLocPreview(null)} />}
 
-      {/* Table area */}
-      <div className="flex-1 overflow-auto min-h-0">
-        {isLoading ? (
-          <div className="flex items-center justify-center h-full text-muted-foreground text-sm">Yuklanmoqda...</div>
-        ) : rows.length === 0 ? (
-          <div className="flex items-center justify-center h-full text-muted-foreground text-sm">Bu qavat uchun ma'lumot yo'q</div>
-        ) : (
-          <table className="w-full border-collapse text-left">
-            <thead className="sticky top-0 z-10">
-              <tr className="bg-gray-50 border-b-2 border-gray-200">
-                <th className="px-4 py-2.5 text-[11px] font-bold text-gray-400 uppercase tracking-wider w-14">№</th>
-                <th className="px-4 py-2.5 text-[11px] font-bold text-gray-400 uppercase tracking-wider w-52">Joylashuv</th>
-                <th className="px-4 py-2.5 text-[11px] font-bold text-gray-400 uppercase tracking-wider w-20">Maydon</th>
-                <th className="px-4 py-2.5 text-[11px] font-bold text-gray-400 uppercase tracking-wider w-28">Umumiy narx</th>
-                <th className="px-4 py-2.5 text-[11px] font-bold text-gray-400 uppercase tracking-wider text-right">Alohida narx</th>
-              </tr>
-            </thead>
-            <tbody>
-              {shopBolims.flatMap(bolim => [
-                <tr key={`sh-${bolim}`}>
-                  <td colSpan={5} className="sticky top-10.25 z-5 bg-gray-100 border-y border-gray-200 px-4 py-1.5 text-[11px] font-black text-gray-400 uppercase tracking-widest">
-                    {bolim}-bo'lim
-                  </td>
-                </tr>,
-                ...shopMap[bolim].map(renderRow),
-              ])}
-              {wcBolims.length > 0 && (
-                <tr>
-                  <td colSpan={5} className="sticky top-10.25 z-5 bg-sky-50 border-y-2 border-sky-200 px-4 py-1.5 text-[11px] font-black text-sky-500 uppercase tracking-widest">
-                    Hojatxonalar
-                  </td>
-                </tr>
-              )}
-              {wcBolims.flatMap(bolim => [
-                <tr key={`wch-${bolim}`}>
-                  <td colSpan={5} className="sticky top-10.25 z-5 bg-sky-50/60 border-b border-sky-100 px-6 py-1 text-[11px] font-semibold text-sky-400">
-                    {bolim}-bo'lim
-                  </td>
-                </tr>,
-                ...wcMap[bolim].map(renderRow),
-              ])}
-            </tbody>
-          </table>
-        )}
-      </div>
-
-      {/* Sheet tabs — Excel style */}
-      <div className="shrink-0 border-t-2 border-border bg-gray-50 flex items-end gap-0 px-2 overflow-x-auto">
-        {SHEETS.map(s => (
-          <button key={s.id} onClick={() => setSheetId(s.id)}
-            className={`px-5 py-2 text-xs font-bold whitespace-nowrap border-x border-t transition-all shrink-0
-              ${s.id === sheetId
-                ? 'bg-background text-foreground border-border -mb-0.5 rounded-t-lg shadow-sm z-10'
-                : 'bg-gray-50 text-muted-foreground border-transparent hover:bg-gray-100 rounded-t-md'
-              } ${allDrafts[s.id] && Object.keys(allDrafts[s.id]).length ? 'after:content-["•"] after:ml-1 after:text-amber-500' : ''}`}
-          >
-            {s.label}
+      <div className="flex flex-col h-full bg-background" style={{ minHeight: 0 }}>
+        {/* Top bar */}
+        <div className="flex items-center gap-3 px-5 py-3 border-b border-border shrink-0">
+          <button onClick={onBack}
+            className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
+            <ArrowLeft size={16} />
+            Orqaga
           </button>
-        ))}
+          <span className="text-sm font-bold flex-1 text-center text-foreground">Do'kon bo'yicha alohida narxlash</span>
+          <button
+            onClick={handleSave}
+            disabled={!totalDrafts || saving}
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold transition-all active:scale-95
+              ${savedFlash
+                ? 'bg-green-500 text-white'
+                : totalDrafts
+                  ? 'bg-amber-500 hover:bg-amber-600 text-white'
+                  : 'bg-muted text-muted-foreground cursor-not-allowed'}`}
+          >
+            {savedFlash ? <Check size={15} /> : <Save size={15} />}
+            {savedFlash ? 'Saqlandi!' : saving ? 'Saqlanmoqda...' : `Saqlash${totalDrafts ? ` (${totalDrafts})` : ''}`}
+          </button>
+        </div>
+
+        {/* Table */}
+        <div className="flex-1 overflow-auto min-h-0">
+          {isLoading ? (
+            <div className="flex items-center justify-center h-full text-muted-foreground text-sm">Yuklanmoqda...</div>
+          ) : rows.length === 0 ? (
+            <div className="flex items-center justify-center h-full text-muted-foreground text-sm">Bu qavat uchun ma'lumot yo'q</div>
+          ) : (
+            <table className="w-full border-collapse text-left">
+              <thead className="sticky top-0 z-10">
+                <tr className="bg-gray-50 border-b-2 border-gray-200">
+                  <th className="px-4 py-2.5 text-[11px] font-bold text-gray-400 uppercase tracking-wider w-14">№</th>
+                  <th className="px-4 py-2.5 text-[11px] font-bold text-gray-400 uppercase tracking-wider w-20">Maydon</th>
+                  <th className="px-4 py-2.5 text-[11px] font-bold text-gray-400 uppercase tracking-wider w-32 whitespace-nowrap">Umumiy narx</th>
+                  <th />
+                  <th className="px-4 py-2.5 text-[11px] font-bold text-gray-400 uppercase tracking-wider w-56">Joylashuv</th>
+                  <th className="px-4 py-2.5 text-[11px] font-bold text-gray-400 uppercase tracking-wider w-48 text-right">Alohida narx</th>
+                </tr>
+              </thead>
+              <tbody>
+                {shopBolims.flatMap(bolim => [
+                  <tr key={`sh-${bolim}`}>
+                    <td colSpan={6} className="sticky top-10.25 z-5 bg-gray-100 border-y border-gray-200 px-4 py-1.5 text-[11px] font-black text-gray-400 uppercase tracking-widest">
+                      {bolim}-bo'lim
+                    </td>
+                  </tr>,
+                  ...shopMap[bolim].map(renderRow),
+                ])}
+                {wcBolims.length > 0 && (
+                  <tr>
+                    <td colSpan={6} className="sticky top-10.25 z-5 bg-sky-50 border-y-2 border-sky-200 px-4 py-1.5 text-[11px] font-black text-sky-500 uppercase tracking-widest">
+                      Hojatxonalar
+                    </td>
+                  </tr>
+                )}
+                {wcBolims.flatMap(bolim => [
+                  <tr key={`wch-${bolim}`}>
+                    <td colSpan={6} className="sticky top-10.25 z-5 bg-sky-50/60 border-b border-sky-100 px-6 py-1 text-[11px] font-semibold text-sky-400">
+                      {bolim}-bo'lim
+                    </td>
+                  </tr>,
+                  ...wcMap[bolim].map(renderRow),
+                ])}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        {/* Sheet tabs */}
+        <div className="shrink-0 border-t-2 border-border bg-gray-50 flex items-end gap-0 px-2 overflow-x-auto">
+          {SHEETS.map(s => (
+            <button key={s.id} onClick={() => setSheetId(s.id)}
+              className={`px-5 py-2 text-xs font-bold whitespace-nowrap border-x border-t transition-all shrink-0
+                ${s.id === sheetId
+                  ? 'bg-background text-foreground border-border -mb-0.5 rounded-t-lg shadow-sm z-10'
+                  : 'bg-gray-50 text-muted-foreground border-transparent hover:bg-gray-100 rounded-t-md'
+                } ${allDrafts[s.id] && Object.keys(allDrafts[s.id]).length ? 'after:content-["•"] after:ml-1 after:text-amber-500' : ''}`}
+            >
+              {s.label}
+            </button>
+          ))}
+        </div>
       </div>
-    </div>
+    </>
   )
 }
