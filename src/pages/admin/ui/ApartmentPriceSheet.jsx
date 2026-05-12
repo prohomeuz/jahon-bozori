@@ -320,8 +320,6 @@ export function ApartmentPriceSheet({ onBack }) {
   const { keys: shopBolims, map: shopMap } = group(shops, 'bolim')
   const { keys: wcBolims,   map: wcMap   } = group(wcs,   'bolim')
 
-  const BLOCK_GROUPS = ['A', 'B', 'C']
-
   return (
     <>
       {locPreview && <LocationModal {...locPreview} onClose={() => setLocPreview(null)} />}
@@ -412,34 +410,18 @@ export function ApartmentPriceSheet({ onBack }) {
           )}
         </div>
 
-        {/* ── Sheet tabs — grouped by block ────────────────────────────────── */}
-        <div className="shrink-0 border-t border-border bg-background px-4 py-2.5 flex items-center gap-2 overflow-x-auto">
-          {BLOCK_GROUPS.map((block, bi) => (
-            <div key={block} className="flex items-center gap-1 shrink-0">
-              {bi > 0 && <div className="w-px h-5 bg-border mx-1" />}
-              <span className="text-[10px] font-black text-muted-foreground/50 w-4 text-center select-none">{block}</span>
-              <div className="flex items-center gap-0.5 p-1 bg-muted rounded-xl">
-                {SHEETS.filter(s => s.block === block).map(s => {
-                  const isActive  = s.id === sheetId
-                  const hasDraft  = !!(allDrafts[s.id] && Object.keys(allDrafts[s.id]).length)
-                  return (
-                    <button
-                      key={s.id}
-                      onClick={() => setSheetId(s.id)}
-                      className={`relative px-3 py-1 rounded-lg text-xs font-bold whitespace-nowrap transition-all
-                        ${isActive
-                          ? 'bg-white text-foreground shadow-sm'
-                          : 'text-muted-foreground hover:text-foreground'}`}
-                    >
-                      {s.floor}-qavat
-                      {hasDraft && (
-                        <span className={`absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full ${isActive ? 'bg-amber-400' : 'bg-amber-400/70'}`} />
-                      )}
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
+        {/* ── Sheet tabs — Excel style ─────────────────────────────────────── */}
+        <div className="shrink-0 border-t-2 border-border bg-gray-50 flex items-end gap-0 px-2 overflow-x-auto">
+          {SHEETS.map(s => (
+            <button key={s.id} onClick={() => setSheetId(s.id)}
+              className={`px-5 py-2 text-xs font-bold whitespace-nowrap border-x border-t transition-all shrink-0
+                ${s.id === sheetId
+                  ? 'bg-background text-foreground border-border -mb-0.5 rounded-t-lg shadow-sm z-10'
+                  : 'bg-gray-50 text-muted-foreground border-transparent hover:bg-gray-100 rounded-t-md'
+                } ${allDrafts[s.id] && Object.keys(allDrafts[s.id]).length ? 'after:content-["•"] after:ml-1 after:text-amber-500' : ''}`}
+            >
+              {s.label}
+            </button>
           ))}
         </div>
       </div>
