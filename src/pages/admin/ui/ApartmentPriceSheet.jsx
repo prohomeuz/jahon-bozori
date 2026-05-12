@@ -12,6 +12,10 @@ const SHEETS = [
   { id: 'C-2', block: 'C', floor: 2, label: 'C · 2-qavat' },
 ]
 
+// ─── WC overlay data ──────────────────────────────────────────────────────────
+
+import { WC_OVERLAYS } from '../../bolim/config/hojatxonaOverlays'
+
 // ─── Location highlight helpers (same logic as ShopsPage) ────────────────────
 
 const allBlockImgs = import.meta.glob('@/assets/blocks/**/*.{png,jpg,webp}', { eager: true })
@@ -49,6 +53,52 @@ async function getAptRect(blockId, floor, bolimNum, address) {
     const rect = bolimData.rects?.find(r => r.id === address)
     return rect ? { rect, viewBox: bolimData.viewBox } : null
   } catch { return null }
+}
+
+async function getBolimViewBox(blockId, floor, bolimNum) {
+  try {
+    const LOADERS = {
+      A: [
+        () => import('../../bolim/config/aRectOverlays').then(m => m.A_RECT_OVERLAYS),
+        () => import('../../bolim/config/aFloor2RectOverlays').then(m => m.A_FLOOR2_RECT_OVERLAYS),
+      ],
+      B: [
+        () => import('../../bolim/config/bRectOverlays').then(m => m.B_RECT_OVERLAYS),
+        () => import('../../bolim/config/bFloor2RectOverlays').then(m => m.B_FLOOR2_RECT_OVERLAYS),
+      ],
+      C: [
+        () => import('../../bolim/config/cRectOverlays').then(m => m.C_RECT_OVERLAYS),
+        () => import('../../bolim/config/cFloor2RectOverlays').then(m => m.C_FLOOR2_RECT_OVERLAYS),
+      ],
+    }
+    const overlays = await LOADERS[blockId]?.[floor === 2 ? 1 : 0]?.()
+    return overlays?.[bolimNum]?.viewBox ?? null
+  } catch { return null }
+}
+
+async function drawWcHighlight(imgSrc, points, viewBox) {
+  const img = new Image()
+  await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = imgSrc })
+  const canvas = document.createElement('canvas')
+  canvas.width = img.naturalWidth; canvas.height = img.naturalHeight
+  const ctx = canvas.getContext('2d')
+  ctx.drawImage(img, 0, 0)
+  if (!points || !viewBox) return canvas.toDataURL('image/png')
+  const [, , vw, vh] = viewBox.split(' ').map(Number)
+  const sx = img.naturalWidth / vw, sy = img.naturalHeight / vh
+  const pts = points.trim().split(/\s+/).map(p => p.split(',').map(Number))
+  ctx.save(); ctx.scale(sx, sy)
+  ctx.beginPath()
+  ctx.moveTo(pts[0][0], pts[0][1])
+  for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1])
+  ctx.closePath()
+  ctx.fillStyle = 'rgba(14,165,233,0.18)'
+  ctx.fill()
+  ctx.strokeStyle = '#0ea5e9'
+  ctx.lineWidth = vw / 90
+  ctx.stroke()
+  ctx.restore()
+  return canvas.toDataURL('image/png')
 }
 
 function pathBBox(d) {
@@ -94,7 +144,10 @@ function LocationModal({ address, block, floor, bolim, isWc, onClose }) {
     const src = loadImg(block, floor, bolim)
     if (!src) return
     if (isWc) {
-      setDataUrl(src)
+      const points = WC_OVERLAYS[block]?.[floor]?.[bolim]
+      getBolimViewBox(block, floor, bolim)
+        .then(viewBox => drawWcHighlight(src, points, viewBox))
+        .then(setDataUrl)
     } else {
       getAptRect(block, floor, bolim, address)
         .then(overlay => drawHighlight(src, overlay?.rect ?? null, overlay?.viewBox ?? null))
