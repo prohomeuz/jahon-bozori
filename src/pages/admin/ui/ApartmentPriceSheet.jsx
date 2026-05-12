@@ -86,16 +86,20 @@ async function drawHighlight(imgSrc, rect, viewBox) {
 
 // ─── Location modal ───────────────────────────────────────────────────────────
 
-function LocationModal({ address, block, floor, bolim, onClose }) {
+function LocationModal({ address, block, floor, bolim, isWc, onClose }) {
   const [dataUrl, setDataUrl] = useState(null)
   const aptNum = address.split('-').pop()
 
   useEffect(() => {
     const src = loadImg(block, floor, bolim)
     if (!src) return
-    getAptRect(block, floor, bolim, address)
-      .then(overlay => drawHighlight(src, overlay?.rect ?? null, overlay?.viewBox ?? null))
-      .then(setDataUrl)
+    if (isWc) {
+      setDataUrl(src)
+    } else {
+      getAptRect(block, floor, bolim, address)
+        .then(overlay => drawHighlight(src, overlay?.rect ?? null, overlay?.viewBox ?? null))
+        .then(setDataUrl)
+    }
   }, [address])
 
   useEffect(() => {
@@ -125,9 +129,11 @@ function LocationModal({ address, block, floor, bolim, onClose }) {
               <p className="text-base font-black text-gray-900 leading-tight">
                 {block}-blok · {bolim}-bo'lim · {floor}-qavat
               </p>
-              <p className="text-sm text-gray-400 mt-0.5">
-                Do'kon № <span className="font-bold text-amber-500">{aptNum}</span>
-              </p>
+              {!isWc && (
+                <p className="text-sm text-gray-400 mt-0.5">
+                  Do'kon № <span className="font-bold text-amber-500">{aptNum}</span>
+                </p>
+              )}
             </div>
           </div>
           <button
@@ -270,7 +276,7 @@ export function ApartmentPriceSheet({ onBack }) {
         {/* Joylashuv — underlined, clickable */}
         <td className="px-3 py-2 w-56 shrink-0">
           <button
-            onClick={() => setLocPreview({ address: id, block: sheet.block, floor: sheet.floor, bolim: row.bolim })}
+            onClick={() => setLocPreview({ address: id, block: sheet.block, floor: sheet.floor, bolim: row.bolim, isWc: !!row.is_wc })}
             className="inline-flex items-center gap-1.5 text-xs text-gray-400 underline underline-offset-2 decoration-dashed hover:text-amber-600 hover:decoration-amber-400 transition-colors"
           >
             <MapPin size={11} className="shrink-0" />
