@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useSearchParams } from 'react-router'
 import { apiFetch } from '@/shared/lib/auth'
 import { ArrowLeft, Check, Save, X, MapPin } from 'lucide-react'
 
@@ -229,8 +230,13 @@ function group(rows, key) {
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export function ApartmentPriceSheet({ onBack }) {
-  const [sheetId, setSheetId]       = useState('A-1')
-  const [typeTab, setTypeTab]       = useState('shops') // 'shops' | 'wc'
+  const [params, setParams]         = useSearchParams()
+  const sheetId  = SHEETS.find(s => s.id === params.get('sheet'))?.id ?? 'A-1'
+  const typeTab  = params.get('type') === 'wc' ? 'wc' : 'shops'
+
+  function setSheetId(id) { setParams(p => { const n = new URLSearchParams(p); n.set('sheet', id); n.delete('type'); return n }, { replace: true }) }
+  function setTypeTab(t)  { setParams(p => { const n = new URLSearchParams(p); n.set('type', t);  return n }, { replace: true }) }
+
   const [allDrafts, setAllDrafts]   = useState({})
   const [editId, setEditId]         = useState(null)
   const [editVal, setEditVal]       = useState('')
@@ -248,7 +254,7 @@ export function ApartmentPriceSheet({ onBack }) {
     staleTime: 30_000,
   })
 
-  useEffect(() => { setEditId(null); setTypeTab('shops') }, [sheetId])
+  useEffect(() => { setEditId(null) }, [sheetId])
 
   const totalDrafts = Object.values(allDrafts).reduce((s, d) => s + Object.keys(d).length, 0)
 
