@@ -303,12 +303,20 @@ export default function ManagersPage() {
     queryKey: ['users'],
     queryFn: () => apiFetch('/api/users').then(r => r.json()),
   })
+  const { data: narxchiData } = useQuery({
+    queryKey: ['narxchi'],
+    queryFn: () => apiFetch('/api/users/narxchi').then(r => r.json()),
+  })
   const users = Array.isArray(data) ? data : []
+  const narxchiList = Array.isArray(narxchiData) ? narxchiData : []
   const filtered = search.trim()
     ? users.filter(u => u.name.toLowerCase().includes(search.trim().toLowerCase()))
     : users
 
-  const refresh = () => queryClient.invalidateQueries({ queryKey: ['users'] })
+  const refresh = () => {
+    queryClient.invalidateQueries({ queryKey: ['users'] })
+    queryClient.invalidateQueries({ queryKey: ['narxchi'] })
+  }
 
   return (
     <div className="p-4 md:p-6 flex flex-col gap-3 h-full min-h-0 overflow-hidden">
@@ -403,6 +411,34 @@ export default function ManagersPage() {
           </table>
         </div>
       </div>
+
+      {/* Narxchi section */}
+      {narxchiList.length > 0 && (
+        <div className="bg-card border border-border rounded-2xl overflow-hidden shrink-0">
+          <div className="px-4 py-3 border-b border-border bg-muted/40">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Narxchi — 定價員</p>
+          </div>
+          <table className="w-full text-sm">
+            <tbody className="divide-y divide-border">
+              {narxchiList.map(u => (
+                <tr key={u.id} className="hover:bg-muted/30 transition-colors">
+                  <td className="px-4 py-3.5 font-medium whitespace-nowrap">{u.name}</td>
+                  <td className="px-4 py-3.5"><PasswordCell password={u.plain_password} /></td>
+                  <td className="px-4 py-3.5 text-xs text-muted-foreground whitespace-nowrap">Har doim aktiv · 只限定價</td>
+                  <td className="px-4 py-3.5 whitespace-nowrap">
+                    <div className="flex items-center gap-2">
+                      <ActiveToggle user={u} onDone={refresh} />
+                      <span className={`text-xs font-medium inline-block w-16 ${u.is_active ? 'text-emerald-600' : 'text-muted-foreground'}`}>
+                        {u.is_active ? 'Aktiv' : 'Bloklangan'}
+                      </span>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {modal?.type === 'create' && <UserModal onClose={() => setModal(null)} onDone={refresh} />}
       {modal?.type === 'edit' && <UserModal user={modal.user} onClose={() => setModal(null)} onDone={refresh} />}

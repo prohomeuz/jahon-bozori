@@ -64,7 +64,7 @@ export default function LoginPage() {
       }
       setToken(data.token)
       if (data.refreshToken) setRefreshToken(data.refreshToken)
-      const defaultDest = data.user?.role === 'salesmanager' ? '/admin/bookings' : '/admin'
+      const defaultDest = data.user?.role === 'salesmanager' ? '/admin/bookings' : data.user?.role === 'narxchi' ? '/admin/prices' : '/admin'
       navigate(from ?? defaultDest, { replace: true })
     } finally {
       setLoading(false)

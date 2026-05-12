@@ -19,7 +19,7 @@ db.exec(`
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
     username   TEXT NOT NULL UNIQUE,
     password   TEXT NOT NULL,
-    role       TEXT NOT NULL CHECK(role IN ('admin', 'salesmanager')),
+    role       TEXT NOT NULL CHECK(role IN ('admin', 'salesmanager', 'narxchi')),
     name       TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL DEFAULT (datetime('now', '+5 hours'))
   );
@@ -420,6 +420,35 @@ try { db.exec(`UPDATE apartments SET notes = 'Burchak'                  WHERE no
 try { db.exec(`UPDATE apartments SET notes = 'Ko''cha bo''yi, Burchak'  WHERE notes = '临街铺、端头路口'`) } catch {}
 try { db.exec(`UPDATE apartments SET notes = 'Ko''cha bo''yi, Burchak'  WHERE notes = '临街商铺、端头路口'`) } catch {}
 
+// Migrate users table role CHECK to include 'narxchi'
+try {
+  const schema = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='users'").get()
+  if (schema?.sql && !schema.sql.includes('narxchi')) {
+    db.exec(`BEGIN`)
+    db.exec(`
+      CREATE TABLE users_new (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        username     TEXT NOT NULL UNIQUE,
+        password     TEXT NOT NULL,
+        role         TEXT NOT NULL CHECK(role IN ('admin','salesmanager','narxchi')),
+        name         TEXT NOT NULL DEFAULT '',
+        created_at   TEXT NOT NULL DEFAULT (datetime('now', '+5 hours')),
+        telegram_id  TEXT,
+        plain_password TEXT,
+        is_active    INTEGER NOT NULL DEFAULT 1
+      )
+    `)
+    db.exec(`INSERT INTO users_new SELECT id,username,password,role,name,created_at,telegram_id,plain_password,is_active FROM users`)
+    db.exec(`DROP TABLE users`)
+    db.exec(`ALTER TABLE users_new RENAME TO users`)
+    db.exec(`COMMIT`)
+    console.log('[migration] users role CHECK updated to include narxchi')
+  }
+} catch (e) {
+  try { db.exec(`ROLLBACK`) } catch {}
+  console.error('[migration] users role CHECK:', e.message)
+}
+
 // Sotuv shartnomasi raqamlari (HTKH20260504-001 format)
 db.exec(`CREATE TABLE IF NOT EXISTS contract_numbers (
   id      INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -434,6 +463,7 @@ export const q = {
   userById:            db.prepare('SELECT id, role, name, is_active, created_at FROM users WHERE id=:id'),
   insertUser:          db.prepare("INSERT INTO users (username, password, plain_password, role, name, telegram_id, created_at) VALUES (:plain_password, :password, :plain_password, :role, :name, NULL, datetime('now', '+5 hours'))"),
   allUsers:            db.prepare("SELECT id, name, plain_password, role, is_active, telegram_id, created_at FROM users WHERE role='salesmanager' ORDER BY created_at DESC"),
+  allNarxchi:          db.prepare("SELECT id, name, plain_password, role, is_active, created_at FROM users WHERE role='narxchi' ORDER BY created_at DESC"),
   userTelegramId:      db.prepare('SELECT telegram_id FROM users WHERE id=:id'),
 
   // telegram subscribers

@@ -18,12 +18,12 @@ const BLOCK_META = {
 
 // ─── Step 0: Landing ─────────────────────────────────────────────────────────
 
-function LandingStep({ onBolim, onAlohida }) {
+function LandingStep({ onBolim, onAlohida, zh }) {
   return (
     <div className="absolute inset-0 bg-background flex flex-col">
       <div className="px-6 pt-8 pb-4 border-b border-border">
-        <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Narx belgilash</p>
-        <p className="text-2xl font-black text-foreground mt-1">Narx turini tanlang</p>
+        <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">{zh ? '定價設定' : 'Narx belgilash'}</p>
+        <p className="text-2xl font-black text-foreground mt-1">{zh ? '請選擇定價類型' : 'Narx turini tanlang'}</p>
       </div>
       <div className="p-6 grid grid-cols-2 gap-4">
         <button onClick={onBolim}
@@ -34,8 +34,8 @@ function LandingStep({ onBolim, onAlohida }) {
             </svg>
           </div>
           <div>
-            <p className="font-bold text-foreground text-lg group-hover:text-amber-600 transition-colors">Bo'lim narxlash</p>
-            <p className="text-sm text-muted-foreground mt-1.5">Blok bo'yicha, qavat bo'yicha umumiy narx</p>
+            <p className="font-bold text-foreground text-lg group-hover:text-amber-600 transition-colors">{zh ? '按區域定價' : "Bo'lim narxlash"}</p>
+            <p className="text-sm text-muted-foreground mt-1.5">{zh ? '按棟按樓層設定整體價格' : "Blok bo'yicha, qavat bo'yicha umumiy narx"}</p>
           </div>
           <ArrowRight size={18} className="absolute bottom-7 right-7 text-amber-400 opacity-0 group-hover:opacity-100 translate-x-1 group-hover:translate-x-0 transition-all" />
         </button>
@@ -47,8 +47,8 @@ function LandingStep({ onBolim, onAlohida }) {
             </svg>
           </div>
           <div>
-            <p className="font-bold text-foreground text-lg group-hover:text-sky-600 transition-colors">Alohida narxlash</p>
-            <p className="text-sm text-muted-foreground mt-1.5">Har bir do'kon uchun alohida narx</p>
+            <p className="font-bold text-foreground text-lg group-hover:text-sky-600 transition-colors">{zh ? '單獨定價' : 'Alohida narxlash'}</p>
+            <p className="text-sm text-muted-foreground mt-1.5">{zh ? '為每個商鋪單獨設定價格' : "Har bir do'kon uchun alohida narx"}</p>
           </div>
           <ArrowRight size={18} className="absolute bottom-7 right-7 text-sky-400 opacity-0 group-hover:opacity-100 translate-x-1 group-hover:translate-x-0 transition-all" />
         </button>
@@ -61,7 +61,7 @@ function LandingStep({ onBolim, onAlohida }) {
 
 const WC_BOLIMS = [1, 3]
 
-function BlockStep({ blockId, onSwitchBlock, onBack, grouped, groupedWc, mode, onModeChange }) {
+function BlockStep({ blockId, onSwitchBlock, onBack, grouped, groupedWc, mode, onModeChange, zh }) {
   const meta = BLOCK_META[blockId]
   const [loaded, setLoaded] = useState(() => imgCache.has(meta?.image))
   const [hovered, setHovered] = useState(null)
@@ -175,18 +175,18 @@ function BlockStep({ blockId, onSwitchBlock, onBack, grouped, groupedWc, mode, o
         <button onClick={onBack}
           className="flex items-center gap-1.5 text-white/60 hover:text-white text-sm transition-colors shrink-0">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
-          Orqaga
+          {zh ? '返回' : 'Orqaga'}
         </button>
 
         <div className="flex-1 flex justify-center">
           <div className="flex gap-1 p-1 bg-white/10 rounded-xl">
             <button onClick={() => onModeChange('dokonlar')}
               className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${mode === 'dokonlar' ? 'bg-white text-black' : 'text-white/60 hover:text-white'}`}>
-              Do'konlar
+              {zh ? '商鋪' : "Do'konlar"}
             </button>
             <button onClick={() => onModeChange('wc')}
               className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${mode === 'wc' ? 'bg-sky-400 text-sky-950' : 'text-white/60 hover:text-white'}`}>
-              WC
+              {zh ? '衛生間' : 'WC'}
             </button>
           </div>
         </div>
@@ -305,7 +305,9 @@ function BlockStep({ blockId, onSwitchBlock, onBack, grouped, groupedWc, mode, o
         {/* Hint overlay */}
         {!panelOpen && (
           <div className="absolute top-4 left-1/2 -translate-x-1/2 px-5 py-2 rounded-full bg-black/70 backdrop-blur-sm border border-white/10 text-white text-sm font-medium pointer-events-none">
-            {mode === 'wc' ? "WC narxini o'zgartirish uchun bo'limni tanlang" : "Narx o'zgartirish uchun bo'limni tanlang"}
+            {zh
+              ? (mode === 'wc' ? '請選擇區域以修改衛生間價格' : '請選擇區域以修改價格')
+              : (mode === 'wc' ? "WC narxini o'zgartirish uchun bo'limni tanlang" : "Narx o'zgartirish uchun bo'limni tanlang")}
           </div>
         )}
       </div>
@@ -337,8 +339,8 @@ function BlockStep({ blockId, onSwitchBlock, onBack, grouped, groupedWc, mode, o
                   {selected?.bolimNum}
                 </span>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-black text-foreground leading-tight truncate">{blockId}-BLOK · {selected?.bolimNum}-bo'lim</p>
-                  <p className="text-xs text-muted-foreground">{activeFloor}-qavat {mode === 'wc' ? 'WC' : "do'kon"} narxi</p>
+                  <p className="text-sm font-black text-foreground leading-tight truncate">{zh ? `${blockId}棟 · ${selected?.bolimNum}區` : `${blockId}-BLOK · ${selected?.bolimNum}-bo'lim`}</p>
+                  <p className="text-xs text-muted-foreground">{zh ? `第${activeFloor}層 ${mode === 'wc' ? '衛生間' : '商鋪'}價格` : `${activeFloor}-qavat ${mode === 'wc' ? 'WC' : "do'kon"} narxi`}</p>
                 </div>
               </div>
 
@@ -348,7 +350,7 @@ function BlockStep({ blockId, onSwitchBlock, onBack, grouped, groupedWc, mode, o
                   {selectedFloors.map(f => (
                     <button key={f} onClick={() => changeFloor(f)}
                       className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all touch-manipulation ${activeFloor === f ? 'bg-amber-400 text-amber-900 shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
-                      {f}-qavat
+                      {zh ? `第${f}層` : `${f}-qavat`}
                     </button>
                   ))}
                 </div>
@@ -402,6 +404,7 @@ export default function PricesPage() {
   const navigate = useNavigate()
   const [params, setParams] = useSearchParams()
   const user = getUser()
+  const zh = user?.role === 'narxchi'
   const [mode, setMode] = useState('dokonlar') // 'dokonlar' | 'wc'
 
   const step    = params.get('step')  ?? 'landing'
@@ -411,21 +414,23 @@ export default function PricesPage() {
   function goLanding()  { setParams({ step: 'landing' }, { replace: true }) }
 
   useEffect(() => {
-    if (user?.role !== 'admin') navigate('/admin', { replace: true })
+    if (user?.role !== 'admin' && user?.role !== 'narxchi') navigate('/admin', { replace: true })
   }, [])
+
+  const canFetch = user?.role === 'admin' || user?.role === 'narxchi'
 
   const { data: allPrices = [] } = useQuery({
     queryKey: ['prices-all'],
     queryFn: () => apiFetch('/api/prices/all').then(r => r.json()),
     staleTime: 60_000,
-    enabled: user?.role === 'admin',
+    enabled: canFetch,
   })
 
   const { data: allWcPrices = [] } = useQuery({
     queryKey: ['prices-all-wc'],
     queryFn: () => apiFetch('/api/prices/all?is_wc=1').then(r => r.json()),
     staleTime: 60_000,
-    enabled: user?.role === 'admin',
+    enabled: canFetch,
   })
 
   function buildGrouped(rows) {
@@ -441,17 +446,17 @@ export default function PricesPage() {
   const grouped   = buildGrouped(allPrices)
   const groupedWc = buildGrouped(allWcPrices)
 
-  if (!user || user.role !== 'admin') return null
+  if (!user || !canFetch) return null
 
   if (!step || step === 'landing') {
-    return <LandingStep
+    return <LandingStep zh={zh}
       onBolim={() => goBlock('A')}
       onAlohida={() => setParams({ step: 'excel' }, { replace: true })}
     />
   }
 
   if (step === 'excel') {
-    return <ApartmentPriceSheet onBack={goLanding} />
+    return <ApartmentPriceSheet onBack={goLanding} zh={zh} />
   }
 
   return (
@@ -464,6 +469,7 @@ export default function PricesPage() {
       groupedWc={groupedWc}
       mode={mode}
       onModeChange={setMode}
+      zh={zh}
     />
   )
 }

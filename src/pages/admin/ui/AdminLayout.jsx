@@ -219,7 +219,8 @@ export default function AdminLayout() {
   const queryClient = useQueryClient()
   const user = getUser()
   const isAdmin = user?.role === 'admin'
-  const outsideHours = useWorkingHours(isAdmin)
+  const isNarxchi = user?.role === 'narxchi'
+  const outsideHours = useWorkingHours(isAdmin || isNarxchi)
   const [collapsed, setCollapsed] = useState(
     () => document.cookie.split(';').some(c => c.trim() === 'sidebar=collapsed')
   )
@@ -257,7 +258,7 @@ export default function AdminLayout() {
   }, [])
 
   useEffect(() => {
-    if (isAdmin) return
+    if (isAdmin || isNarxchi) return
     const token = getToken()
     if (!token) return
 
@@ -325,7 +326,7 @@ export default function AdminLayout() {
     loop()
 
     return () => { stopped = true; controller.abort() }
-  }, [isAdmin, user?.id])
+  }, [isAdmin, isNarxchi, user?.id])
 
   function logout() {
     removeToken()
@@ -355,7 +356,7 @@ export default function AdminLayout() {
 
         {/* Nav */}
         <nav className="flex flex-col gap-1 p-2 flex-1 overflow-y-auto">
-          {NAV.filter(n => !n.adminOnly || isAdmin).map(({ to, label, icon: Icon, end }) => (
+          {NAV.filter(n => isNarxchi ? n.to === '/admin/prices' : (!n.adminOnly || isAdmin)).map(({ to, label, icon: Icon, end }) => (
             <NavLink key={to} to={to} end={end} title={collapsed ? label : undefined}
               className={({ isActive }) =>
                 `flex items-center gap-3 rounded-xl text-sm font-medium transition-colors
@@ -370,7 +371,7 @@ export default function AdminLayout() {
 
         {/* Bottom nav */}
         <div className="p-2 border-t border-border flex flex-col gap-1">
-          {!isAdmin && (
+          {!isAdmin && !isNarxchi && (
             <button onClick={() => setShowChangePw(true)}
               title={collapsed ? 'Parolni o\'zgartirish' : undefined}
               className={`flex items-center gap-3 rounded-xl text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors w-full
@@ -403,7 +404,7 @@ export default function AdminLayout() {
           ) : (
             <div className="flex-1 min-w-0">
               <p className="text-xs font-semibold text-foreground truncate">{user.name}</p>
-              <p className="text-xs text-muted-foreground">{isAdmin ? 'Admin' : 'Salesmanager'}</p>
+              <p className="text-xs text-muted-foreground">{isAdmin ? 'Admin' : isNarxchi ? '定價員' : 'Salesmanager'}</p>
             </div>
           )}
         </div>

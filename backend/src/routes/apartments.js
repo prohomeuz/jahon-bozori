@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import { db, q } from '../db.js'
-import { requireAuth, requireAdmin } from '../auth.js'
+import { requireAuth, requireAdmin, requireAdminOrNarxchi } from '../auth.js'
 import { broadcast } from '../lib/sse.js'
 import { proxiedFetch } from '../lib/telegram.js'
 
@@ -146,7 +146,7 @@ app.get('/prices', requireAuth, (c) => {
   return c.json({ price: row?.price ?? (isWc ? 2000 : 1000) })
 })
 
-app.get('/apartment-prices', requireAuth, requireAdmin, (c) => {
+app.get('/apartment-prices', requireAuth, requireAdminOrNarxchi, (c) => {
   const block = c.req.query('block')
   const floor = parseInt(c.req.query('floor'))
   if (!block || isNaN(floor)) return c.json({ error: 'block, floor required' }, 400)
@@ -172,7 +172,7 @@ app.get('/apartment-prices', requireAuth, requireAdmin, (c) => {
   return c.json(rows)
 })
 
-app.post('/apartment-prices/batch', requireAuth, requireAdmin, async (c) => {
+app.post('/apartment-prices/batch', requireAuth, requireAdminOrNarxchi, async (c) => {
   const { items } = await c.req.json()
   if (!Array.isArray(items)) return c.json({ error: 'items array required' }, 400)
   db.exec('BEGIN')
@@ -194,12 +194,12 @@ app.post('/apartment-prices/batch', requireAuth, requireAdmin, async (c) => {
   return c.json({ ok: true })
 })
 
-app.get('/prices/all', requireAuth, requireAdmin, (c) => {
+app.get('/prices/all', requireAuth, requireAdminOrNarxchi, (c) => {
   const isWc = c.req.query('is_wc') === '1'
   return c.json(isWc ? q.allWcPrices.all() : q.allPrices.all())
 })
 
-app.patch('/prices', requireAuth, requireAdmin, async (c) => {
+app.patch('/prices', requireAuth, requireAdminOrNarxchi, async (c) => {
   const { block, bolim, floor, price, isWc } = await c.req.json()
   if (!block || bolim == null || floor == null || price == null) return c.json({ error: 'block, bolim, floor, price required' }, 400)
   if (typeof price !== 'number' || price < 0) return c.json({ error: 'price must be non-negative number' }, 400)

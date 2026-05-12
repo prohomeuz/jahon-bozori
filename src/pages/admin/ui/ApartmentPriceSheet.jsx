@@ -137,7 +137,7 @@ async function drawHighlight(imgSrc, rect, viewBox) {
 
 // ─── Location modal ───────────────────────────────────────────────────────────
 
-function LocationModal({ address, block, floor, bolim, isWc, onClose }) {
+function LocationModal({ address, block, floor, bolim, isWc, onClose, zh }) {
   const [dataUrl, setDataUrl] = useState(null)
   const aptNum = address.split('-').pop()
 
@@ -181,11 +181,11 @@ function LocationModal({ address, block, floor, bolim, isWc, onClose }) {
             </div>
             <div>
               <p className="text-base font-black text-gray-900 leading-tight">
-                {block}-blok · {bolim}-bo'lim · {floor}-qavat
+                {zh ? `${block}棟 · ${bolim}區 · 第${floor}層` : `${block}-blok · ${bolim}-bo'lim · ${floor}-qavat`}
               </p>
               {!isWc && (
                 <p className="text-sm text-gray-400 mt-0.5">
-                  Do'kon № <span className="font-bold text-amber-500">{aptNum}</span>
+                  {zh ? '商鋪 №' : "Do'kon №"} <span className="font-bold text-amber-500">{aptNum}</span>
                 </p>
               )}
             </div>
@@ -235,7 +235,7 @@ function group(rows, key) {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export function ApartmentPriceSheet({ onBack }) {
+export function ApartmentPriceSheet({ onBack, zh }) {
   const [params, setParams]         = useSearchParams()
   const sheetId  = SHEETS.find(s => s.id === params.get('sheet'))?.id ?? 'A-1'
   const typeTab  = params.get('type') === 'wc' ? 'wc' : 'shops'
@@ -318,7 +318,7 @@ export function ApartmentPriceSheet({ onBack }) {
       })
       if (!res.ok) {
         const err = await res.json().catch(() => ({}))
-        alert('Xatolik: ' + (err?.error ?? res.status))
+        alert((zh ? '錯誤：' : 'Xatolik: ') + (err?.error ?? res.status))
         return
       }
       await qc.invalidateQueries({ queryKey: ['apt-prices'] })
@@ -326,7 +326,7 @@ export function ApartmentPriceSheet({ onBack }) {
       setSavedFlash(true)
       setTimeout(() => setSavedFlash(false), 1800)
     } catch (e) {
-      alert('Tarmoq xatoligi: ' + e.message)
+      alert((zh ? '網路錯誤：' : 'Tarmoq xatoligi: ') + e.message)
     } finally {
       setSaving(false)
     }
@@ -354,8 +354,8 @@ export function ApartmentPriceSheet({ onBack }) {
             className="inline-flex items-center gap-1.5 text-xs text-gray-400 underline underline-offset-2 decoration-dashed hover:text-amber-600 hover:decoration-amber-400 transition-colors"
           >
             <MapPin size={11} className="shrink-0" />
-            {sheet.block}-blok · {row.bolim}-bo'lim · {sheet.floor}-qavat
-            {row.is_wc ? <span className="ml-1 text-sky-500 font-bold no-underline">WC</span> : null}
+            {zh ? `${sheet.block}棟 · ${row.bolim}區 · 第${sheet.floor}層` : `${sheet.block}-blok · ${row.bolim}-bo'lim · ${sheet.floor}-qavat`}
+            {row.is_wc ? <span className="ml-1 text-sky-500 font-bold no-underline">{zh ? '衛生間' : 'WC'}</span> : null}
           </button>
         </td>
         <td className="px-4 py-0 text-right w-48 shrink-0">
@@ -409,7 +409,7 @@ export function ApartmentPriceSheet({ onBack }) {
 
   return (
     <>
-      {locPreview && <LocationModal {...locPreview} onClose={() => setLocPreview(null)} />}
+      {locPreview && <LocationModal {...locPreview} onClose={() => setLocPreview(null)} zh={zh} />}
 
       <div className="flex flex-col h-full bg-background" style={{ minHeight: 0 }}>
 
@@ -425,19 +425,19 @@ export function ApartmentPriceSheet({ onBack }) {
 
           {/* Title + type switcher */}
           <div className="flex flex-col items-center gap-2">
-            <p className="text-sm font-bold text-foreground leading-tight">Alohida narxlash</p>
+            <p className="text-sm font-bold text-foreground leading-tight">{zh ? '單獨定價' : 'Alohida narxlash'}</p>
             <div className="flex items-center gap-0.5 p-0.5 bg-muted rounded-lg">
               <button
                 onClick={() => setTypeTab('shops')}
                 className={`px-3 py-1 rounded-md text-xs font-semibold transition-all ${typeTab === 'shops' ? 'bg-white text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
               >
-                Do'konlar
+                {zh ? '商鋪' : "Do'konlar"}
               </button>
               <button
                 onClick={() => setTypeTab('wc')}
                 className={`px-3 py-1 rounded-md text-xs font-semibold transition-all ${typeTab === 'wc' ? 'bg-white text-sky-600 shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
               >
-                Hojatxonalar
+                {zh ? '衛生間' : 'Hojatxonalar'}
               </button>
             </div>
           </div>
@@ -454,7 +454,7 @@ export function ApartmentPriceSheet({ onBack }) {
                   : 'bg-muted text-muted-foreground cursor-not-allowed'}`}
           >
             {savedFlash ? <Check size={14} strokeWidth={2.5} /> : <Save size={14} />}
-            <span>{savedFlash ? 'Saqlandi!' : saving ? 'Saqlanmoqda...' : 'Saqlash'}</span>
+            <span>{savedFlash ? (zh ? '已儲存！' : 'Saqlandi!') : saving ? (zh ? '儲存中...' : 'Saqlanmoqda...') : (zh ? '儲存' : 'Saqlash')}</span>
             {!savedFlash && !saving && totalDrafts > 0 && (
               <span className="ml-0.5 min-w-4.5 h-4.5 px-1 rounded-full bg-white/25 text-[10px] font-black flex items-center justify-center tabular-nums">
                 {totalDrafts}
@@ -466,19 +466,19 @@ export function ApartmentPriceSheet({ onBack }) {
         {/* ── Table ───────────────────────────────────────────────────────── */}
         <div className="flex-1 overflow-auto min-h-0">
           {isLoading ? (
-            <div className="flex items-center justify-center h-full text-muted-foreground text-sm">Yuklanmoqda...</div>
+            <div className="flex items-center justify-center h-full text-muted-foreground text-sm">{zh ? '載入中...' : 'Yuklanmoqda...'}</div>
           ) : rows.length === 0 ? (
-            <div className="flex items-center justify-center h-full text-muted-foreground text-sm">Bu qavat uchun ma'lumot yo'q</div>
+            <div className="flex items-center justify-center h-full text-muted-foreground text-sm">{zh ? '此樓層無資料' : "Bu qavat uchun ma'lumot yo'q"}</div>
           ) : (
             <table className="w-full border-collapse text-left">
               <thead className="sticky top-0 z-10">
                 <tr className="bg-white h-10" style={{ boxShadow: '0 1px 0 0 #f3f4f6, 0 2px 0 0 #e5e7eb' }}>
                   <th className="px-4 text-[11px] font-bold text-gray-500 uppercase tracking-wider w-14">№</th>
-                  <th className="px-4 text-[11px] font-bold text-gray-500 uppercase tracking-wider w-20">Maydon</th>
-                  <th className="px-4 text-[11px] font-bold text-gray-500 uppercase tracking-wider w-32 whitespace-nowrap">Umumiy narx</th>
+                  <th className="px-4 text-[11px] font-bold text-gray-500 uppercase tracking-wider w-20">{zh ? '面積' : 'Maydon'}</th>
+                  <th className="px-4 text-[11px] font-bold text-gray-500 uppercase tracking-wider w-32 whitespace-nowrap">{zh ? '基礎價格' : 'Umumiy narx'}</th>
                   <th />
-                  <th className="px-4 text-[11px] font-bold text-gray-500 uppercase tracking-wider w-56">Joylashuv</th>
-                  <th className="px-4 text-[11px] font-bold text-gray-500 uppercase tracking-wider w-48 text-right">Alohida narx</th>
+                  <th className="px-4 text-[11px] font-bold text-gray-500 uppercase tracking-wider w-56">{zh ? '位置' : 'Joylashuv'}</th>
+                  <th className="px-4 text-[11px] font-bold text-gray-500 uppercase tracking-wider w-48 text-right">{zh ? '單獨定價' : 'Alohida narx'}</th>
                 </tr>
               </thead>
               <tbody>
@@ -489,7 +489,7 @@ export function ApartmentPriceSheet({ onBack }) {
                         ? { background: '#e0f2fe', boxShadow: 'inset 3px 0 0 0 #0ea5e9' }
                         : { background: '#f3f4f6', boxShadow: 'inset 3px 0 0 0 #9ca3af' }}>
                       <span className={`text-[11px] font-bold uppercase tracking-wider ${typeTab === 'wc' ? 'text-sky-600' : 'text-gray-600'}`}>
-                        {bolim}-bo'lim
+                        {zh ? `${bolim}區` : `${bolim}-bo'lim`}
                       </span>
                     </td>
                   </tr>,
@@ -505,6 +505,7 @@ export function ApartmentPriceSheet({ onBack }) {
           {SHEETS.map(s => {
             const isActive = s.id === sheetId
             const hasDraft = !!(allDrafts[s.id] && Object.keys(allDrafts[s.id]).length)
+            const label = zh ? `${s.block} · 第${s.floor}層` : s.label
             return (
               <button key={s.id} onClick={() => setSheetId(s.id)}
                 className={`relative px-5 py-2 text-xs whitespace-nowrap border-x border-t transition-all shrink-0
@@ -514,7 +515,7 @@ export function ApartmentPriceSheet({ onBack }) {
                   }`}
                 style={isActive ? { boxShadow: 'inset 0 2px 0 0 rgb(245 158 11)' } : undefined}
               >
-                {s.label}
+                {label}
                 {hasDraft && (
                   <span className="absolute top-1 right-1.5 w-1.5 h-1.5 rounded-full bg-amber-400" />
                 )}
