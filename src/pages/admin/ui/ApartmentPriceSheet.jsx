@@ -320,35 +320,52 @@ export function ApartmentPriceSheet({ onBack }) {
   const { keys: shopBolims, map: shopMap } = group(shops, 'bolim')
   const { keys: wcBolims,   map: wcMap   } = group(wcs,   'bolim')
 
+  const BLOCK_GROUPS = ['A', 'B', 'C']
+
   return (
     <>
       {locPreview && <LocationModal {...locPreview} onClose={() => setLocPreview(null)} />}
 
       <div className="flex flex-col h-full bg-background" style={{ minHeight: 0 }}>
-        {/* Top bar */}
-        <div className="flex items-center gap-3 px-5 py-3 border-b border-border shrink-0">
-          <button onClick={onBack}
-            className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
-            <ArrowLeft size={16} />
-            Orqaga
+
+        {/* ── Top bar ─────────────────────────────────────────────────────── */}
+        <div className="flex items-center justify-between px-5 py-3 border-b border-border shrink-0">
+          {/* Back */}
+          <button
+            onClick={onBack}
+            className="w-8 h-8 rounded-full flex items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground transition-all"
+          >
+            <ArrowLeft size={17} />
           </button>
-          <span className="text-sm font-bold flex-1 text-center text-foreground">Do'kon bo'yicha alohida narxlash</span>
+
+          {/* Title */}
+          <div className="text-center">
+            <p className="text-sm font-bold text-foreground leading-tight">Alohida narxlash</p>
+            <p className="text-[11px] text-muted-foreground mt-0.5">Har bir do'kon uchun maxsus narx</p>
+          </div>
+
+          {/* Save button */}
           <button
             onClick={handleSave}
             disabled={!totalDrafts || saving}
-            className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold transition-all active:scale-95
+            className={`relative flex items-center gap-1.5 pl-3.5 pr-4 py-2 rounded-xl text-sm font-semibold transition-all active:scale-95 select-none
               ${savedFlash
-                ? 'bg-green-500 text-white'
+                ? 'bg-green-500 text-white shadow-sm shadow-green-200'
                 : totalDrafts
-                  ? 'bg-amber-500 hover:bg-amber-600 text-white'
+                  ? 'bg-amber-500 hover:bg-amber-600 text-white shadow-sm shadow-amber-200'
                   : 'bg-muted text-muted-foreground cursor-not-allowed'}`}
           >
-            {savedFlash ? <Check size={15} /> : <Save size={15} />}
-            {savedFlash ? 'Saqlandi!' : saving ? 'Saqlanmoqda...' : `Saqlash${totalDrafts ? ` (${totalDrafts})` : ''}`}
+            {savedFlash ? <Check size={14} strokeWidth={2.5} /> : <Save size={14} />}
+            <span>{savedFlash ? 'Saqlandi!' : saving ? 'Saqlanmoqda...' : 'Saqlash'}</span>
+            {!savedFlash && !saving && totalDrafts > 0 && (
+              <span className="ml-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-white/25 text-[10px] font-black flex items-center justify-center tabular-nums">
+                {totalDrafts}
+              </span>
+            )}
           </button>
         </div>
 
-        {/* Table */}
+        {/* ── Table ───────────────────────────────────────────────────────── */}
         <div className="flex-1 overflow-auto min-h-0">
           {isLoading ? (
             <div className="flex items-center justify-center h-full text-muted-foreground text-sm">Yuklanmoqda...</div>
@@ -357,35 +374,35 @@ export function ApartmentPriceSheet({ onBack }) {
           ) : (
             <table className="w-full border-collapse text-left">
               <thead className="sticky top-0 z-10">
-                <tr className="bg-gray-50 h-10" style={{ boxShadow: '0 2px 0 0 #e5e7eb' }}>
-                  <th className="px-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider w-14">№</th>
-                  <th className="px-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider w-20">Maydon</th>
-                  <th className="px-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider w-32 whitespace-nowrap">Umumiy narx</th>
+                <tr className="bg-white h-10" style={{ boxShadow: '0 1px 0 0 #f3f4f6, 0 2px 0 0 #e5e7eb' }}>
+                  <th className="px-4 text-[10px] font-extrabold text-gray-300 uppercase tracking-widest w-14">№</th>
+                  <th className="px-4 text-[10px] font-extrabold text-gray-300 uppercase tracking-widest w-20">Maydon</th>
+                  <th className="px-4 text-[10px] font-extrabold text-gray-300 uppercase tracking-widest w-32 whitespace-nowrap">Umumiy narx</th>
                   <th />
-                  <th className="px-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider w-56">Joylashuv</th>
-                  <th className="px-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider w-48 text-right">Alohida narx</th>
+                  <th className="px-4 text-[10px] font-extrabold text-gray-300 uppercase tracking-widest w-56">Joylashuv</th>
+                  <th className="px-4 text-[10px] font-extrabold text-gray-300 uppercase tracking-widest w-48 text-right">Alohida narx</th>
                 </tr>
               </thead>
               <tbody>
                 {shopBolims.flatMap(bolim => [
                   <tr key={`sh-${bolim}`}>
-                    <td colSpan={6} className="sticky top-10 z-5 bg-gray-100 border-y border-gray-200 px-4 py-1.5 text-[11px] font-black text-gray-400 uppercase tracking-widest">
-                      {bolim}-bo'lim
+                    <td colSpan={6} className="sticky top-10 z-5 px-4 py-1.5" style={{ background: '#f9fafb', boxShadow: 'inset 3px 0 0 0 #d1d5db' }}>
+                      <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{bolim}-bo'lim</span>
                     </td>
                   </tr>,
                   ...shopMap[bolim].map(renderRow),
                 ])}
                 {wcBolims.length > 0 && (
                   <tr>
-                    <td colSpan={6} className="sticky top-10 z-5 bg-sky-50 border-y-2 border-sky-200 px-4 py-1.5 text-[11px] font-black text-sky-500 uppercase tracking-widest">
-                      Hojatxonalar
+                    <td colSpan={6} className="sticky top-10 z-5 px-4 py-1.5" style={{ background: '#f0f9ff', boxShadow: 'inset 3px 0 0 0 #38bdf8' }}>
+                      <span className="text-[10px] font-black text-sky-500 uppercase tracking-widest">Hojatxonalar</span>
                     </td>
                   </tr>
                 )}
                 {wcBolims.flatMap(bolim => [
                   <tr key={`wch-${bolim}`}>
-                    <td colSpan={6} className="sticky top-10 z-5 bg-sky-50/60 border-b border-sky-100 px-6 py-1 text-[11px] font-semibold text-sky-400">
-                      {bolim}-bo'lim
+                    <td colSpan={6} className="sticky top-10 z-5 px-6 py-1" style={{ background: '#f0f9ff', boxShadow: 'inset 3px 0 0 0 #7dd3fc' }}>
+                      <span className="text-[10px] font-semibold text-sky-400 uppercase tracking-widest">{bolim}-bo'lim</span>
                     </td>
                   </tr>,
                   ...wcMap[bolim].map(renderRow),
@@ -395,18 +412,34 @@ export function ApartmentPriceSheet({ onBack }) {
           )}
         </div>
 
-        {/* Sheet tabs */}
-        <div className="shrink-0 border-t-2 border-border bg-gray-50 flex items-end gap-0 px-2 overflow-x-auto">
-          {SHEETS.map(s => (
-            <button key={s.id} onClick={() => setSheetId(s.id)}
-              className={`px-5 py-2 text-xs font-bold whitespace-nowrap border-x border-t transition-all shrink-0
-                ${s.id === sheetId
-                  ? 'bg-background text-foreground border-border -mb-0.5 rounded-t-lg shadow-sm z-10'
-                  : 'bg-gray-50 text-muted-foreground border-transparent hover:bg-gray-100 rounded-t-md'
-                } ${allDrafts[s.id] && Object.keys(allDrafts[s.id]).length ? 'after:content-["•"] after:ml-1 after:text-amber-500' : ''}`}
-            >
-              {s.label}
-            </button>
+        {/* ── Sheet tabs — grouped by block ────────────────────────────────── */}
+        <div className="shrink-0 border-t border-border bg-background px-4 py-2.5 flex items-center gap-2 overflow-x-auto">
+          {BLOCK_GROUPS.map((block, bi) => (
+            <div key={block} className="flex items-center gap-1 shrink-0">
+              {bi > 0 && <div className="w-px h-5 bg-border mx-1" />}
+              <span className="text-[10px] font-black text-muted-foreground/50 w-4 text-center select-none">{block}</span>
+              <div className="flex items-center gap-0.5 p-1 bg-muted rounded-xl">
+                {SHEETS.filter(s => s.block === block).map(s => {
+                  const isActive  = s.id === sheetId
+                  const hasDraft  = !!(allDrafts[s.id] && Object.keys(allDrafts[s.id]).length)
+                  return (
+                    <button
+                      key={s.id}
+                      onClick={() => setSheetId(s.id)}
+                      className={`relative px-3 py-1 rounded-lg text-xs font-bold whitespace-nowrap transition-all
+                        ${isActive
+                          ? 'bg-white text-foreground shadow-sm'
+                          : 'text-muted-foreground hover:text-foreground'}`}
+                    >
+                      {s.floor}-qavat
+                      {hasDraft && (
+                        <span className={`absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full ${isActive ? 'bg-amber-400' : 'bg-amber-400/70'}`} />
+                      )}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
           ))}
         </div>
       </div>
