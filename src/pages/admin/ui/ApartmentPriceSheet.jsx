@@ -412,17 +412,25 @@ export function ApartmentPriceSheet({ onBack }) {
 
         {/* ── Sheet tabs — Excel style ─────────────────────────────────────── */}
         <div className="shrink-0 border-t-2 border-border bg-gray-50 flex items-end gap-0 px-2 overflow-x-auto">
-          {SHEETS.map(s => (
-            <button key={s.id} onClick={() => setSheetId(s.id)}
-              className={`px-5 py-2 text-xs font-bold whitespace-nowrap border-x border-t transition-all shrink-0
-                ${s.id === sheetId
-                  ? 'bg-background text-foreground border-border -mb-0.5 rounded-t-lg shadow-sm z-10'
-                  : 'bg-gray-50 text-muted-foreground border-transparent hover:bg-gray-100 rounded-t-md'
-                } ${allDrafts[s.id] && Object.keys(allDrafts[s.id]).length ? 'after:content-["•"] after:ml-1 after:text-amber-500' : ''}`}
-            >
-              {s.label}
-            </button>
-          ))}
+          {SHEETS.map(s => {
+            const isActive = s.id === sheetId
+            const hasDraft = !!(allDrafts[s.id] && Object.keys(allDrafts[s.id]).length)
+            return (
+              <button key={s.id} onClick={() => setSheetId(s.id)}
+                className={`relative px-5 py-2 text-xs whitespace-nowrap border-x border-t transition-all shrink-0
+                  ${isActive
+                    ? 'bg-background font-extrabold text-amber-600 border-border -mb-0.5 rounded-t-lg shadow-md z-10'
+                    : 'bg-gray-50 font-semibold text-muted-foreground border-transparent hover:bg-gray-100 hover:text-foreground rounded-t-md'
+                  }`}
+                style={isActive ? { boxShadow: 'inset 0 2px 0 0 rgb(245 158 11)' } : undefined}
+              >
+                {s.label}
+                {hasDraft && (
+                  <span className="absolute top-1 right-1.5 w-1.5 h-1.5 rounded-full bg-amber-400" />
+                )}
+              </button>
+            )
+          })}
         </div>
       </div>
     </>
