@@ -562,7 +562,7 @@ export function ContractPDF({
           <View style={s.section}>
             <Text style={{ fontSize: 7, color: P.fg, lineHeight: 1.6 }}>
               <Text style={{ fontFamily: 'Roboto', fontWeight: 700 }}>Telegram: </Text>
-              <Text style={{ color: '#2563eb' }}>@HengTai_Admin</Text>
+              <Text style={{ color: '#2563eb' }}>@jahonbozori_admin</Text>
             </Text>
             <Text style={{ fontFamily: 'Roboto', fontWeight: 700, fontSize: 7, color: P.fg, marginTop: 2 }}>
               Murojaat uchun:
