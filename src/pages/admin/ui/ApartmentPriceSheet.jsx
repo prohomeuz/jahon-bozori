@@ -358,7 +358,7 @@ export function ApartmentPriceSheet({ onBack }) {
             {savedFlash ? <Check size={14} strokeWidth={2.5} /> : <Save size={14} />}
             <span>{savedFlash ? 'Saqlandi!' : saving ? 'Saqlanmoqda...' : 'Saqlash'}</span>
             {!savedFlash && !saving && totalDrafts > 0 && (
-              <span className="ml-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-white/25 text-[10px] font-black flex items-center justify-center tabular-nums">
+              <span className="ml-0.5 min-w-4.5 h-4.5 px-1 rounded-full bg-white/25 text-[10px] font-black flex items-center justify-center tabular-nums">
                 {totalDrafts}
               </span>
             )}
