@@ -5,9 +5,9 @@ import { downloadBookingPDF } from '../lib/bookingPdf.jsx'
 
 const TYPE_BADGE = {
   bron:   'bg-amber-100 text-amber-700 border border-amber-200',
-  sotish: 'bg-emerald-100 text-emerald-700 border border-emerald-200',
+  sotish: 'bg-red-100 text-red-700 border border-red-200',
 }
-const TYPE_LABEL = { bron: 'Bron', sotish: 'Sotish' }
+const TYPE_LABEL = { bron: 'Bron', sotish: 'Sotilgan' }
 
 function fmtMoney(val) {
   if (!val) return null
