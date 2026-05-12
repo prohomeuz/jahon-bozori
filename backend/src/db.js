@@ -128,6 +128,12 @@ try { db.exec(`CREATE TABLE IF NOT EXISTS apartment_pairs (
 )`) } catch {}
 // pair_group_id on bookings — birgalikda bron qilingan do'konlarni birlashtiradi
 try { db.exec(`ALTER TABLE bookings ADD COLUMN pair_group_id INTEGER`) } catch {}
+// Alohida do'kon narxlari — bo'lim narxini override qiladi
+try { db.exec(`CREATE TABLE IF NOT EXISTS apartment_prices (
+  apartment_id TEXT PRIMARY KEY,
+  price REAL NOT NULL,
+  updated_at TEXT NOT NULL DEFAULT (datetime('now', '+5 hours'))
+)`) } catch {}
 // Sources — mijoz qayerdan kelganini belgilaydi
 try { db.exec(`CREATE TABLE IF NOT EXISTS sources (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -525,6 +531,11 @@ export const q = {
   allSettings:  db.prepare("SELECT key, value FROM settings"),
   getSetting:   db.prepare("SELECT value FROM settings WHERE key=:key"),
   upsertSetting: db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES (:key, :value)"),
+
+  // alohida do'kon narxlari
+  getAptCustomPrice:    db.prepare("SELECT price FROM apartment_prices WHERE apartment_id = :apt"),
+  upsertAptCustomPrice: db.prepare("INSERT OR REPLACE INTO apartment_prices (apartment_id, price, updated_at) VALUES (:apt, :price, datetime('now', '+5 hours'))"),
+  deleteAptCustomPrice: db.prepare("DELETE FROM apartment_prices WHERE apartment_id = :apt"),
 
   // prices (do'konlar)
   getPrice:        db.prepare("SELECT price FROM prices WHERE block=:block AND bolim=:bolim AND floor=:floor"),

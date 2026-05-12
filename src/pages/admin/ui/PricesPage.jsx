@@ -9,6 +9,7 @@ import { imgCache } from '@/shared/lib/imgCache'
 import { apiFetch, getUser } from '@/shared/lib/auth'
 import { BLOCK_BUILDINGS, BLOCK_VIEW_BOX } from '@/pages/block/config/buildings'
 import { Check, X } from 'lucide-react'
+import { ApartmentPriceSheet } from './ApartmentPriceSheet'
 
 const GENPLAN_BLOCKS = [
   { id: 'A', points: '3081,2161 2935,2414 3004,2472 3811,2579 3928,2521 3996,2268', textX: 3459, textY: 2403, delay: '0s' },
@@ -22,9 +23,45 @@ const BLOCK_META = {
   C: { label: 'C-BLOK', image: CBLOK },
 }
 
+// ─── Step 0: Landing ─────────────────────────────────────────────────────────
+
+function LandingStep({ onBolim, onAlohida }) {
+  return (
+    <div className="absolute inset-0 bg-black flex flex-col items-center justify-center gap-6 p-6">
+      <p className="text-white/60 text-sm font-medium tracking-widest uppercase">Narx belgilash</p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full max-w-lg">
+        <button onClick={onBolim}
+          className="flex flex-col gap-3 p-7 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 hover:border-white/25 transition-all text-left group">
+          <div className="w-10 h-10 rounded-xl bg-amber-400/20 flex items-center justify-center">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-amber-400">
+              <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
+            </svg>
+          </div>
+          <div>
+            <p className="font-bold text-white text-base group-hover:text-amber-300 transition-colors">Bo'lim narxlash</p>
+            <p className="text-sm text-white/45 mt-1">Blok bo'yicha, qavat bo'yicha umumiy narx</p>
+          </div>
+        </button>
+        <button onClick={onAlohida}
+          className="flex flex-col gap-3 p-7 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 hover:border-white/25 transition-all text-left group">
+          <div className="w-10 h-10 rounded-xl bg-sky-400/20 flex items-center justify-center">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-sky-400">
+              <path d="M3 3h18v18H3z"/><path d="M3 9h18M3 15h18M9 3v18"/>
+            </svg>
+          </div>
+          <div>
+            <p className="font-bold text-white text-base group-hover:text-sky-300 transition-colors">Alohida narxlash</p>
+            <p className="text-sm text-white/45 mt-1">Har bir do'kon uchun alohida narx</p>
+          </div>
+        </button>
+      </div>
+    </div>
+  )
+}
+
 // ─── Step 1: Genplan ──────────────────────────────────────────────────────────
 
-function GenplanStep({ onSelect }) {
+function GenplanStep({ onSelect, onBack }) {
   const [loaded, setLoaded] = useState(() => imgCache.has(GENPLAN))
   const [hovered, setHovered] = useState(null)
 
@@ -61,6 +98,10 @@ function GenplanStep({ onSelect }) {
       <div className="absolute top-6 left-1/2 -translate-x-1/2 px-5 py-2 rounded-full bg-black/70 backdrop-blur-sm border border-white/10 text-white text-sm font-medium pointer-events-none">
         Narx belgilash uchun blokni tanlang
       </div>
+      <button onClick={onBack}
+        className="absolute bottom-6 left-6 flex items-center gap-2 px-4 py-2 rounded-xl bg-black/70 backdrop-blur-sm border border-white/10 text-white/70 hover:text-white text-sm transition-colors">
+        ← Orqaga
+      </button>
     </div>
   )
 }
@@ -401,10 +442,11 @@ export default function PricesPage() {
   const user = getUser()
   const [mode, setMode] = useState('dokonlar') // 'dokonlar' | 'wc'
 
-  const step    = params.get('step')  ?? 'genplan'
+  const step    = params.get('step')  ?? 'landing'
   const blockId = params.get('block') ?? 'A'
 
   function goBlock(bid) { setParams({ step: 'block', block: bid }, { replace: true }) }
+  function goLanding()  { setParams({ step: 'landing' }, { replace: true }) }
 
   useEffect(() => {
     if (user?.role !== 'admin') navigate('/admin', { replace: true })
@@ -439,8 +481,19 @@ export default function PricesPage() {
 
   if (!user || user.role !== 'admin') return null
 
+  if (!step || step === 'landing') {
+    return <LandingStep
+      onBolim={() => setParams({ step: 'genplan' }, { replace: true })}
+      onAlohida={() => setParams({ step: 'excel' }, { replace: true })}
+    />
+  }
+
+  if (step === 'excel') {
+    return <ApartmentPriceSheet onBack={goLanding} />
+  }
+
   if (step === 'genplan') {
-    return <GenplanStep onSelect={goBlock} />
+    return <GenplanStep onSelect={goBlock} onBack={goLanding} />
   }
 
   return (

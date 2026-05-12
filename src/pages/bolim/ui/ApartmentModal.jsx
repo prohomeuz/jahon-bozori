@@ -162,7 +162,7 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
     let cancelled = false
     const [block, bolimStr] = apartment.address.split('-')
     const isWc = apartment.is_wc ? '&is_wc=1' : ''
-    apiFetch(`/api/prices?block=${block}&bolim=${parseInt(bolimStr)}&floor=${floor}${isWc}`)
+    apiFetch(`/api/prices?block=${block}&bolim=${parseInt(bolimStr)}&floor=${floor}${isWc}&apt=${apartment.address}`)
       .then(r => r.json())
       .then(({ price }) => {
         if (!cancelled && price) {
@@ -177,7 +177,7 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
   function fetchCalcPrice() {
     const [block, bolimStr] = apartment.address.split('-')
     const isWc = apartment.is_wc ? '&is_wc=1' : ''
-    apiFetch(`/api/prices?block=${block}&bolim=${parseInt(bolimStr)}&floor=${floor}${isWc}`)
+    apiFetch(`/api/prices?block=${block}&bolim=${parseInt(bolimStr)}&floor=${floor}${isWc}&apt=${apartment.address}`)
       .then(r => r.json())
       .then(({ price }) => {
         if (price) {
