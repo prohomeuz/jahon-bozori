@@ -6,13 +6,14 @@ import { startInactivityWatcher } from '@/shared/lib/inactivity'
 import { LayoutDashboard, Users, ClipboardList, LogOut, Home, PanelLeftClose, PanelLeftOpen, KeyRound, CheckCircle, Tag, MapPin, WifiOff, Wifi, ShieldOff, Settings } from 'lucide-react'
 import { useBlockedState } from '@/shared/hooks/useBlockedState'
 import { BlockedOverlay } from '@/shared/ui/BlockedOverlay'
+import { Toaster } from '@/shared/ui/Toaster'
 
 const NAV = [
-  { to: '/admin',              label: 'Dashboard',          icon: LayoutDashboard, end: true },
+  { to: '/admin',              label: 'Dashboard',          zhLabel: '儀表板',      icon: LayoutDashboard, end: true },
   { to: '/admin/bookings',     label: 'Bitimlar',            icon: ClipboardList },
   { to: '/admin/joylar',       label: 'Joylar',              icon: MapPin },
   { to: '/admin/managers',     label: 'Salesmanagerlar',     icon: Users,           adminOnly: true },
-  { to: '/admin/prices',       label: 'Narxlar',             icon: Tag,             adminOnly: true },
+  { to: '/admin/prices',       label: 'Narxlar',             zhLabel: '定價',        icon: Tag,             adminOnly: true },
   { to: '/admin/sales-lock',   label: "Sotuvni to'xtatish",  icon: ShieldOff,       adminOnly: true },
   { to: '/admin/settings',     label: 'Sozlamalar',          icon: Settings,        adminOnly: true },
 ]
@@ -344,7 +345,7 @@ export default function AdminLayout() {
           {!collapsed && (
             <div className="min-w-0">
               <p className="font-bold text-sm leading-tight truncate">Jahon Bozori</p>
-              <p className="text-xs text-muted-foreground">Boshqaruv paneli</p>
+              <p className="text-xs text-muted-foreground">{isNarxchi ? '管理面板' : 'Boshqaruv paneli'}</p>
             </div>
           )}
           <button onClick={toggleCollapsed}
@@ -356,17 +357,20 @@ export default function AdminLayout() {
 
         {/* Nav */}
         <nav className="flex flex-col gap-1 p-2 flex-1 overflow-y-auto">
-          {NAV.filter(n => isNarxchi ? n.to === '/admin/prices' : (!n.adminOnly || isAdmin)).map(({ to, label, icon: Icon, end }) => (
-            <NavLink key={to} to={to} end={end} title={collapsed ? label : undefined}
-              className={({ isActive }) =>
-                `flex items-center gap-3 rounded-xl text-sm font-medium transition-colors
-                ${collapsed ? 'justify-center px-0 py-2.5' : 'px-3 py-2.5'}
-                ${isActive ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`
-              }>
-              <Icon size={16} className="shrink-0" />
-              {!collapsed && <span className="truncate">{label}</span>}
-            </NavLink>
-          ))}
+          {NAV.filter(n => isNarxchi ? (n.to === '/admin/prices' || n.to === '/admin') : (!n.adminOnly || isAdmin)).map(({ to, label, zhLabel, icon: Icon, end }) => {
+            const displayLabel = isNarxchi && zhLabel ? zhLabel : label
+            return (
+              <NavLink key={to} to={to} end={end} title={collapsed ? displayLabel : undefined}
+                className={({ isActive }) =>
+                  `flex items-center gap-3 rounded-xl text-sm font-medium transition-colors
+                  ${collapsed ? 'justify-center px-0 py-2.5' : 'px-3 py-2.5'}
+                  ${isActive ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`
+                }>
+                <Icon size={16} className="shrink-0" />
+                {!collapsed && <span className="truncate">{displayLabel}</span>}
+              </NavLink>
+            )
+          })}
         </nav>
 
         {/* Bottom nav */}
@@ -380,18 +384,20 @@ export default function AdminLayout() {
               {!collapsed && <span>Parolni o'zgartirish</span>}
             </button>
           )}
-          <NavLink to="/" title={collapsed ? 'Bosh sahifa' : undefined}
-            className={`flex items-center gap-3 rounded-xl text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors
-              ${collapsed ? 'justify-center px-0 py-2.5' : 'px-3 py-2.5'}`}>
-            <Home size={16} className="shrink-0" />
-            {!collapsed && <span>Bosh sahifa</span>}
-          </NavLink>
+          {!isNarxchi && (
+            <NavLink to="/" title={collapsed ? 'Bosh sahifa' : undefined}
+              className={`flex items-center gap-3 rounded-xl text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors
+                ${collapsed ? 'justify-center px-0 py-2.5' : 'px-3 py-2.5'}`}>
+              <Home size={16} className="shrink-0" />
+              {!collapsed && <span>Bosh sahifa</span>}
+            </NavLink>
+          )}
           <button onClick={() => setShowLogoutConfirm(true)}
-            title={collapsed ? 'Chiqish' : undefined}
+            title={collapsed ? (isNarxchi ? '登出' : 'Chiqish') : undefined}
             className={`flex items-center gap-3 rounded-xl text-sm font-medium text-muted-foreground hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors w-full
               ${collapsed ? 'justify-center px-0 py-2.5' : 'px-3 py-2.5 text-left'}`}>
             <LogOut size={16} className="shrink-0" />
-            {!collapsed && <span>Chiqish</span>}
+            {!collapsed && <span>{isNarxchi ? '登出' : 'Chiqish'}</span>}
           </button>
         </div>
 
@@ -440,16 +446,16 @@ export default function AdminLayout() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
           onClick={e => e.target === e.currentTarget && setShowLogoutConfirm(false)}>
           <div className="bg-background border border-border rounded-2xl p-6 w-full max-w-sm shadow-2xl">
-            <h3 className="text-lg font-bold mb-2">Chiqishni tasdiqlang</h3>
-            <p className="text-sm text-muted-foreground mb-6">Tizimdan chiqmoqchimisiz?</p>
+            <h3 className="text-lg font-bold mb-2">{isNarxchi ? '確認登出' : 'Chiqishni tasdiqlang'}</h3>
+            <p className="text-sm text-muted-foreground mb-6">{isNarxchi ? '您確定要退出系統嗎？' : 'Tizimdan chiqmoqchimisiz?'}</p>
             <div className="flex gap-2">
               <button onClick={() => setShowLogoutConfirm(false)}
                 className="flex-1 py-3 rounded-xl border border-border text-sm font-medium hover:bg-muted transition-colors">
-                Bekor
+                {isNarxchi ? '取消' : 'Bekor'}
               </button>
               <button onClick={logout}
                 className="flex-1 py-3 rounded-xl bg-red-600 text-white text-sm font-semibold hover:bg-red-700 transition-colors">
-                Chiqish
+                {isNarxchi ? '登出' : 'Chiqish'}
               </button>
             </div>
           </div>
@@ -490,6 +496,8 @@ export default function AdminLayout() {
           </div>
         </div>
       )}
+
+      <Toaster />
     </div>
   )
 }

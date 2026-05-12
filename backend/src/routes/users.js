@@ -1,10 +1,10 @@
 import { Hono } from 'hono'
 import { db, q } from '../db.js'
-import { hashPassword } from '../auth.js'
-import { requireAuth, requireAdmin } from '../auth.js'
+import { hashPassword, requireAuth, requireAdmin, blockNarxchi } from '../auth.js'
 import { broadcast } from '../lib/sse.js'
 
 const app = new Hono()
+app.use('*', requireAuth, blockNarxchi)
 
 app.get('/', requireAuth, requireAdmin, (c) => c.json(q.allUsers.all()))
 app.get('/narxchi', requireAuth, requireAdmin, (c) => c.json(q.allNarxchi.all()))

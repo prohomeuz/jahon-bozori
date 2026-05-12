@@ -2,6 +2,7 @@ import { useState, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from '@/shared/lib/auth'
 import { UserPlus, Pencil, Trash2, Eye, EyeOff, Copy, Check, RefreshCw, Search, X } from 'lucide-react'
+import { showToast } from '@/shared/lib/toast'
 
 const PAD = ['1','2','3','4','5','6','7','8','9','','0','⌫']
 const REVEAL_MS = 800
@@ -192,10 +193,20 @@ function DeleteConfirm({ user, onClose, onDone }) {
 
   async function handleDelete() {
     setLoading(true)
-    await apiFetch(`/api/users/${user.id}`, { method: 'DELETE' })
-    setLoading(false)
-    onDone()
-    onClose()
+    try {
+      const res = await apiFetch(`/api/users/${user.id}`, { method: 'DELETE' })
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}))
+        showToast(d.error ?? "O'chirishda xatolik", 'error')
+        return
+      }
+      onDone()
+      onClose()
+    } catch {
+      showToast("Server bilan aloqa yo'q", 'error')
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
@@ -268,8 +279,13 @@ function PasswordCell({ password }) {
 function ActiveToggle({ user, onDone }) {
   const cooldownRef = useRef(false)
   const { mutate, isPending } = useMutation({
-    mutationFn: () => apiFetch(`/api/users/${user.id}/active`, { method: 'PATCH' }).then(r => r.json()),
+    mutationFn: () => apiFetch(`/api/users/${user.id}/active`, { method: 'PATCH' }).then(async r => {
+      const d = await r.json()
+      if (!r.ok) throw new Error(d.error ?? 'Xatolik')
+      return d
+    }),
     onSuccess: onDone,
+    onError: (e) => showToast(e.message, 'error'),
     onSettled: () => { setTimeout(() => { cooldownRef.current = false }, 800) },
   })
   const active = !!user.is_active
@@ -416,7 +432,7 @@ export default function ManagersPage() {
       {narxchiList.length > 0 && (
         <div className="bg-card border border-border rounded-2xl overflow-hidden shrink-0">
           <div className="px-4 py-3 border-b border-border bg-muted/40">
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Narxchi — 定價員</p>
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Narxchi</p>
           </div>
           <table className="w-full text-sm">
             <tbody className="divide-y divide-border">
@@ -424,9 +440,16 @@ export default function ManagersPage() {
                 <tr key={u.id} className="hover:bg-muted/30 transition-colors">
                   <td className="px-4 py-3.5 font-medium whitespace-nowrap">{u.name}</td>
                   <td className="px-4 py-3.5"><PasswordCell password={u.plain_password} /></td>
-                  <td className="px-4 py-3.5 text-xs text-muted-foreground whitespace-nowrap">Har doim aktiv · 只限定價</td>
+                  <td className="px-4 py-3.5 text-xs text-muted-foreground whitespace-nowrap">Har doim aktiv · Faqat narxlar</td>
                   <td className="px-4 py-3.5 whitespace-nowrap">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={() => setModal({ type: 'edit', user: u })}
+                        className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                        title="Tahrirlash"
+                      >
+                        <Pencil size={15} />
+                      </button>
                       <ActiveToggle user={u} onDone={refresh} />
                       <span className={`text-xs font-medium inline-block w-16 ${u.is_active ? 'text-emerald-600' : 'text-muted-foreground'}`}>
                         {u.is_active ? 'Aktiv' : 'Bloklangan'}

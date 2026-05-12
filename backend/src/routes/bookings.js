@@ -1,10 +1,11 @@
 import { Hono } from 'hono'
 import { db, q } from '../db.js'
-import { requireAuth, requireAdmin } from '../auth.js'
+import { requireAuth, requireAdmin, blockNarxchi } from '../auth.js'
 import { broadcast } from '../lib/sse.js'
 import { proxiedFetch, OWNER_CHAT_ID } from '../lib/telegram.js'
 
 const app = new Hono()
+app.use('*', requireAuth, blockNarxchi)
 
 function generateContractNumber(bookingId, dateStr) {
   const { lastInsertRowid } = q.insertContractNum.run({ booking_id: bookingId, contract_number: '__TEMP__' })

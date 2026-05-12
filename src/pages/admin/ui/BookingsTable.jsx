@@ -24,7 +24,7 @@ export function BookingsTable({ cancelled, isAdmin, onReset, search, typeFilter,
     scrollRef.current = node
   }, [])
 
-  const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading } = useInfiniteQuery({
+  const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading, isError } = useInfiniteQuery({
     queryKey: ['bookings', cancelled ? 'cancelled' : 'active', search, typeFilter, dateFrom, dateTo, blockFilter, bolimFilter, floorFilter, managerFilter, sourceFilter],
     queryFn: ({ pageParam = 0 }) => {
       const params = new URLSearchParams({ limit: String(LIMIT), offset: String(pageParam) })
@@ -103,6 +103,17 @@ export function BookingsTable({ cancelled, isAdmin, onReset, search, typeFilter,
                     ))}
                   </tr>
                 ))
+              : isError
+              ? (
+                  <tr>
+                    <td colSpan={colSpan} className="px-4 py-16 text-center text-sm">
+                      <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                        <span className="text-2xl">⚠</span>
+                        <span>Ma'lumotlarni yuklashda xatolik. Server ishlamayapti yoki internet yo'q.</span>
+                      </div>
+                    </td>
+                  </tr>
+                )
               : bookingsRaw.length === 0 && !isFetchingNextPage && !isLoading
               ? (
                   <tr>

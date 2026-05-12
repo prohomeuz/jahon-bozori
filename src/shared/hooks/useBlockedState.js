@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router'
-import { getUser, getToken, apiFetch, removeToken } from '@/shared/lib/auth'
+import { getUser, getToken, apiFetch, removeToken, forceLogout } from '@/shared/lib/auth'
 
 const SS_KEY = 'sm_blocked'
 
@@ -64,6 +64,7 @@ export function useBlockedState({ hasRealtimeApts = false } = {}) {
       if (blocked === true) {
         setIsBlocked(true)
         writeSession(true)
+        setTimeout(() => forceLogout(false), 2500)
       } else if (blocked === false && !handled) {
         handled = true
         writeSession(false)

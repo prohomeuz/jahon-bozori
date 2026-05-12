@@ -424,6 +424,7 @@ try { db.exec(`UPDATE apartments SET notes = 'Ko''cha bo''yi, Burchak'  WHERE no
 try {
   const schema = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='users'").get()
   if (schema?.sql && !schema.sql.includes('narxchi')) {
+    db.exec(`PRAGMA foreign_keys = OFF`)
     db.exec(`BEGIN`)
     db.exec(`
       CREATE TABLE users_new (
@@ -442,10 +443,12 @@ try {
     db.exec(`DROP TABLE users`)
     db.exec(`ALTER TABLE users_new RENAME TO users`)
     db.exec(`COMMIT`)
+    db.exec(`PRAGMA foreign_keys = ON`)
     console.log('[migration] users role CHECK updated to include narxchi')
   }
 } catch (e) {
   try { db.exec(`ROLLBACK`) } catch {}
+  try { db.exec(`PRAGMA foreign_keys = ON`) } catch {}
   console.error('[migration] users role CHECK:', e.message)
 }
 

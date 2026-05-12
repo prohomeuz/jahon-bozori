@@ -82,10 +82,7 @@ export async function requireAuth(c, next) {
       const row = db.prepare('SELECT is_active FROM users WHERE id=?').get(payload.sub)
       if (!row) return c.json({ error: 'Unauthorized' }, 401)
 
-      // Bloklangan foydalanuvchi faqat o'qish (GET) so'rovlarini amalga oshira oladi
-      if (!row.is_active && c.req.method !== 'GET') {
-        return c.json({ error: 'BLOCKED' }, 403)
-      }
+      if (!row.is_active) return c.json({ error: 'BLOCKED' }, 403)
 
       if (payload.role === 'salesmanager' && !isWorkingHours() && !isLocalhostReq(c)) {
         return c.json({ error: 'OUTSIDE_HOURS', message: "Tizim faqat 08:00–20:00 orasida ishlaydi" }, 403)
@@ -108,5 +105,11 @@ export function requireAdmin(c, next) {
 export function requireAdminOrNarxchi(c, next) {
   const user = c.get('user')
   if (user?.role !== 'admin' && user?.role !== 'narxchi') return c.json({ error: 'Forbidden' }, 403)
+  return next()
+}
+
+export function blockNarxchi(c, next) {
+  const user = c.get('user')
+  if (user?.role === 'narxchi') return c.json({ error: 'Forbidden' }, 403)
   return next()
 }

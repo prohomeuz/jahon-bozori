@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Download, FileText, X } from 'lucide-react'
 import { apiFetch } from '@/shared/lib/auth'
 import { downloadBookingPDF } from '../lib/bookingPdf.jsx'
+import { showToast } from '@/shared/lib/toast'
 
 const TYPE_BADGE = {
   bron:   'bg-amber-100 text-amber-700 border border-amber-200',
@@ -75,13 +76,23 @@ export function BookingRow({ b, isAdmin, cancelled, onReset, scrolled, scrolledR
 
   async function handleReset() {
     setShowConfirm(false); setLoading(true)
-    await apiFetch(`/api/apartments/${b.apartment_id}/status`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: 'EMPTY' }),
-    })
-    setLoading(false)
-    onReset?.()
+    try {
+      const res = await apiFetch(`/api/apartments/${b.apartment_id}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'EMPTY' }),
+      })
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}))
+        showToast(d.error ?? "Amal bajarilmadi", 'error')
+        return
+      }
+      onReset?.()
+    } catch {
+      showToast("Server bilan aloqa yo'q", 'error')
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
