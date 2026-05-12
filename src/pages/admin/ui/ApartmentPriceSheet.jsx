@@ -12,13 +12,6 @@ const SHEETS = [
   { id: 'C-2', block: 'C', floor: 2, label: 'C  2-qavat' },
 ]
 
-const STATUS_LABEL = { EMPTY: "Bo'sh", RESERVED: 'Bron', SOLD: 'Sotilgan', NOT_SALE: 'Sotilmaydi' }
-const STATUS_CLS   = {
-  EMPTY:    'bg-green-100 text-green-700',
-  RESERVED: 'bg-amber-100 text-amber-700',
-  SOLD:     'bg-red-100 text-red-700',
-  NOT_SALE: 'bg-gray-100 text-gray-500',
-}
 
 function fmt(n) {
   if (n == null) return ''
@@ -91,12 +84,20 @@ export function ApartmentPriceSheet({ onBack }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ items }),
       })
-      if (!res.ok) throw new Error()
-      qc.invalidateQueries({ queryKey: ['apt-prices'] })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        alert('Xatolik: ' + (err?.error ?? res.status))
+        return
+      }
+      await qc.invalidateQueries({ queryKey: ['apt-prices'] })
       setAllDrafts({})
       setSavedFlash(true)
       setTimeout(() => setSavedFlash(false), 1800)
-    } finally { setSaving(false) }
+    } catch (e) {
+      alert('Tarmoq xatoligi: ' + e.message)
+    } finally {
+      setSaving(false)
+    }
   }
 
   function renderRow(row) {
@@ -112,7 +113,7 @@ export function ApartmentPriceSheet({ onBack }) {
         <td className="px-4 py-2 font-mono font-bold text-sm text-gray-800 w-16">{aptNum}</td>
         <td className="px-4 py-2 text-sm text-gray-500 tabular-nums w-20">{row.size} m²</td>
         <td className="px-4 py-2 text-sm font-mono text-gray-400 tabular-nums w-28">{fmt(row.general_price)} $</td>
-        <td className="px-3 py-1.5 w-40">
+        <td className="px-3 py-1.5">
           {isEdit ? (
             <input
               autoFocus
@@ -143,11 +144,6 @@ export function ApartmentPriceSheet({ onBack }) {
                   : '—'}
             </button>
           )}
-        </td>
-        <td className="px-4 py-2 w-24">
-          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${STATUS_CLS[row.status] ?? 'bg-gray-100 text-gray-500'}`}>
-            {STATUS_LABEL[row.status] ?? row.status}
-          </span>
         </td>
       </tr>
     )
@@ -196,29 +192,28 @@ export function ApartmentPriceSheet({ onBack }) {
                 <th className="px-4 py-2.5 text-[11px] font-bold text-gray-400 uppercase tracking-wider w-16">№</th>
                 <th className="px-4 py-2.5 text-[11px] font-bold text-gray-400 uppercase tracking-wider">Maydon</th>
                 <th className="px-4 py-2.5 text-[11px] font-bold text-gray-400 uppercase tracking-wider">Umumiy narx</th>
-                <th className="px-4 py-2.5 text-[11px] font-bold text-gray-400 uppercase tracking-wider w-40">Alohida narx</th>
-                <th className="px-4 py-2.5 text-[11px] font-bold text-gray-400 uppercase tracking-wider">Holat</th>
+                <th className="px-4 py-2.5 text-[11px] font-bold text-gray-400 uppercase tracking-wider">Alohida narx</th>
               </tr>
             </thead>
             <tbody>
               {shopBolims.flatMap(bolim => [
-                <tr key={`sh-${bolim}`} className="bg-gray-100 border-y border-gray-200">
-                  <td colSpan={5} className="px-4 py-1.5 text-[11px] font-black text-gray-400 uppercase tracking-widest">
+                <tr key={`sh-${bolim}`}>
+                  <td colSpan={4} className="sticky top-[41px] z-[5] bg-gray-100 border-y border-gray-200 px-4 py-1.5 text-[11px] font-black text-gray-400 uppercase tracking-widest">
                     {bolim}-bo'lim
                   </td>
                 </tr>,
                 ...shopMap[bolim].map(renderRow),
               ])}
               {wcBolims.length > 0 && (
-                <tr className="bg-sky-50 border-y-2 border-sky-200">
-                  <td colSpan={5} className="px-4 py-1.5 text-[11px] font-black text-sky-500 uppercase tracking-widest">
+                <tr>
+                  <td colSpan={4} className="sticky top-[41px] z-[5] bg-sky-50 border-y-2 border-sky-200 px-4 py-1.5 text-[11px] font-black text-sky-500 uppercase tracking-widest">
                     Hojatxonalar
                   </td>
                 </tr>
               )}
               {wcBolims.flatMap(bolim => [
-                <tr key={`wch-${bolim}`} className="bg-sky-50/60 border-b border-sky-100">
-                  <td colSpan={5} className="px-6 py-1 text-[11px] font-semibold text-sky-400">
+                <tr key={`wch-${bolim}`}>
+                  <td colSpan={4} className="sticky top-[41px] z-[5] bg-sky-50/60 border-b border-sky-100 px-6 py-1 text-[11px] font-semibold text-sky-400">
                     {bolim}-bo'lim
                   </td>
                 </tr>,
