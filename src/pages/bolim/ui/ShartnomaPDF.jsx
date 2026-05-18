@@ -96,10 +96,34 @@ function calcSchedule(total, down, months, startDate) {
 }
 
 function ZhRow({ zh, uz, bold }) {
+  if (bold) {
+    return (
+      <View style={s.block}>
+        <Text style={s.zhB} hyphenationCallback={cjkHyphen}>{zh}</Text>
+        <Text style={[s.uzB, { marginTop: 1 }]}>{uz}</Text>
+      </View>
+    )
+  }
+  const splitNum = (text) => {
+    const m = text.match(/^([\d.]+(?:[–—-][\d.]+)?\s+)(.+)$/s)
+    return m ? [m[1], m[2]] : [null, text]
+  }
+  const [zhN, zhR] = splitNum(zh)
+  const [uzN, uzR] = splitNum(uz)
   return (
     <View style={s.block}>
-      <Text style={bold ? s.zhB : s.zh} hyphenationCallback={cjkHyphen}>{zh}</Text>
-      <Text style={bold ? [s.uzB, { marginTop: 1 }] : [s.uz, { marginTop: 1 }]}>{uz}</Text>
+      <View style={{ flexDirection: 'row' }}>
+        {zhN ? <Text style={s.zhB}>{zhN}</Text> : null}
+        <Text style={[s.zh, zhN ? { flex: 1 } : {}]} hyphenationCallback={cjkHyphen}>
+          {zhN ? zhR : zh}
+        </Text>
+      </View>
+      <View style={{ flexDirection: 'row', marginTop: 1 }}>
+        {uzN ? <Text style={s.uzB}>{uzN}</Text> : null}
+        <Text style={[s.uz, uzN ? { flex: 1 } : {}]}>
+          {uzN ? uzR : uz}
+        </Text>
+      </View>
     </View>
   )
 }
@@ -139,7 +163,11 @@ export function ShartnomaPDF({ apartment, floor, blockId, bolimNum, form, contra
   const endDateObj = schedule.length > 0 ? (() => { const p = schedule[schedule.length-1].date.split('.'); return new Date(+p[2],+p[1]-1,+p[0]) })() : cd
   const endStr  = fmtUZ(endDateObj)
   const molylik = schedule.length > 0 ? schedule[0].amount : 0
-  const contractNum = contractNumber || `#${bookingId}`
+  const firstPayDate = schedule.length > 0 ? schedule[0].date : fmtD(cd)
+  const firstPayDateUZ = schedule.length > 0
+    ? fmtUZ((() => { const p = schedule[0].date.split('.'); return new Date(+p[2], +p[1]-1, +p[0]) })())
+    : cdStr
+  const contractNum = 'HTKH__________________-_______'
 
   return (
     <Document>
@@ -158,7 +186,7 @@ export function ShartnomaPDF({ apartment, floor, blockId, bolimNum, form, contra
         <View style={[s.block, { marginBottom: 9 }]}>
           <Text style={s.zh} hyphenationCallback={cjkHyphen}>{`«HENG TAI» MCHJ XK（下称"建设方"），依据章程开展活动，由 ZHANG XIAOLI 代表，作为一方；\n自然人：${investorName}，护照号/身份证号：${form.passport || '__________'}（下称"投资方"），作为另一方；\n双方就以下内容签订本合同：`}</Text>
           <Text style={[s.uz, { marginTop: 2 }]}>
-            «HENG TAI» MCHJ XK (keyingi o'rinlarda «Quruvchi» deb yuritiladi), Nizom asosida faoliyat yurituvchi ZHANG XIAOLI nomidan, bir tomondan;{'\n'}
+            «HENG TAI» MCHJ XK (keyingi o'rinlarda «Quruvchi» deb yuritiladi), Nizom asosida faoliyat yurituvchi va ZHANG XIAOLI tomonidan vakillangan, bir tomondan;{'\n'}
             Jismoniy shaxs: <U>{investorName}</U>, Pasport / ID raqami: <U>{form.passport || '__________'}</U> (keyingi o'rinlarda «Investor» deb yuritiladi), ikkinchi tomondan;{'\n'}
             Tomonlar quyidagilar to'g'risida mazkur Shartnomani tuzdilar:
           </Text>
@@ -177,14 +205,14 @@ export function ShartnomaPDF({ apartment, floor, blockId, bolimNum, form, contra
           uz="1.2 Ushbu investitsiya loyihasini amalga oshirish uchun Quruvchi o'z vakolatlari doirasida tegishli qurilish tashkilotlarini jalb qiladi; Investor yuqoridagi birgalikda qurilayotgan loyihaga pul mablag'larini kiritishni va ushbu Shartnomada belgilangan shartlar va muddatlarda ko'chmas mulkka egalik huquqini olishni o'z zimmasiga oladi."
         />
         <View style={s.block}>
-          <Text style={s.zh} hyphenationCallback={cjkHyphen}>{`1.3 项目房源：Farg'ona viloyati, Farg'ona tumani, Cheksho'ra MFY, 148号地块建设的亚欧国际商贸中心项目，${blockId}-区 ${bolimNum}-栋 ${floor}-层 ${aptLabel}-号商铺，面积 ${apartment.size} 平方米。`}</Text>
+          <Text style={s.zh} hyphenationCallback={cjkHyphen}><Text style={s.zhB}>1.3 </Text>{'项目房源：Farg\'ona viloyati, Farg\'ona tumani, Cheksho\'ra MFY, 148号地块建设的亚欧国际商贸中心项目，'}<U>{blockId}-区 {bolimNum}-栋 {floor}-层 {aptLabel}-号商铺，面积 {String(apartment.size)} 平方米</U>{'。'}</Text>
           <Text style={[s.uz, { marginTop: 1 }]}>
             1.3 Loyihadagi ko'chmas mulk: Farg'ona viloyati, Farg'ona tumani, Cheksho'ra MFY, 148-uchastkada quriladigan «Yevro-Osiyo xalqaro savdo markazi» loyihasidagi{' '}
             <U>{blockId}-maydon</U>, <U>{bolimNum}-bino</U>, <U>{floor}-qavat</U>, <U>{aptLabel}-do'kon</U>, maydoni <U>{apartment.size}</U> kv.m.
           </Text>
         </View>
         <View style={s.block}>
-          <Text style={s.zh} hyphenationCallback={cjkHyphen}>{`1.4 合同总金额：${usd(total)} 美元（含增值税），投资方最终取得该房屋完整所有权。`}</Text>
+          <Text style={s.zh} hyphenationCallback={cjkHyphen}><Text style={s.zhB}>1.4 </Text>{'合同总金额：'}<U>{usd(total)} 美元</U>{'（含增值税），投资方最终取得该房屋完整所有权。'}</Text>
           <Text style={[s.uz, { marginTop: 1 }]}>
             1.4 Shartnomaning umumiy summasi: <U>{usd(total)} AQSH dollari</U> (QQS bilan birga), Investor yakuniy natijada ushbu ko'chmas mulkka to'liq egalik huquqini oladi.
           </Text>
@@ -207,7 +235,7 @@ export function ShartnomaPDF({ apartment, floor, blockId, bolimNum, form, contra
         />
         <ZhRow
           zh="1.9 建设方负责编制、完善、审批全部设计预算及文件，并取得所有必需许可；以自身名义签订合同、组织施工、完成竣工验收，并向投资方办理对应份额房屋的产权证明，承担本合同全部义务。"
-          uz="1.9 Quruvchi barcha loyiha-smeta hujjatlarini ishlab chiqish, takomillashtirish, tasdiqlash va barcha zarur ruxsatnomalarni olish majburiyatini oladi; o'z nomidan shartnomalar tuzadi, qurilishni tashkil etadi, qurilishni tugatish va topshirishda ishtirok etadi va Investorga tegishli ulushdagi ko'chmas mulkka egalik huquqini rasmiylashtiradi, ushbu Shartnoma bo'yicha barcha majburiyatlarni o'z zimmasiga oladi."
+          uz="1.9 Quruvchi barcha loyiha-smeta hujjatlarini ishlab chiqish, takomillashtirish, tasdiqlash va barcha zarur ruxsatnomalarni olish majburiyatini oladi; o'z nomidan shartnomalar tuzadi, qurilishni tashkil etadi, qurilishni tugatadi va qabul-topshirish tekshiruvini amalga oshiradi, Investorga tegishli ulushdagi ko'chmas mulkka egalik huquqini rasmiylashtiradi, ushbu Shartnoma bo'yicha barcha majburiyatlarni o'z zimmasiga oladi."
         />
 
         {/* 2 */}
@@ -215,9 +243,9 @@ export function ShartnomaPDF({ apartment, floor, blockId, bolimNum, form, contra
         <Text style={[s.secUz, { marginBottom: 4 }]}>2. TARAFLARNING HUQUQ VA MAJBURIYATLARI</Text>
         <ZhRow zh="2.1 投资方义务与权利" uz="2.1 Investorning majburiyatlari va huquqlari" bold />
         <View style={s.block}>
-          <Text style={s.zh} hyphenationCallback={cjkHyphen}>{`2.1.1 投资方应按建设方提供的银行账户，支付首期款：${usd(boshl)} 美元，投资总额在合同有效期内保持不变，期限：${fmtD(cd)} — ${lastDate}。`}</Text>
+          <Text style={s.zh} hyphenationCallback={cjkHyphen}><Text style={s.zhB}>2.1.1 </Text>{'投资方应按建设方提供的银行账户，支付首期款：'}<U>{usd(boshl)} 美元</U>{'，投资总额在合同有效期内保持不变，期限：'}<U>{firstPayDate} — {lastDate}</U>{'。'}</Text>
           <Text style={[s.uz, { marginTop: 1 }]}>
-            2.1.1 Investor Quruvchi tomonidan taqdim etilgan bank hisob raqamiga birinchi to'lovni <U>{usd(boshl)} AQSH dollari</U> miqdorida to'laydi, investitsiyaning umumiy miqdori shartnoma amal qilish muddati davomida o'zgarmaydi, muddat: <U>{cdStr}</U> — <U>{endStr}</U>.
+            <Text style={s.uzB}>2.1.1 </Text>Investor Quruvchi tomonidan taqdim etilgan bank hisob raqamiga birinchi to'lovni <U>{usd(boshl)} AQSH dollari</U> miqdorida to'laydi, investitsiyaning umumiy miqdori shartnoma amal qilish muddati davomida o'zgarmaydi, muddat: <U>{firstPayDateUZ}</U> — <U>{endStr}</U>.
           </Text>
         </View>
         <ZhRow
@@ -234,8 +262,8 @@ export function ShartnomaPDF({ apartment, floor, blockId, bolimNum, form, contra
           uz="2.2.1 Quruvchi O'zbekiston Respublikasining amaldagi qurilish normalari, loyiha-smeta hujjatlariga muvofiq, kelishilgan uchastkada ko'chmas mulk qurilishini yakunlashi shart."
         />
         <ZhRow
-          zh="2.2.2 建设方应在合同签订后     年内完成房屋建设，并向投资方提供办理房屋买卖合同公证、不动产登记所需全套文件；投资方付清全部款项后，正式办理公证与产权登记；若投资方在房屋交付时未付清全部款项，则房屋产权登记在建设方名下，投资方拥有该房屋的使用权和经营权，未经建设方许可严禁将使用权和经营权转让给第三方；投资方付清全部款项后，建设方配合投资方办理公证与产权登记，相关费用由投资方自行承担。"
-          uz="2.2.2 Quruvchi shartnoma tuzilgan kundan boshlab _____ yil ichida ko'chmas mulk qurilishini yakunlashi va Investorga ko'chmas mulk oldi-sotdi shartnomasini notarial tasdiqlash va ko'chmas mulk huquqini ro'yxatdan o'tkazish uchun zarur bo'lgan barcha hujjatlarni taqdim etishi shart; Investor barcha to'lovlarni to'liq to'lagandan so'ng, notarial tasdiqlash va mulk huquqini ro'yxatdan o'tkazish rasmiylashtiriladi; agar Investor ko'chmas mulkni topshirish paytida barcha to'lovlarni to'lamagan bo'lsa, ko'chmas mulkka egalik huquqi Quruvchi nomiga ro'yxatdan o'tkaziladi, Investor ushbu ko'chmas mulkdan foydalanish va uni boshqarish huquqiga ega bo'ladi, Quruvchining ruxsatisiz foydalanish va boshqarish huquqini uchinchi shaxslarga berish qat'iyan man etiladi; Investor barcha to'lovlarni to'liq to'lagandan so'ng, Quruvchi Investorga notarial tasdiqlash va mulk huquqini ro'yxatdan o'tkazishda yordam beradi, bunda yuzaga keladigan barcha xarajatlar Investor tomonidan o'z zimmasiga olinadi."
+          zh="2.2.2 建设方应在合同签订后 3 年内完成房屋建设，并向投资方提供办理房屋买卖合同公证、不动产登记所需全套文件；投资方付清全部款项后，正式办理公证与产权登记；若投资方在房屋交付时未付清全部款项，则房屋产权登记在建设方名下，投资方拥有该房屋的使用权和经营权，未经建设方许可严禁将使用权和经营权转让给第三方；投资方付清全部款项后，建设方配合投资方办理公证与产权登记，相关费用由投资方自行承担。"
+          uz="2.2.2 Quruvchi shartnoma tuzilgan kundan boshlab 3 yil ichida ko'chmas mulk qurilishini yakunlashi va Investorga ko'chmas mulk oldi-sotdi shartnomasini notarial tasdiqlash va ko'chmas mulk huquqini ro'yxatdan o'tkazish uchun zarur bo'lgan barcha hujjatlarni taqdim etishi shart; Investor barcha to'lovlarni to'liq to'lagandan so'ng, notarial tasdiqlash va mulk huquqini ro'yxatdan o'tkazish rasmiylashtiriladi; agar Investor ko'chmas mulkni topshirish paytida barcha to'lovlarni to'lamagan bo'lsa, ko'chmas mulkka egalik huquqi Quruvchi nomiga ro'yxatdan o'tkaziladi, Investor ushbu ko'chmas mulkdan foydalanish va uni boshqarish huquqiga ega bo'ladi, Quruvchining ruxsatisiz foydalanish va boshqarish huquqini uchinchi shaxslarga berish qat'iyan man etiladi; Investor barcha to'lovlarni to'liq to'lagandan so'ng, Quruvchi Investorga notarial tasdiqlash va mulk huquqini ro'yxatdan o'tkazishda yordam beradi, bunda yuzaga keladigan barcha xarajatlar Investor tomonidan o'z zimmasiga olinadi."
         />
         <ZhRow
           zh="2.2.3 房屋完成国家登记后60个银行工作日内，为投资方办理合同约定房屋的产权登记；相关费用由投资方承担；因投资方资金不足导致登记延误，建设方不承担责任。"
@@ -255,7 +283,7 @@ export function ShartnomaPDF({ apartment, floor, blockId, bolimNum, form, contra
         />
         <ZhRow
           zh="2.2.7 本项目公共区域、停车场、建筑楼顶屋面、外墙立面及其他配套设施设备的经营权归属于建设方。项目投入使用后，由建设方自行或其委托的专业运营公司统一经营管理，相关收益由建设方享有。投资方对此无异议，并承诺不干涉建设方或其委托方的正常经营活动。"
-          uz="2.2.7 Mazkur loyihaning umumiy foydalanishdagi hududlari, avtoturargohlar, binoning tom yuzasi, tashqi devorlari hamda boshqa qo'shimcha inshootlar va jihozlarning tadbirkorlik faoliyatini yuritish huquqi Quruvchiga tegishlidir. Loyiha foydalanishga topshirilgandan so'ng, Quruvchi tomonidan yoki u vakolat bergan professional ekspluatatsiya kompaniyasi tomonidan yagona boshqaruv amalga oshiriladi, tegishli daromadlar Quruvchi tomonidan o'zlashtiriladi. Investor bunga e'tiroz bildirmaydi va Quruvchi yoki uning vakolat bergan shaxsining normal tadbirkorlik faoliyatiga aralashmaslikka majbur ekanligini tasdiqlaydi."
+          uz="2.2.7 Mazkur loyihaning umumiy foydalanishdagi hududlari, avtoturargohlar, binoning tom yuzasi, tashqi devorlarning fasadlari hamda boshqa qo'shimcha inshootlar va jihozlarning tadbirkorlik faoliyatini yuritish huquqi Quruvchiga tegishlidir. Loyiha foydalanishga topshirilgandan so'ng, Quruvchi tomonidan yoki u vakolat bergan professional ekspluatatsiya kompaniyasi tomonidan yagona boshqaruv amalga oshiriladi, tegishli daromadlar Quruvchi tomonidan o'zlashtiriladi. Investor bunga e'tiroz bildirmaydi va Quruvchi yoki uning vakolat bergan shaxsining normal tadbirkorlik faoliyatiga aralashmaslikka majbur ekanligini tasdiqlaydi."
         />
 
         {/* 3 */}
@@ -284,12 +312,12 @@ export function ShartnomaPDF({ apartment, floor, blockId, bolimNum, form, contra
         />
         <ZhRow
           zh="4.1.3 合同解除后，建设方应在重新就本合同项下商铺与新的投资方签订正式投资协议之日起180个银行工作日内，向原投资方退还其已支付的全部款项，但建设方有权扣除以下费用：（1）合同解除前已发生的建设成本；（2）中介佣金，不超过合同总金额的5%；（3）银行手续费及其他有书面凭证的合理支出。上述各项扣除金额合计不得超过原投资方已付总金额的10%。"
-          uz="4.1.3 Shartnoma bekor qilingandan so'ng, Quruvchi yangi investor bilan rasmiy investitsiya shartnomasi tuzilgan kundan boshlab 180 bank ish kuni ichida avvalgi Investorga uning to'lagan barcha mablag'larini qaytaradi, biroq quyidagilarni ushlab qolish huquqiga ega: (1) qurilish xarajatlari (loyihalash, geologik qidiruv, davlat yig'imlari, materiallar, ishchi kuchi); (2) vositachilik komissiyasi — shartnoma umumiy summasining 5% dan oshmasligi; (3) bank xizmatlari va boshqa hujjatlashtirilgan asosli xarajatlar. Barcha ushlab qolingan xarajatlar yig'indisi avvalgi Investor to'lagan umumiy summaning 10% dan oshmasligi kerak."
+          uz="4.1.3 Shartnoma bekor qilingandan so'ng, Quruvchi yangi investor bilan rasmiy investitsiya shartnomasi tuzilgan kundan boshlab 180 bank ish kuni ichida avvalgi Investorga uning to'lagan barcha mablag'larini qaytaradi, biroq quyidagilarni ushlab qolish huquqiga ega: (1) shartnoma bekor qilinishidan oldin yuzaga kelgan qurilish xarajatlari; (2) vositachilik komissiyasi — shartnoma umumiy summasining 5% dan oshmasligi; (3) bank xizmatlari va boshqa hujjatlashtirilgan asosli xarajatlar. Barcha ushlab qolingan xarajatlar yig'indisi avvalgi Investor to'lagan umumiy summaning 10% dan oshmasligi kerak."
         />
         <ZhRow zh="4.2 投资方义务" uz="4.2 Investorning majburiyatlari:" bold />
         <ZhRow
           zh="4.2.1–4.2.11 按期足额支付房款；地址、电话变更后3日内书面通知建设方；收到交房书面通知后7日内验收签署交接单；自行承担物业费、水电费、维修费等运营费用；未取得产权及建设方书面同意前不得擅自装修；不得擅自改变房屋结构、工程系统、设备管线；未付清全部合同款项前不得以任何形式将本合同权利转让给第三方，违者建设方有权立即解除合同，已收款项不予退还；自行承担产权登记全部费用；收房后自行承担房产税、公共服务费；未经建设方同意不得私自接驳水电燃气；不得占用、破坏或擅自处分项目公共区域。"
-          uz="4.2.1–4.2.11 O'z vaqtida va to'liq hajmda to'lovlarni amalga oshirish; manzil va telefon o'zgartirilgandan so'ng 3 kun ichida yozma xabardor qilish; ko'chmas mulkni topshirish xabarnomasi olgandan so'ng 7 kun ichida qabul qilish va topshirish dalolatnomasini imzolash; kommunal xarajatlarni o'z zimmasiga olish; mulk huquqi va Quruvchi yozma roziligini olmaguncha o'zgartirish ishlarini olib bormaslik; ko'chmas mulk tuzilishini va muhandislik tizimlarini o'zgartirmaslik; barcha to'lovlar to'liq to'lanmaguncha ushbu Shartnoma bo'yicha huquqlarini uchinchi shaxslarga bermaslik (buzilsa — darhol bekor qilish, to'langan mablag'lar qaytarilmaydi); mulk huquqini ro'yxatdan o'tkazish xarajatlarini o'z zimmasiga olish; mol-mulk solig'i va kommunal xizmatlar uchun to'lovlarni o'z zimmasiga olish; Quruvchi roziligisiz suv, elektr va gaz tarmoqlariga ulanmaslik; umumiy hududlarni egallamaslik va Quruvchi boshqaruviga to'sqinlik qilmaslik."
+          uz="4.2.1–4.2.11 O'z vaqtida va to'liq hajmda to'lovlarni amalga oshirish; manzil va telefon o'zgartirilgandan so'ng 3 kun ichida Quruvchiga yozma xabardor qilish; ko'chmas mulkni topshirish xabarnomasi olgandan so'ng 7 kun ichida qabul qilish va topshirish dalolatnomasini imzolash; mulk boshqaruvi to'lovi, suv-elektr va ta'mirlash xarajatlari hamda boshqa operatsion xarajatlarni o'z zimmasiga olish; mulk huquqi va Quruvchi yozma roziligini olmaguncha o'zboshimchalik bilan ta'mirlash ishlarini olib bormaslik; ko'chmas mulk tuzilishi, muhandislik tizimlari va jihozlar quvurlarini o'zboshimchalik bilan o'zgartirmaslik; barcha to'lovlar to'liq to'lanmaguncha ushbu Shartnoma bo'yicha huquqlarini hech qanday shaklda uchinchi shaxslarga bermaslik (buzilsa — darhol bekor qilish, to'langan mablag'lar qaytarilmaydi); mulk huquqini ro'yxatdan o'tkazish xarajatlarini o'z zimmasiga olish; ko'chmas mulk qabul qilinganidan so'ng mol-mulk solig'i va jamoat xizmat to'lovlarini o'z zimmasiga olish; Quruvchi roziligisiz suv, elektr va gaz tarmoqlariga ulanmaslik; loyiha umumiy hududlarini egallamaslik, buzmaslik yoki o'zboshimchalik bilan tasarruf etmaslik."
         />
         <ZhRow
           zh="4.3 任何一方不履行或不当履行义务，按乌兹别克斯坦法律承担责任。"
@@ -305,7 +333,7 @@ export function ShartnomaPDF({ apartment, floor, blockId, bolimNum, form, contra
         />
 
         {/* 5 */}
-        <Text style={s.secZh} hyphenationCallback={cjkHyphen}>5. 不可抗力 | FORS-MAJOR</Text>
+        <Text break style={s.secZh} hyphenationCallback={cjkHyphen}>5. 不可抗力 | FORS-MAJOR</Text>
         <Text style={[s.secUz, { marginBottom: 4 }]}>5. FORS-MAJOR</Text>
         <ZhRow
           zh="因战争、自然灾害、疫情、政府行为等不可抗力导致无法履约，双方免责，义务暂停；可提前10日书面通知终止合同并据实结算。"
@@ -319,7 +347,6 @@ export function ShartnomaPDF({ apartment, floor, blockId, bolimNum, form, contra
         <ZhRow zh="6.2 协商不成，提交费尔干纳市有管辖权法院审理。" uz="6.2 Muzokaralar natija bermasa, ish Farg'ona shahrining vakolatli sudiga ko'rib chiqish uchun topshiriladi." />
 
         {/* 7 */}
-        <View break>
         <Text style={s.secZh} hyphenationCallback={cjkHyphen}>最终条款 | YAKUNLOVCHI QOIDALAR</Text>
         <Text style={[s.secUz, { marginBottom: 4 }]}>7. YAKUNLOVCHI QOIDALAR</Text>
         <ZhRow
@@ -339,9 +366,8 @@ export function ShartnomaPDF({ apartment, floor, blockId, bolimNum, form, contra
           uz="7.4 Ushbu Shartnoma ikki nusxada tuzilgan bo'lib, har bir tomonda bittadan nusxa saqlanadi va ikkala nusxa ham teng yuridik kuchga ega."
         />
 
-        </View>
-        {/* PARTY TABLE */}
-        <View style={s.ptbl}>
+        {/* PARTY TABLE — yangi sahifada */}
+        <View break style={s.ptbl}>
           <View style={s.pcol}>
             <Text style={s.phd} hyphenationCallback={cjkHyphen}>建设方 | Quruvchi</Text>
             {[
@@ -391,10 +417,10 @@ export function ShartnomaPDF({ apartment, floor, blockId, bolimNum, form, contra
           <Text style={[s.zh, { textAlign: 'center', marginBottom: 10 }]} hyphenationCallback={cjkHyphen}>合同号 {contractNum}  ·  {fmtD(cd)}</Text>
 
           <View style={s.block}>
-            <Text style={s.zh} hyphenationCallback={cjkHyphen}>{`本人 ${investorName} 确认如下：\n依据${fmtD(cd)}第${contractNum}号《投资协议》，费尔干纳地区费尔干纳区 Cheksho'ra MFY 的 148号地块上建设的"亚欧国际商贸中心"项目中的 ${blockId}-区 ${bolimNum}-栋 ${floor}-层 ${aptLabel}-号商铺，面积 ${apartment.size} 平方米，已由本人认购，本人将按协议约定支付全部投资款。`}</Text>
+            <Text style={s.zh} hyphenationCallback={cjkHyphen}>{'本人 '}<U>{investorName}</U>{' 确认如下：\n依据'}<U>{fmtD(cd)}</U>{'第'}<U>{contractNum}</U>{'号《投资协议》，费尔干纳地区费尔干纳区 Cheksho\'ra MFY 的 148号地块上建设的"亚欧国际商贸中心"项目中的 '}<U>{blockId}-区 {bolimNum}-栋 {floor}-层 {aptLabel}-号商铺，面积 {String(apartment.size)} 平方米</U>{'，已由本人认购，本人将按协议约定支付全部投资款。'}</Text>
             <Text style={[s.uz, { marginTop: 3 }]}>
               Men, <U>{investorName}</U>, quyidagilarni tasdiqlayman:{'\n'}
-              {cdStr}-{contractNum}-sonli "Investitsiya shartnomasi"ga asosan, Farg'ona viloyati, Farg'ona tumani, Cheksho'ra MFY, 148-uchastkada qurilayotgan «Yevro-Osiyo xalqaro savdo markazi» loyihasidagi{' '}
+              <U>{cdStr}</U>-<U>{contractNum}</U>-sonli "Investitsiya shartnomasi"ga asosan, Farg'ona viloyati, Farg'ona tumani, Cheksho'ra MFY, 148-uchastkada qurilayotgan «Yevro-Osiyo xalqaro savdo markazi» loyihasidagi{' '}
               <U>{blockId}-maydon</U>, <U>{bolimNum}-bino</U>, <U>{floor}-qavat</U>, <U>{aptLabel}-do'kon</U>, maydoni <U>{apartment.size}</U> kv.m, men tomonimdan sotib olingan va men ushbu Shartnomaga muvofiq barcha investitsiya to'lovlarini to'liq to'lash majburiyatini o'z zimmasiga olaman.
             </Text>
           </View>
@@ -409,7 +435,7 @@ export function ShartnomaPDF({ apartment, floor, blockId, bolimNum, form, contra
           <View style={s.block}>
             <Text style={s.zh} hyphenationCallback={cjkHyphen}>若本人逾期付款超过60个日历日，本人同意建设方按本合同第4.1条约定单方解除合同。合同解除后，建设方有权在重新就本合同项下商铺与新的投资方签订正式投资协议之日起180个银行工作日内，向本人退还已支付的全部款项，但建设方有权扣除以下费用：（1）合同解除前已发生的建设成本；（2）中介佣金，不超过合同总金额的5%；（3）银行手续费及其他有书面凭证的合理支出。上述各项扣除金额合计不超过本人已付总金额的10%。</Text>
             <Text style={[s.uz, { marginTop: 2 }]}>
-              Agar to'lovim 60 kalendar kundan ortiq muddatga kechiktirilsa, Quruvchining ushbu Shartnomaning 4.1-bandiga muvofiq shartnomani bir tomonlama bekor qilishiga roziman. Shartnoma bekor qilingandan so'ng, Quruvchi yangi investor bilan rasmiy investitsiya shartnomasi tuzilgan kundan boshlab 180 bank ish kuni ichida menga to'lagan barcha mablag'larimni qaytaradi, biroq quyidagilarni ushlab qolish huquqiga ega: (1) qurilish xarajatlari; (2) vositachilik komissiyasi — umumiy summaning 5% dan oshmasligi; (3) bank xizmatlari xarajatlari. Ushlab qolingan xarajatlar yig'indisi men to'lagan umumiy summaning 10% dan oshmasligi kerak.
+              Agar to'lovim 60 kalendar kundan ortiq muddatga kechiktirilsa, Quruvchining ushbu Shartnomaning 4.1-bandiga muvofiq shartnomani bir tomonlama bekor qilishiga roziman. Shartnoma bekor qilingandan so'ng, Quruvchi yangi investor bilan rasmiy investitsiya shartnomasi tuzilgan kundan boshlab 180 bank ish kuni ichida menga to'lagan barcha mablag'larimni qaytaradi, biroq quyidagilarni ushlab qolish huquqiga ega: (1) shartnoma bekor qilinishidan oldin yuzaga kelgan qurilish xarajatlari; (2) vositachilik komissiyasi — umumiy summaning 5% dan oshmasligi; (3) bank xizmatlari va boshqa hujjatlashtirilgan asosli xarajatlar. Ushlab qolingan xarajatlar yig'indisi men to'lagan umumiy summaning 10% dan oshmasligi kerak.
             </Text>
           </View>
 
@@ -435,7 +461,7 @@ export function ShartnomaPDF({ apartment, floor, blockId, bolimNum, form, contra
               ['单价\nBirlik narxi', narxM2 > 0 ? `${usd(narxM2)} USD/m²` : '—'],
               ['首期款\nBoshlangʻich toʻlov', `${usd(boshl)} USD`],
               ['分期金额\nBoʻlib toʻlash summasi', `${usd(qolgan)} USD`],
-              ['分期期限\nBoʻlib toʻlash muddati', `${fmtD(cd)} — ${lastDate}`],
+              ['分期期限\nBoʻlib toʻlash muddati', `${firstPayDate} — ${lastDate}`],
               ['共期 / Umumiy davr', `${oylar} ta`],
               ['每月付款\nOylik toʻlov', `${usd(molylik)} USD`],
             ].map(([l,v]) => (
