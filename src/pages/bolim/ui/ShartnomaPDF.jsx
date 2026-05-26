@@ -86,8 +86,11 @@ function calcSchedule(total, down, months, startDate) {
   const moCents  = Math.floor(remCents / months)
   const lastCents = remCents - moCents * (months - 1)
   let runCents = remCents
+  const sd = startDate instanceof Date ? startDate : new Date(startDate)
+  const payDay = Math.min(sd.getDate(), 25)
   return Array.from({ length: months }, (_, i) => {
-    const d = new Date(startDate)
+    const d = new Date(sd)
+    d.setDate(payDay)
     d.setMonth(d.getMonth() + i + 1)
     const amt = i === months - 1 ? lastCents : moCents
     runCents -= amt
