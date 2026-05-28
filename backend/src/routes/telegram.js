@@ -1,7 +1,8 @@
 import { Hono } from 'hono'
-import { q } from '../db.js'
+import { db, q } from '../db.js'
 import { sseClients, SSE_MAX_CLIENTS } from '../lib/sse.js'
 import { proxiedFetch } from '../lib/telegram.js'
+import { requireAuth, requireAdmin } from '../auth.js'
 
 const app = new Hono()
 
@@ -33,6 +34,18 @@ app.post('/telegram/webhook', async (c) => {
   }
 
   return c.json({ ok: true })
+})
+
+// ─── SUBSCRIBERS (admin) ─────────────────────────────────────────────────────
+
+app.get('/telegram/subscribers', requireAuth, requireAdmin, (c) => {
+  const subscribers = db.prepare('SELECT chat_id, first_name, joined_at FROM telegram_subscribers ORDER BY joined_at DESC').all()
+  return c.json({ count: subscribers.length, subscribers })
+})
+
+app.delete('/telegram/subscribers', requireAuth, requireAdmin, (c) => {
+  const { changes } = db.prepare('DELETE FROM telegram_subscribers').run()
+  return c.json({ ok: true, deleted: changes })
 })
 
 // ─── SSE (authenticated) — GET /api/events ───────────────────────────────────
