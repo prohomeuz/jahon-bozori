@@ -1,5 +1,5 @@
 import { Hono } from 'hono'
-import { db, q } from '../db.js'
+import { db } from '../db.js'
 import { sseClients, SSE_MAX_CLIENTS } from '../lib/sse.js'
 import { proxiedFetch } from '../lib/telegram.js'
 import { requireAuth, requireAdmin } from '../auth.js'
@@ -21,7 +21,6 @@ app.post('/telegram/webhook', async (c) => {
   if (!token) return c.json({ ok: true })
 
   if (text === '/start') {
-    q.upsertSubscriber.run({ chat_id: String(chatId), first_name: firstName })
     await proxiedFetch(`https://api.telegram.org/bot${token}/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
