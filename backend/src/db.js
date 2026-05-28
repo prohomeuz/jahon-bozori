@@ -452,6 +452,52 @@ try {
   console.error('[migration] users role CHECK:', e.message)
 }
 
+// Dynamic discount brackets — admin panelidan sozlanadi
+try {
+  db.exec(`CREATE TABLE IF NOT EXISTS discount_brackets (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    min_percent  INTEGER NOT NULL UNIQUE,
+    discount_usd REAL    NOT NULL DEFAULT 0
+  )`)
+  db.exec(`INSERT OR IGNORE INTO discount_brackets (min_percent, discount_usd) VALUES
+    (30,100),(40,150),(50,200),(60,250),(70,300),(100,400)`)
+} catch {}
+
+// Dynamic bonus brackets — admin panelidan sozlanadi
+try {
+  db.exec(`CREATE TABLE IF NOT EXISTS bonus_brackets (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    min_percent INTEGER NOT NULL UNIQUE
+  )`)
+  db.exec(`INSERT OR IGNORE INTO bonus_brackets (min_percent) VALUES
+    (30),(40),(50),(60),(70),(100)`)
+} catch {}
+
+// Bonus items per bracket (max 5, rasmli)
+try {
+  db.exec(`CREATE TABLE IF NOT EXISTS bonus_items (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    bracket_id INTEGER NOT NULL REFERENCES bonus_brackets(id) ON DELETE CASCADE,
+    name       TEXT    NOT NULL,
+    image_path TEXT,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    UNIQUE (bracket_id, name)
+  )`)
+  const _seedItem = db.prepare(`
+    INSERT OR IGNORE INTO bonus_items (bracket_id, name, sort_order)
+    SELECT id, :name, :sort_order FROM bonus_brackets WHERE min_percent = :pct
+  `)
+  const seeds = [
+    [30,'Konditsioner',1],
+    [40,'Konditsioner',1],
+    [50,'Konditsioner',1],[50,'TV (43")',2],
+    [60,'Konditsioner',1],[60,'TV (43")',2],
+    [70,'Konditsioner',1],[70,'Muzlatgich',2],
+    [100,'Konditsioner',1],[100,'TV (43")',2],[100,'Muzlatgich',3],
+  ]
+  for (const [pct, name, sort_order] of seeds) _seedItem.run({ pct, name, sort_order })
+} catch {}
+
 // Sotuv shartnomasi raqamlari (HTKH20260504-001 format)
 db.exec(`CREATE TABLE IF NOT EXISTS contract_numbers (
   id      INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -584,6 +630,24 @@ export const q = {
   updateContractNum:  db.prepare("UPDATE contract_numbers SET contract_number=:contract_number WHERE id=:id"),
   getContractNum:     db.prepare("SELECT contract_number FROM contract_numbers WHERE booking_id=:booking_id"),
   lastContractSeq:    db.prepare("SELECT id FROM contract_numbers ORDER BY id DESC LIMIT 1"),
+
+  // discount brackets
+  allDiscountBrackets:   db.prepare("SELECT id, min_percent, discount_usd FROM discount_brackets ORDER BY min_percent ASC"),
+  insertDiscountBracket: db.prepare("INSERT INTO discount_brackets (min_percent, discount_usd) VALUES (:min_percent, :discount_usd)"),
+  updateDiscountBracket: db.prepare("UPDATE discount_brackets SET min_percent=:min_percent, discount_usd=:discount_usd WHERE id=:id"),
+  deleteDiscountBracket: db.prepare("DELETE FROM discount_brackets WHERE id=:id"),
+
+  // bonus brackets + items
+  allBonusBrackets:    db.prepare("SELECT id, min_percent FROM bonus_brackets ORDER BY min_percent ASC"),
+  bonusItemsByBracket: db.prepare("SELECT id, bracket_id, name, image_path, sort_order FROM bonus_items WHERE bracket_id=:bracket_id ORDER BY sort_order ASC"),
+  bonusItemById:       db.prepare("SELECT id, bracket_id, name, image_path FROM bonus_items WHERE id=:id"),
+  countBonusItems:     db.prepare("SELECT COUNT(*) AS n FROM bonus_items WHERE bracket_id=:bracket_id"),
+  insertBonusBracket:  db.prepare("INSERT INTO bonus_brackets (min_percent) VALUES (:min_percent)"),
+  updateBonusBracket:  db.prepare("UPDATE bonus_brackets SET min_percent=:min_percent WHERE id=:id"),
+  deleteBonusBracket:  db.prepare("DELETE FROM bonus_brackets WHERE id=:id"),
+  insertBonusItem:     db.prepare("INSERT INTO bonus_items (bracket_id, name, image_path, sort_order) VALUES (:bracket_id, :name, :image_path, (SELECT COALESCE(MAX(sort_order),0)+1 FROM bonus_items WHERE bracket_id=:bracket_id))"),
+  updateBonusItem:     db.prepare("UPDATE bonus_items SET name=:name, image_path=:image_path WHERE id=:id"),
+  deleteBonusItem:     db.prepare("DELETE FROM bonus_items WHERE id=:id"),
 
   totalByBlock:    db.prepare("SELECT COUNT(*) AS n FROM apartments WHERE block=:block"),
   snapshotByBlock: db.prepare(`
