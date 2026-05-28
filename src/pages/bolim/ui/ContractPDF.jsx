@@ -573,7 +573,7 @@ export function ContractPDF({
             </View>
             <View style={s.sRow}>
               <Icon d={IP.phone} size={8} color={P.muted} />
-              <Text style={{ fontSize: 7, color: P.muted }}>88-692-33-33</Text>
+              <Text style={{ fontSize: 7, color: P.muted }}>50-122-50-36</Text>
             </View>
             <View style={[s.sRow, { marginTop: 2 }]}>
               <Icon d={IP.globe} size={8} color={P.muted} />
