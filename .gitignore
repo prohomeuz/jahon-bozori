@@ -1,3 +1,6 @@
+# Uploaded bonus item images — keep outside git, mount as volume in production
+uploads/
+
 # Database — production data is in ./data/ (Docker volume bind)
 *.sqlite
 *.sqlite-shm

@@ -2,33 +2,26 @@ import { Loader2, RotateCcw, FileText, CheckCircle, X, ChevronDown, Calculator }
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { apiFetch, getUser } from '@/shared/lib/auth'
 import { useSettings } from '@/shared/hooks/useSettings'
+import { useDiscountBrackets } from '@/shared/hooks/useDiscountBrackets'
+import { useBonusBrackets } from '@/shared/hooks/useBonusBrackets'
 import { StatusCard } from './StatusCard'
 import { Field, PhoneField, PassportField, FullPhoneNumpad, LABEL, getRawDigits } from './FormFields'
 import { downloadContractPDF, downloadShartnomaPDF } from '../lib/pdfExport.jsx'
 
-import imgKonditsioner from '@/assets/bonus/konditsioner.webp'
-import imgTV from '@/assets/bonus/tv.webp'
-import imgMuzlatgich from '@/assets/bonus/muzlatgich.webp'
-
-const CHEGIRMA_TABLE = { 30: 100, 40: 150, 50: 200, 60: 250, 70: 300, 100: 400 }
-const BONUS_TABLE = {
-  30:  [{ img: imgKonditsioner, name: 'Konditsioner' }],
-  40:  [{ img: imgKonditsioner, name: 'Konditsioner' }],
-  50:  [{ img: imgKonditsioner, name: 'Konditsioner' }, { img: imgTV, name: 'TV (43)' }],
-  60:  [{ img: imgKonditsioner, name: 'Konditsioner' }, { img: imgTV, name: 'TV (43)' }],
-  70:  [{ img: imgKonditsioner, name: 'Konditsioner' }, { img: imgMuzlatgich, name: 'Muzlatgich' }],
-  100: [{ img: imgKonditsioner, name: 'Konditsioner' }, { img: imgTV, name: 'TV (43)' }, { img: imgMuzlatgich, name: 'Muzlatgich' }],
-}
-const TIERS = [
-  { pct: 30, disc: 100 }, { pct: 40, disc: 150 }, { pct: 50, disc: 200 },
-  { pct: 60, disc: 250 }, { pct: 70, disc: 300 }, { pct: 100, disc: 400 },
-]
-const MUDDAT_STEPS      = [36, 48, 60]
-const CHEGIRMA_BRACKETS = [100, 70, 60, 50, 40, 30]
-const BONUS_BRACKETS    = [100, 70, 60, 50, 40, 30]
+const MUDDAT_STEPS = [36, 48, 60]
 const CALC_KEYS         = ['7','8','9','4','5','6','1','2','3','C','0','⌫']
 const BRON_EMPTY   = { ism: '', familiya: '', telefon: '', boshlangich: '', oylar: '12', umumiy: '', narx_m2: '', chegirma_m2: '', asl_narx_m2: '', source_id: null }
 const SOTISH_EMPTY = { ism: '', familiya: '', telefon: '', boshlangich: '', oylar: '12', umumiy: '', narx_m2: '', passport: '', passport_place: '', manzil: '', source_id: null }
+
+function BonusItemPlaceholder({ name, large }) {
+  const colors = ['bg-amber-100 text-amber-600', 'bg-purple-100 text-purple-600', 'bg-blue-100 text-blue-600', 'bg-emerald-100 text-emerald-600']
+  const color = colors[(name?.charCodeAt(0) ?? 0) % colors.length]
+  return (
+    <div className={`w-full h-full flex items-center justify-center font-bold ${large ? 'text-4xl' : 'text-lg'} ${color}`}>
+      {name?.charAt(0)?.toUpperCase() ?? '?'}
+    </div>
+  )
+}
 
 function playDiscountSound() {
   try {
@@ -76,6 +69,8 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
   const [sources, setSources]           = useState([])
 
   const { chegirmaEnabled, bonusEnabled } = useSettings()
+  const { data: discountBrackets = [] } = useDiscountBrackets()
+  const { data: bonusBrackets = [] } = useBonusBrackets()
 
   const longPressTimer       = useRef(null)
   const longPressFired       = useRef(false)
@@ -138,8 +133,10 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
       ? Math.round(narxVal * apartment.size + pNarx * pairPartner.size)
       : Math.round(narxVal * apartment.size)
     const pctOfBase = baseTotal > 0 && downVal > 0 ? Math.floor((downVal / baseTotal) * 100) : 0
-    const pctBracket = apartment.is_wc ? null : (CHEGIRMA_BRACKETS.find(p => pctOfBase >= p) ?? null)
-    const chegirma  = (apartment.is_wc || !chegirmaEnabled) ? 0 : (pctBracket ? CHEGIRMA_TABLE[pctBracket] : 0)
+    const sortedDisc = [...discountBrackets].sort((a, b) => b.min_percent - a.min_percent)
+    const activeBracket = apartment.is_wc ? null : (sortedDisc.find(b => pctOfBase >= b.min_percent) ?? null)
+    const pctBracket = activeBracket?.min_percent ?? null
+    const chegirma  = (apartment.is_wc || !chegirmaEnabled) ? 0 : (activeBracket?.discount_usd ?? 0)
     const yakuniy   = narxVal > 0 ? Math.max(0, narxVal - chegirma) : 0
     const yakuniy2  = pNarx > 0   ? Math.max(0, pNarx - chegirma)   : 0
     const total     = isPair
@@ -149,10 +146,11 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
     const qolgan    = Math.max(0, total - downVal)
     const qolganDisplay = qolgan > 0 ? qolgan : (pctOfBase < 100 ? Math.max(0, baseTotal - downVal) : 0)
     const monthly   = qolganDisplay > 0 && months > 0 ? Math.round(qolganDisplay / months) : 0
-    const bonusBracket = BONUS_BRACKETS.find(p => pctOfBase >= p) ?? null
-    const bonus     = (apartment.is_wc || !bonusEnabled) ? null : (bonusBracket ? BONUS_TABLE[bonusBracket] : null)
+    const sortedBonus = [...bonusBrackets].sort((a, b) => b.min_percent - a.min_percent)
+    const activeBonusBracket = sortedBonus.find(b => pctOfBase >= b.min_percent) ?? null
+    const bonus = (apartment.is_wc || !bonusEnabled) ? null : (activeBonusBracket?.items?.length ? activeBonusBracket.items : null)
     return { narxVal, downVal, months, baseTotal, pctOfBase, pctBracket, chegirma, yakuniy, total, percent, qolgan, monthly, bonus }
-  }, [calc.narxM2, calc.boshlangich, calc.oylar, apartment.size, apartment.is_wc, bookWithPair, pairPartner, pairNarxM2, chegirmaEnabled, bonusEnabled])
+  }, [calc.narxM2, calc.boshlangich, calc.oylar, apartment.size, apartment.is_wc, bookWithPair, pairPartner, pairNarxM2, chegirmaEnabled, bonusEnabled, discountBrackets, bonusBrackets])
 
   const { pctBracket: currentBracket } = calcDerived
   useEffect(() => {
@@ -529,24 +527,24 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
             </button>
           </div>
 
-          {!apartment.is_wc && chegirmaEnabled && (
+          {!apartment.is_wc && chegirmaEnabled && discountBrackets.length > 0 && (
             <div className="rounded-2xl border border-border bg-background overflow-hidden shrink-0">
               <div className="px-3 py-1.5 border-b border-border bg-muted/40">
                 <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Chegirma darajalari</p>
               </div>
               <div className="divide-y divide-border/60">
-                {TIERS.map(({ pct, disc }) => {
-                  const isActive  = pctBracket === pct
-                  const isReached = pctOfBase >= pct
-                  const threshold = baseTotal > 0 ? Math.round(baseTotal * pct / 100) : null
+                {[...discountBrackets].sort((a, b) => a.min_percent - b.min_percent).map(({ id, min_percent, discount_usd }) => {
+                  const isActive  = pctBracket === min_percent
+                  const isReached = pctOfBase >= min_percent
+                  const threshold = baseTotal > 0 ? Math.round(baseTotal * min_percent / 100) : null
                   return (
-                    <div key={pct} className={`flex items-center justify-between px-3 py-2 transition-all duration-300 ${isActive ? 'bg-amber-400/15' : ''}`}>
+                    <div key={id} className={`flex items-center justify-between px-3 py-2 transition-all duration-300 ${isActive ? 'bg-amber-400/15' : ''}`}>
                       <div className="flex items-center gap-2 min-w-0">
                         <span className={`w-2 h-2 rounded-full shrink-0 transition-all duration-300 ${isActive ? 'bg-amber-500 shadow-[0_0_6px_2px_rgba(245,158,11,0.5)]' : isReached ? 'bg-emerald-400' : 'bg-border'}`} />
-                        <span className={`text-sm font-bold shrink-0 transition-colors ${isActive ? 'text-amber-700' : isReached ? 'text-emerald-700' : 'text-muted-foreground'}`}>{pct}%</span>
+                        <span className={`text-sm font-bold shrink-0 transition-colors ${isActive ? 'text-amber-700' : isReached ? 'text-emerald-700' : 'text-muted-foreground'}`}>{min_percent}%</span>
                         {threshold && <span className="text-xs text-muted-foreground/70 shrink-0">≥ {threshold.toLocaleString('ru-RU')} $</span>}
                       </div>
-                      <span className={`text-sm font-bold shrink-0 transition-colors ${isActive ? 'text-amber-600' : isReached ? 'text-emerald-600' : 'text-muted-foreground/50'}`}>−{disc} $/m²</span>
+                      <span className={`text-sm font-bold shrink-0 transition-colors ${isActive ? 'text-amber-600' : isReached ? 'text-emerald-600' : 'text-muted-foreground/50'}`}>−{discount_usd} $/m²</span>
                     </div>
                   )
                 })}
@@ -554,15 +552,11 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
             </div>
           )}
 
-          {!apartment.is_wc && bonusEnabled && (() => {
-            const MILESTONES = [
-              { pct: 30,  items: [{ img: imgKonditsioner, name: 'Konditsioner' }] },
-              { pct: 50,  items: [{ img: imgKonditsioner, name: 'Konditsioner' }, { img: imgTV, name: 'TV (43)' }] },
-              { pct: 70,  items: [{ img: imgKonditsioner, name: 'Konditsioner' }, { img: imgMuzlatgich, name: 'Muzlatgich' }] },
-              { pct: 100, items: [{ img: imgKonditsioner, name: 'Konditsioner' }, { img: imgTV, name: 'TV (43)' }, { img: imgMuzlatgich, name: 'Muzlatgich' }] },
-            ]
-            const reachedCount = MILESTONES.filter(m => pctOfBase >= m.pct).length
-            const trackFill = reachedCount <= 1 ? 0 : ((reachedCount - 1) / (MILESTONES.length - 1)) * 100
+          {!apartment.is_wc && bonusEnabled && bonusBrackets.length > 0 && (() => {
+            const milestones = [...bonusBrackets].sort((a, b) => a.min_percent - b.min_percent)
+            const reachedCount = milestones.filter(m => pctOfBase >= m.min_percent).length
+            const trackFill = milestones.length <= 1 || reachedCount <= 1 ? 0 : ((reachedCount - 1) / (milestones.length - 1)) * 100
+            const colW = `${100 / milestones.length}%`
             return (
               <div className="rounded-2xl border border-border bg-background overflow-hidden shrink-0 px-4 pt-4 pb-3">
                 <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-4">Bonus texnikalar</p>
@@ -570,25 +564,27 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
                   <div className="absolute top-5 left-5 right-5 h-0.5 bg-border rounded-full" />
                   <div className="absolute top-5 left-5 h-0.5 bg-linear-to-r from-emerald-400 to-amber-400 rounded-full transition-all duration-700 ease-out"
                     style={{ width: `calc((100% - 40px) * ${trackFill} / 100)` }} />
-                  {MILESTONES.map(({ pct, items }, idx) => {
-                    const reached = pctOfBase >= pct
+                  {milestones.map(({ id, min_percent, items }, idx) => {
+                    const reached = pctOfBase >= min_percent
                     const active  = reachedCount - 1 === idx
                     return (
-                      <div key={pct} className="relative flex flex-col items-center gap-2" style={{ width: '25%' }}>
+                      <div key={id} className="relative flex flex-col items-center gap-2" style={{ width: colW }}>
                         <div className={`relative w-12 h-12 rounded-full flex items-center justify-center font-bold text-sm border-2 transition-all duration-400 ${active ? 'bg-amber-400 border-amber-500 text-white shadow-lg shadow-amber-200/60 scale-110' : reached ? 'bg-emerald-400 border-emerald-500 text-white' : 'bg-muted border-border text-muted-foreground/60'}`}>
-                          {pct}%
+                          {min_percent}%
                           {active && <span className="absolute inset-0 rounded-full animate-ping bg-amber-400 opacity-20" />}
                         </div>
                         <div className="flex flex-wrap justify-center gap-1">
-                          {items.map(item => (
-                            <div key={item.name} className={`w-10 h-10 rounded-xl overflow-hidden border-2 transition-all duration-400 ${active ? 'border-amber-300 shadow-md shadow-amber-100' : reached ? 'border-emerald-300 shadow-sm' : 'border-border opacity-55'}`}>
-                              <img src={item.img} alt={item.name} className="w-full h-full object-cover" loading="lazy" />
+                          {(items ?? []).map(item => (
+                            <div key={item.id} className={`w-10 h-10 rounded-xl overflow-hidden border-2 transition-all duration-400 ${active ? 'border-amber-300 shadow-md shadow-amber-100' : reached ? 'border-emerald-300 shadow-sm' : 'border-border opacity-55'}`}>
+                              {item.image_path
+                                ? <img src={item.image_path} alt={item.name} className="w-full h-full object-cover" loading="lazy" />
+                                : <BonusItemPlaceholder name={item.name} />}
                             </div>
                           ))}
                         </div>
                         <div className="flex flex-col items-center gap-0.5">
-                          {items.map(item => (
-                            <span key={item.name} className={`text-[10px] font-semibold leading-tight text-center transition-colors ${active ? 'text-amber-600' : reached ? 'text-emerald-600' : 'text-muted-foreground/60'}`}>{item.name}</span>
+                          {(items ?? []).map(item => (
+                            <span key={item.id} className={`text-[10px] font-semibold leading-tight text-center transition-colors ${active ? 'text-amber-600' : reached ? 'text-emerald-600' : 'text-muted-foreground/60'}`}>{item.name}</span>
                           ))}
                         </div>
                       </div>
@@ -662,9 +658,11 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
                 <p className="text-xs text-amber-700 mb-1.5">Bonus texnika</p>
                 <div className="flex gap-3">
                   {bonus.map(item => (
-                    <button key={item.name} type="button" onClick={() => setBonusPreview(item)} className="flex flex-col items-center gap-1 group">
+                    <button key={item.id ?? item.name} type="button" onClick={() => setBonusPreview(item)} className="flex flex-col items-center gap-1 group">
                       <div className="w-12 h-12 rounded-xl bg-white shadow-sm overflow-hidden border border-amber-200 group-active:scale-95 transition-transform">
-                        <img src={item.img} alt={item.name} className="w-full h-full object-cover" />
+                        {item.image_path
+                          ? <img src={item.image_path} alt={item.name} className="w-full h-full object-cover" />
+                          : <BonusItemPlaceholder name={item.name} />}
                       </div>
                       <span className="text-[10px] font-medium text-amber-800 text-center leading-tight">{item.name}</span>
                     </button>
@@ -977,7 +975,9 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
       {bonusPreview && (
         <div className="fixed inset-0 z-70 flex items-center justify-center p-6 bg-black/75" onClick={() => setBonusPreview(null)}>
           <div className="relative bg-white rounded-3xl overflow-hidden shadow-2xl max-w-sm w-full" onClick={e => e.stopPropagation()}>
-            <img src={bonusPreview.img} alt={bonusPreview.name} className="w-full aspect-square object-cover" />
+            {bonusPreview.image_path
+              ? <img src={bonusPreview.image_path} alt={bonusPreview.name} className="w-full aspect-square object-cover" />
+              : <div className="w-full aspect-square flex items-center justify-center bg-amber-50"><BonusItemPlaceholder name={bonusPreview.name} large /></div>}
             <div className="px-5 py-4 flex items-center justify-between">
               <p className="text-lg font-bold text-foreground">{bonusPreview.name}</p>
               <span className="text-xs font-semibold text-amber-600 bg-amber-100 px-3 py-1 rounded-full">Bonus</span>

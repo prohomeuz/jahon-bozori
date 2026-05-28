@@ -215,9 +215,9 @@ export function ShartnomaPDF({ apartment, floor, blockId, bolimNum, form, contra
           </Text>
         </View>
         <View style={s.block}>
-          <Text style={s.zh} hyphenationCallback={cjkHyphen}><Text style={s.zhB}>1.4 </Text>{'合同总金额：'}<U>{usd(total)} 美元</U>{'（含增值税），投资方最终取得该房屋完整所有权。'}</Text>
+          <Text style={s.zh} hyphenationCallback={cjkHyphen}><Text style={s.zhB}>1.4 </Text>{'合同总金额：'}<U>{usd(total)} 美元</U>{narxM2 > 0 ? `（含增值税，1㎡ = ${usd(narxM2)} 美元），投资方最终取得该房屋完整所有权。` : '（含增值税），投资方最终取得该房屋完整所有权。'}</Text>
           <Text style={[s.uz, { marginTop: 1 }]}>
-            1.4 Shartnomaning umumiy summasi: <U>{usd(total)} AQSH dollari</U> (QQS bilan birga), Investor yakuniy natijada ushbu ko'chmas mulkka to'liq egalik huquqini oladi.
+            {'1.4 Shartnomaning umumiy summasi: '}<U>{usd(total)} AQSH dollari</U>{narxM2 > 0 ? ` (QQS bilan birga, 1 kv.m = ${usd(narxM2)} AQSH dollari), ` : ' (QQS bilan birga), '}{'Investor yakuniy natijada ushbu ko\'chmas mulkka to\'liq egalik huquqini oladi.'}
           </Text>
         </View>
         <ZhRow

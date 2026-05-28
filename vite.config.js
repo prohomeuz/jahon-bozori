@@ -20,6 +20,7 @@ export default defineConfig({
     allowedHosts: true,
     proxy: {
       '/api': 'http://localhost:3001',
+      '/uploads': 'http://localhost:3001',
     },
   },
   build: {
