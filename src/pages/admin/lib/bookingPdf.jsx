@@ -1,6 +1,5 @@
 import { apiFetch } from '@/shared/lib/auth'
 import { getBolimViewBox, getAptRect, drawHighlight, drawWcHighlight, drawPairHighlight, imgToDataUrl } from '@/shared/lib/canvasHighlight'
-import { BONUS_MAP } from '@/shared/config/bonusConfig'
 
 const allBlockImgs = import.meta.glob('@/assets/blocks/**/*.{png,jpg,webp}', { eager: true })
 
@@ -80,9 +79,20 @@ export async function downloadBookingPDF(b) {
     } catch { floorImgSrc = null }
   }
 
+  let combinedBoshlangich = b.boshlangich
+  let combinedUmumiy = b.umumiy || ''
+  if (partnerBooking) {
+    const b1 = Number(String(b.boshlangich).replace(/\s/g, '')) || 0
+    const b2 = Number(String(partnerBooking.boshlangich).replace(/\s/g, '')) || 0
+    combinedBoshlangich = String(b1 + b2)
+    const u1 = Number(String(b.umumiy || '').replace(/\s/g, '')) || 0
+    const u2 = Number(String(partnerBooking.umumiy || '').replace(/\s/g, '')) || 0
+    if (u1 > 0 || u2 > 0) combinedUmumiy = String(u1 + u2)
+  }
+
   const form = {
     ism: b.ism, familiya: b.familiya, telefon: b.phone || '',
-    boshlangich: b.boshlangich, oylar: String(b.oylar), umumiy: b.umumiy || '',
+    boshlangich: combinedBoshlangich, oylar: String(b.oylar), umumiy: combinedUmumiy,
     narx_m2: b.narx_m2 || '', chegirma_m2: b.chegirma_m2 || '', asl_narx_m2: b.asl_narx_m2 || '',
     passport: b.passport || '', passport_place: b.passport_place || '', manzil: b.manzil || '',
   }
@@ -104,28 +114,6 @@ export async function downloadBookingPDF(b) {
       />
     ).toBlob()
   } else {
-    let bonusItems = []
-    const bonusWasEnabled = b.bonus_enabled === 1 || b.bonus_enabled === '1' || b.bonus_enabled === true
-    if (bonusWasEnabled && effectiveSize > 0) {
-      const chegirmaM2 = Number(String(b.chegirma_m2 || '').replace(/\s/g, '')) || 0
-      const aslNarxM2  = Number(String(b.asl_narx_m2 || '').replace(/\s/g, '')) || 0
-      const baseM2     = chegirmaM2 > 0 && aslNarxM2 > 0
-        ? aslNarxM2
-        : Number(String(b.narx_m2 || '').replace(/\s/g, '')) || 0
-      if (baseM2 > 0) {
-        // Juft bron: boshlangich va umumiy DB da yarmicha saqlanadi → ikkalasini yig'amiz
-        const pBoshlangich = partnerBooking ? Number(String(partnerBooking.boshlangich || '').replace(/\s/g, '')) || 0 : 0
-        const pUmumiy      = partnerBooking ? Number(String(partnerBooking.umumiy      || '').replace(/\s/g, '')) || 0 : 0
-        const downVal   = (Number(String(b.boshlangich || '').replace(/\s/g, '')) || 0) + pBoshlangich
-        const umumiyNum = (Number(String(b.umumiy      || '').replace(/\s/g, '')) || 0) + pUmumiy
-        const baseTotal = Math.round(baseM2 * effectiveSize)
-        const pctOfBase = baseTotal > 0 && downVal > 0
-          ? (umumiyNum > 0 && downVal >= umumiyNum ? 100 : Math.floor((downVal / baseTotal) * 100))
-          : 0
-        const bracket   = [100, 70, 60, 50, 40, 30].find(p => pctOfBase >= p) ?? null
-        bonusItems      = bracket ? (BONUS_MAP[bracket] ?? []).map(name => ({ name })) : []
-      }
-    }
     const [{ ContractPDF }, qrImg, logoSrc] = await Promise.all([
       import('@/pages/bolim/ui/ContractPDF'),
       import('@/assets/qrcode.png'),
@@ -140,7 +128,7 @@ export async function downloadBookingPDF(b) {
         apartment={pdfApartment} floor={floor} blockId={blockId} bolimNum={bolimNum}
         form={form} type={b.type} date={date} floorImgSrc={floorImgSrc}
         qrDataUrl={qrImg.default} managerName={b.manager_name || ''} sourceName={b.source_name || ''}
-        logoSrc={logoSrc} bonusItems={bonusItems}
+        logoSrc={logoSrc}
       />
     ).toBlob()
   }

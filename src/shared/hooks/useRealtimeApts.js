@@ -65,6 +65,10 @@ export function useRealtimeApts() {
         queryClient.setQueryData(['settings'], JSON.parse(rawData))
       }
 
+      if (event === 'discount_brackets_changed') {
+        queryClient.setQueryData(['discount-brackets'], JSON.parse(rawData))
+      }
+
       if (event === 'user_invalidated') {
         window.dispatchEvent(new CustomEvent('user-invalidated', { detail: JSON.parse(rawData) }))
       }

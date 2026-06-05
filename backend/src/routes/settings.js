@@ -15,7 +15,7 @@ app.get('/', requireAuth, (c) => {
 
 app.put('/', requireAuth, requireAdmin, async (c) => {
   const body = await c.req.json()
-  const allowed = ['chegirma_enabled', 'bonus_enabled']
+  const allowed = ['chegirma_enabled']
   for (const key of allowed) {
     if (key in body) {
       q.upsertSetting.run({ key, value: body[key] ? '1' : '0' })
