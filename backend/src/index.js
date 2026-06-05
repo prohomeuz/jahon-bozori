@@ -7,10 +7,6 @@ import { hashPassword, requireAuth } from './auth.js'
 import { broadcast } from './lib/sse.js'
 import { notifyBackupAll, setupTelegramWebhook, checkWebhookHealth } from './lib/telegram.js'
 
-import { createReadStream, existsSync } from 'fs'
-import { join } from 'path'
-import { uploadsDir } from './lib/uploads.js'
-
 import authRoutes             from './routes/auth.js'
 import usersRoutes            from './routes/users.js'
 import apartmentRoutes        from './routes/apartments.js'
@@ -20,7 +16,6 @@ import statsRoutes            from './routes/stats.js'
 import telegramRoutes         from './routes/telegram.js'
 import settingsRoutes         from './routes/settings.js'
 import discountBracketsRoutes from './routes/discount-brackets.js'
-import bonusBracketsRoutes    from './routes/bonus-brackets.js'
 
 const app = new Hono()
 
@@ -40,24 +35,6 @@ app.route('/api',           statsRoutes)
 app.route('/api',           telegramRoutes)
 app.route('/api/settings',          settingsRoutes)
 app.route('/api/discount-brackets', discountBracketsRoutes)
-app.route('/api/bonus-brackets',    bonusBracketsRoutes)
-
-// Static uploads — bonus item images
-app.get('/uploads/:filename', (c) => {
-  const filename = c.req.param('filename')
-  if (filename.includes('..') || filename.includes('/') || filename.includes('\\'))
-    return c.notFound()
-  const filePath = join(uploadsDir, filename)
-  if (!existsSync(filePath)) return c.notFound()
-  const ext = filename.split('.').pop().toLowerCase()
-  const mimes = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', gif: 'image/gif' }
-  return new Response(createReadStream(filePath), {
-    headers: {
-      'Content-Type': mimes[ext] ?? 'image/jpeg',
-      'Cache-Control': 'public, max-age=31536000, immutable',
-    },
-  })
-})
 
 // Legacy endpoint — manager dropdown uses /api/managers, not /api/users/managers
 app.get('/api/managers', requireAuth, (c) => c.json(q.allUsers.all()))

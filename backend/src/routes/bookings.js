@@ -93,13 +93,19 @@ app.post('/', requireAuth, async (c) => {
     passport, manzil, phone, passport_place, narx_m2, chegirma_m2,
     asl_narx_m2, assigned_user_id, pair_with, source_id,
   } = await c.req.json()
-  if (!apartment_id || !type || !ism || !familiya || !boshlangich || !oylar)
+  if (!apartment_id || !type || !ism || !familiya || !boshlangich || !oylar || parseInt(oylar) <= 0)
     return c.json({ error: "Majburiy maydonlar to'ldirilmagan" }, 400)
 
   const chegirmaEnabled = q.getSetting.get({ key: 'chegirma_enabled' })?.value === '1'
-  const bonusEnabledNow = q.getSetting.get({ key: 'bonus_enabled' })?.value === '1'
-  const safe_chegirma_m2   = chegirmaEnabled ? (chegirma_m2   ?? null) : null
-  const safe_asl_narx_m2   = chegirmaEnabled ? (asl_narx_m2   ?? null) : null
+  let safe_chegirma_m2 = null
+  let safe_asl_narx_m2 = null
+  if (chegirmaEnabled && chegirma_m2 != null) {
+    const chegirmaNum = Number(String(chegirma_m2).replace(/\s/g, ''))
+    if (chegirmaNum > 0) {
+      safe_chegirma_m2 = chegirma_m2
+      safe_asl_narx_m2 = asl_narx_m2 ?? null
+    }
+  }
 
   const effective_user_id = assigned_user_id ? parseInt(assigned_user_id) : user.sub
 
@@ -123,23 +129,33 @@ app.post('/', requireAuth, async (c) => {
       const lock = db.prepare("SELECT reason FROM sales_locks WHERE block=? AND bolim=? AND floor=?").get(apt1.block, apt1.bolim, apt1.floor)
       if (lock) { db.exec('ROLLBACK'); return c.json({ error: `Sotuv to'xtatilgan: ${lock.reason}` }, 403) }
 
+      const chegirmaM2Num = Number(String(safe_chegirma_m2 || '').replace(/\s/g, '')) || 0
+
       // apt1 narxi: alohida narx → bolim narxi
       const customPrice1 = q.getAptCustomPrice.get({ apt: apartment_id })
       const priceRow1 = apt1.is_wc ? q.getWcPrice.get({ block: apt1.block, bolim: apt1.bolim, floor: apt1.floor }) : q.getPrice.get({ block: apt1.block, bolim: apt1.bolim, floor: apt1.floor })
       const systemNarxM2_1 = customPrice1?.price ?? (priceRow1?.price ?? (apt1.is_wc ? 2000 : 1000))
+      const frontendNarxNum1 = narx_m2 ? Number(String(narx_m2).replace(/\s/g, '')) : 0
+      const finalNarxM2_1 = frontendNarxNum1 > 0 ? frontendNarxNum1 : systemNarxM2_1
 
-      // apt2 narxi: alohida narx → bolim narxi
+      // apt2 narxi: chegirma bo'lsa apt2 o'z tizim narxidan chegirma ayriladi; custom narxda apt1 bilan bir xil
       const customPrice2 = q.getAptCustomPrice.get({ apt: pair_with })
       const priceRow2 = q.getPrice.get({ block: apt2.block, bolim: apt2.bolim, floor: apt2.floor })
       const systemNarxM2_2 = customPrice2?.price ?? (priceRow2?.price ?? 1000)
+      const finalNarxM2_2 = frontendNarxNum1 > 0
+        ? (chegirmaM2Num > 0 ? Math.max(0, systemNarxM2_2 - chegirmaM2Num) : frontendNarxNum1)
+        : systemNarxM2_2
 
+      const yakuniyM2_1 = frontendNarxNum1 > 0 ? finalNarxM2_1 : Math.max(0, finalNarxM2_1 - chegirmaM2Num)
+      const yakuniyM2_2 = frontendNarxNum1 > 0 ? finalNarxM2_2 : Math.max(0, finalNarxM2_2 - chegirmaM2Num)
+
+      // boshlangich har bir do'konning umumiy narxiga proporsional bo'linadi
       const boshlangichNum = Number(String(boshlangich).replace(/\s/g, '')) || 0
-      const half1 = Math.round(boshlangichNum / 2)
+      const totalPrice1 = yakuniyM2_1 * apt1.size
+      const totalPrice2 = yakuniyM2_2 * apt2.size
+      const combinedTotal = totalPrice1 + totalPrice2
+      const half1 = combinedTotal > 0 ? Math.round(boshlangichNum * totalPrice1 / combinedTotal) : Math.round(boshlangichNum / 2)
       const half2 = boshlangichNum - half1
-
-      const chegirmaM2Num = Number(String(safe_chegirma_m2 || '').replace(/\s/g, '')) || 0
-      const yakuniyM2_1 = systemNarxM2_1 > 0 ? Math.max(0, systemNarxM2_1 - chegirmaM2Num) : 0
-      const yakuniyM2_2 = systemNarxM2_2 > 0 ? Math.max(0, systemNarxM2_2 - chegirmaM2Num) : 0
 
       let umumiy1, umumiy2
       if (yakuniyM2_1 > 0 || yakuniyM2_2 > 0) {
@@ -161,15 +177,14 @@ app.post('/', requireAuth, async (c) => {
         passport: passport ?? null, manzil: manzil ?? null, phone: phone ?? null,
         passport_place: passport_place ?? null,
         chegirma_m2: safe_chegirma_m2, asl_narx_m2: safe_asl_narx_m2,
-        bonus_enabled: bonusEnabledNow ? 1 : 0,
         source_id: source_id ? parseInt(source_id) : null,
       }
 
-      q.insertBooking.run({ ...sharedBase, apartment_id, boshlangich: String(half1), umumiy: umumiy1, narx_m2: String(systemNarxM2_1) })
+      q.insertBooking.run({ ...sharedBase, apartment_id, boshlangich: String(half1), umumiy: umumiy1, narx_m2: String(finalNarxM2_1) })
       const booking1 = q.lastBooking.get()
       db.prepare("UPDATE bookings SET pair_group_id=? WHERE id=?").run(booking1.id, booking1.id)
 
-      q.insertBooking.run({ ...sharedBase, apartment_id: pair_with, boshlangich: String(half2), umumiy: umumiy2, narx_m2: String(systemNarxM2_2) })
+      q.insertBooking.run({ ...sharedBase, apartment_id: pair_with, boshlangich: String(half2), umumiy: umumiy2, narx_m2: String(finalNarxM2_2) })
       const booking2 = q.lastBooking.get()
       db.prepare("UPDATE bookings SET pair_group_id=? WHERE id=?").run(booking1.id, booking2.id)
 
@@ -206,15 +221,17 @@ app.post('/', requireAuth, async (c) => {
     if (apt.status !== 'EMPTY') { db.exec('ROLLBACK'); return c.json({ error: "Do'kon allaqachon band yoki sotilgan" }, 409) }
     const lock = db.prepare("SELECT reason FROM sales_locks WHERE block=? AND bolim=? AND floor=?").get(apt.block, apt.bolim, apt.floor)
     if (lock) { db.exec('ROLLBACK'); return c.json({ error: `Sotuv to'xtatilgan: ${lock.reason}` }, 403) }
+    const customPriceSingle = q.getAptCustomPrice.get({ apt: apartment_id })
     const priceRow = apt.is_wc ? q.getWcPrice.get({ block: apt.block, bolim: apt.bolim, floor: apt.floor }) : q.getPrice.get({ block: apt.block, bolim: apt.bolim, floor: apt.floor })
-    const systemNarxM2 = priceRow?.price ?? (apt.is_wc ? 2000 : 1000)
+    const systemNarxM2 = customPriceSingle?.price ?? (priceRow?.price ?? (apt.is_wc ? 2000 : 1000))
+    const frontendNarxNum = narx_m2 ? Number(String(narx_m2).replace(/\s/g, '')) : 0
+    const finalNarxM2 = frontendNarxNum > 0 ? frontendNarxNum : systemNarxM2
     q.insertBooking.run({
       apartment_id, user_id: effective_user_id, type, ism, familiya,
       boshlangich, oylar: parseInt(oylar), umumiy: umumiy ?? null,
       passport: passport ?? null, manzil: manzil ?? null, phone: phone ?? null,
-      passport_place: passport_place ?? null, narx_m2: String(systemNarxM2),
+      passport_place: passport_place ?? null, narx_m2: String(finalNarxM2),
       chegirma_m2: safe_chegirma_m2, asl_narx_m2: safe_asl_narx_m2,
-      bonus_enabled: bonusEnabledNow ? 1 : 0,
       source_id: source_id ? parseInt(source_id) : null,
     })
     const newStatus = type === 'sotish' ? 'SOLD' : 'RESERVED'

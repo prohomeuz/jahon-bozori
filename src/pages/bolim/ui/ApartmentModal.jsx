@@ -1,9 +1,8 @@
-import { Loader2, RotateCcw, FileText, CheckCircle, X, ChevronDown, Calculator } from 'lucide-react'
+import { Loader2, RotateCcw, FileText, CheckCircle, ChevronDown, Calculator } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { apiFetch, getUser } from '@/shared/lib/auth'
 import { useSettings } from '@/shared/hooks/useSettings'
 import { useDiscountBrackets } from '@/shared/hooks/useDiscountBrackets'
-import { useBonusBrackets } from '@/shared/hooks/useBonusBrackets'
 import { StatusCard } from './StatusCard'
 import { Field, PhoneField, PassportField, FullPhoneNumpad, LABEL, getRawDigits } from './FormFields'
 import { downloadContractPDF, downloadShartnomaPDF } from '../lib/pdfExport.jsx'
@@ -12,16 +11,6 @@ const MUDDAT_STEPS = [36, 48, 60]
 const CALC_KEYS         = ['7','8','9','4','5','6','1','2','3','C','0','⌫']
 const BRON_EMPTY   = { ism: '', familiya: '', telefon: '', boshlangich: '', oylar: '12', umumiy: '', narx_m2: '', chegirma_m2: '', asl_narx_m2: '', source_id: null }
 const SOTISH_EMPTY = { ism: '', familiya: '', telefon: '', boshlangich: '', oylar: '12', umumiy: '', narx_m2: '', passport: '', passport_place: '', manzil: '', source_id: null }
-
-function BonusItemPlaceholder({ name, large }) {
-  const colors = ['bg-amber-100 text-amber-600', 'bg-purple-100 text-purple-600', 'bg-blue-100 text-blue-600', 'bg-emerald-100 text-emerald-600']
-  const color = colors[(name?.charCodeAt(0) ?? 0) % colors.length]
-  return (
-    <div className={`w-full h-full flex items-center justify-center font-bold ${large ? 'text-4xl' : 'text-lg'} ${color}`}>
-      {name?.charAt(0)?.toUpperCase() ?? '?'}
-    </div>
-  )
-}
 
 function playDiscountSound() {
   try {
@@ -59,7 +48,6 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
   const [sotishShowErrors, setSotishShowErrors] = useState(false)
   const [showCalc, setShowCalc]         = useState(false)
   const [narxIsLocked, setNarxIsLocked] = useState(false)
-  const [bonusPreview, setBonusPreview] = useState(null)
   const [calc, setCalc]                 = useState({ narxM2: '', boshlangich: '', oylar: '12', muddatStep: 0, focus: 'boshlangich' })
   const [phoneTarget, setPhoneTarget]   = useState(null)
   const [sendSms, setSendSms]           = useState(false)
@@ -68,9 +56,8 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
   const [bookWithPair, setBookWithPair] = useState(false)
   const [sources, setSources]           = useState([])
 
-  const { chegirmaEnabled, bonusEnabled } = useSettings()
+  const { chegirmaEnabled } = useSettings()
   const { data: discountBrackets = [] } = useDiscountBrackets()
-  const { data: bonusBrackets = [] } = useBonusBrackets()
 
   const longPressTimer       = useRef(null)
   const longPressFired       = useRef(false)
@@ -105,7 +92,7 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
       if (navigator.vibrate) navigator.vibrate(40)
       calcLoadFromDB.current = false
       setNarxIsLocked(false)
-      setCalc({ narxM2: '', boshlangich: '', oylar: '12', muddatStep: 0, focus: 'boshlangich' })
+      setCalc({ narxM2: '', boshlangich: '', oylar: '12', muddatStep: 0, focus: 'narxM2' })
       setShowCalc(true)
     }, 1000)
   }
@@ -128,7 +115,8 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
     const downVal   = Number(String(calc.boshlangich).replace(/\s/g, ''))
     const months    = parseInt(calc.oylar) || 12
     const isPair    = bookWithPair && pairPartner
-    const pNarx     = isPair && pairNarxM2 > 0 ? pairNarxM2 : narxVal
+    // Custom rejimda (narxIsLocked=false) ikkala do'kon ham bir xil custom narxda
+    const pNarx     = isPair && pairNarxM2 > 0 && narxIsLocked ? pairNarxM2 : narxVal
     const baseTotal = isPair
       ? Math.round(narxVal * apartment.size + pNarx * pairPartner.size)
       : Math.round(narxVal * apartment.size)
@@ -136,7 +124,7 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
     const sortedDisc = [...discountBrackets].sort((a, b) => b.min_percent - a.min_percent)
     const activeBracket = apartment.is_wc ? null : (sortedDisc.find(b => pctOfBase >= b.min_percent) ?? null)
     const pctBracket = activeBracket?.min_percent ?? null
-    const chegirma  = (apartment.is_wc || !chegirmaEnabled) ? 0 : (activeBracket?.discount_usd ?? 0)
+    const chegirma  = (apartment.is_wc || !chegirmaEnabled || !narxIsLocked) ? 0 : (activeBracket?.discount_usd ?? 0)
     const yakuniy   = narxVal > 0 ? Math.max(0, narxVal - chegirma) : 0
     const yakuniy2  = pNarx > 0   ? Math.max(0, pNarx - chegirma)   : 0
     const total     = isPair
@@ -146,11 +134,8 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
     const qolgan    = Math.max(0, total - downVal)
     const qolganDisplay = qolgan > 0 ? qolgan : (pctOfBase < 100 ? Math.max(0, baseTotal - downVal) : 0)
     const monthly   = qolganDisplay > 0 && months > 0 ? Math.round(qolganDisplay / months) : 0
-    const sortedBonus = [...bonusBrackets].sort((a, b) => b.min_percent - a.min_percent)
-    const activeBonusBracket = sortedBonus.find(b => pctOfBase >= b.min_percent) ?? null
-    const bonus = (apartment.is_wc || !bonusEnabled) ? null : (activeBonusBracket?.items?.length ? activeBonusBracket.items : null)
-    return { narxVal, downVal, months, baseTotal, pctOfBase, pctBracket, chegirma, yakuniy, total, percent, qolgan, monthly, bonus }
-  }, [calc.narxM2, calc.boshlangich, calc.oylar, apartment.size, apartment.is_wc, bookWithPair, pairPartner, pairNarxM2, chegirmaEnabled, bonusEnabled, discountBrackets, bonusBrackets])
+    return { narxVal, downVal, months, baseTotal, pctOfBase, pctBracket, chegirma, yakuniy, total, percent, qolgan, monthly }
+  }, [calc.narxM2, calc.boshlangich, calc.oylar, apartment.size, apartment.is_wc, bookWithPair, pairPartner, pairNarxM2, narxIsLocked, chegirmaEnabled, discountBrackets])
 
   const { pctBracket: currentBracket } = calcDerived
   useEffect(() => {
@@ -160,7 +145,9 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
       triggerConfetti()
       if (navigator.vibrate) navigator.vibrate([80, 40, 120, 40, 200])
     }
-    prevPctBracket.current = currentBracket
+    if (chegirmaEnabled) {
+      prevPctBracket.current = currentBracket
+    }
   }, [showCalc, currentBracket, triggerConfetti, chegirmaEnabled])
 
   useEffect(() => {
@@ -172,8 +159,13 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
       .then(r => r.json())
       .then(({ price }) => {
         if (!cancelled && price) {
-          setCalc(f => ({ ...f, narxM2: f.narxM2 === '' ? String(price) : f.narxM2 }))
-          setNarxIsLocked(true)
+          setCalc(f => {
+            if (f.narxM2 === '') {
+              setNarxIsLocked(true)
+              return { ...f, narxM2: String(price) }
+            }
+            return f
+          })
         }
       })
       .catch(() => {})
@@ -336,9 +328,6 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
       setBooked({
         form, type, bookingId: booking.id, managerName: effectiveManagerName, sourceName,
         contractNumber: booking.contract_number ?? null,
-        bonusEnabled: booking.bonus_enabled != null
-          ? (booking.bonus_enabled === 1 || booking.bonus_enabled === true)
-          : bonusEnabled,
         createdAt: booking.created_at ?? null,
         pairApartmentAddress: booking.pair_booking ? pairPartner?.address ?? null : null,
         pairApartmentSize:    booking.pair_booking ? pairPartner?.size ?? null : null,
@@ -358,7 +347,7 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
           ? { address: pairPartner.address, size: pairPartner.size } : null
         const pdfPromise = type === 'sotish'
           ? downloadShartnomaPDF({ apartment, floor, blockId, bolimNum, form, bookingId: booking.id, pairApartment: pairApt, contractNumber: booking.contract_number ?? null })
-          : downloadContractPDF({ apartment, floor, blockId, bolimNum, form, type, managerName: effectiveManagerName, sourceName, pairApartment: pairApt, bonusEnabled })
+          : downloadContractPDF({ apartment, floor, blockId, bolimNum, form, type, managerName: effectiveManagerName, sourceName, pairApartment: pairApt })
         pdfPromise
           .then(blob => {
             const fd = new FormData()
@@ -384,7 +373,7 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
         ? { address: booked.pairApartmentAddress, size: booked.pairApartmentSize } : null
       const blob = booked.type === 'sotish'
         ? await downloadShartnomaPDF({ apartment, floor, blockId, bolimNum, form: booked.form, bookingId: booked.bookingId, pairApartment: pairApt, contractNumber: booked.contractNumber ?? null })
-        : await downloadContractPDF({ apartment, floor, blockId, bolimNum, form: booked.form, type: booked.type, managerName: booked.managerName ?? getUser()?.name ?? '', sourceName: booked.sourceName ?? '', pairApartment: pairApt, bonusEnabled: booked.bonusEnabled ?? false, contractDate: booked.createdAt ?? null })
+        : await downloadContractPDF({ apartment, floor, blockId, bolimNum, form: booked.form, type: booked.type, managerName: booked.managerName ?? getUser()?.name ?? '', sourceName: booked.sourceName ?? '', pairApartment: pairApt, contractDate: booked.createdAt ?? null })
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
@@ -475,13 +464,13 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
       if (muddatLongPressTimer.current) { clearTimeout(muddatLongPressTimer.current); muddatLongPressTimer.current = null }
     }
 
-    const { narxVal, downVal, baseTotal, pctOfBase, pctBracket, chegirma, yakuniy, total, percent, monthly, bonus } = calcDerived
+    const { narxVal, downVal, baseTotal, pctOfBase, pctBracket, chegirma, yakuniy, total, percent, monthly } = calcDerived
 
     function transferToForm() {
       const setter = tab === 'sotish' ? setSotishForm : setBronForm
       setter(f => ({
         ...f,
-        narx_m2:     yakuniy ? String(yakuniy) : f.narx_m2,
+        narx_m2:     yakuniy ? String(yakuniy) : '',
         boshlangich: total > 0 && downVal > total ? String(total) : (calc.boshlangich || f.boshlangich),
         oylar:       calc.oylar || f.oylar,
         umumiy:      total ? String(total) : f.umumiy,
@@ -552,49 +541,6 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
             </div>
           )}
 
-          {!apartment.is_wc && bonusEnabled && bonusBrackets.length > 0 && (() => {
-            const milestones = [...bonusBrackets].sort((a, b) => a.min_percent - b.min_percent)
-            const reachedCount = milestones.filter(m => pctOfBase >= m.min_percent).length
-            const trackFill = milestones.length <= 1 || reachedCount <= 1 ? 0 : ((reachedCount - 1) / (milestones.length - 1)) * 100
-            const colW = `${100 / milestones.length}%`
-            return (
-              <div className="rounded-2xl border border-border bg-background overflow-hidden shrink-0 px-4 pt-4 pb-3">
-                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-4">Bonus texnikalar</p>
-                <div className="relative flex justify-between items-start">
-                  <div className="absolute top-5 left-5 right-5 h-0.5 bg-border rounded-full" />
-                  <div className="absolute top-5 left-5 h-0.5 bg-linear-to-r from-emerald-400 to-amber-400 rounded-full transition-all duration-700 ease-out"
-                    style={{ width: `calc((100% - 40px) * ${trackFill} / 100)` }} />
-                  {milestones.map(({ id, min_percent, items }, idx) => {
-                    const reached = pctOfBase >= min_percent
-                    const active  = reachedCount - 1 === idx
-                    return (
-                      <div key={id} className="relative flex flex-col items-center gap-2" style={{ width: colW }}>
-                        <div className={`relative w-12 h-12 rounded-full flex items-center justify-center font-bold text-sm border-2 transition-all duration-400 ${active ? 'bg-amber-400 border-amber-500 text-white shadow-lg shadow-amber-200/60 scale-110' : reached ? 'bg-emerald-400 border-emerald-500 text-white' : 'bg-muted border-border text-muted-foreground/60'}`}>
-                          {min_percent}%
-                          {active && <span className="absolute inset-0 rounded-full animate-ping bg-amber-400 opacity-20" />}
-                        </div>
-                        <div className="flex flex-wrap justify-center gap-1">
-                          {(items ?? []).map(item => (
-                            <div key={item.id} className={`w-10 h-10 rounded-xl overflow-hidden border-2 transition-all duration-400 ${active ? 'border-amber-300 shadow-md shadow-amber-100' : reached ? 'border-emerald-300 shadow-sm' : 'border-border opacity-55'}`}>
-                              {item.image_path
-                                ? <img src={item.image_path} alt={item.name} className="w-full h-full object-cover" loading="lazy" />
-                                : <BonusItemPlaceholder name={item.name} />}
-                            </div>
-                          ))}
-                        </div>
-                        <div className="flex flex-col items-center gap-0.5">
-                          {(items ?? []).map(item => (
-                            <span key={item.id} className={`text-[10px] font-semibold leading-tight text-center transition-colors ${active ? 'text-amber-600' : reached ? 'text-emerald-600' : 'text-muted-foreground/60'}`}>{item.name}</span>
-                          ))}
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-            )
-          })()}
-
           {!apartment.is_wc && narxVal > 0 && chegirma > 0 && (
             <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
               <p className="text-[10px] font-bold text-amber-600 uppercase tracking-widest mb-3">Chegirma faollashdi</p>
@@ -653,23 +599,6 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
                 <p className="text-2xl font-bold text-amber-700">{percent}% <span className="text-sm font-normal">umumiy to'lovdan</span></p>
               </div>
             )}
-            {bonus && (
-              <div className="mt-2 pt-2 border-t border-amber-300">
-                <p className="text-xs text-amber-700 mb-1.5">Bonus texnika</p>
-                <div className="flex gap-3">
-                  {bonus.map(item => (
-                    <button key={item.id ?? item.name} type="button" onClick={() => setBonusPreview(item)} className="flex flex-col items-center gap-1 group">
-                      <div className="w-12 h-12 rounded-xl bg-white shadow-sm overflow-hidden border border-amber-200 group-active:scale-95 transition-transform">
-                        {item.image_path
-                          ? <img src={item.image_path} alt={item.name} className="w-full h-full object-cover" />
-                          : <BonusItemPlaceholder name={item.name} />}
-                      </div>
-                      <span className="text-[10px] font-medium text-amber-800 text-center leading-tight">{item.name}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
         </div>
         <div className="px-5 py-4 border-t border-border shrink-0">
@@ -694,11 +623,14 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
         </button>
       )
     }
-    const down    = Number(String(form.boshlangich || '').replace(/\s/g, ''))
-    const aslNarx = Number(String(form.asl_narx_m2 || '').replace(/\s/g, ''))
-    const narx    = Number(String(form.narx_m2 || '').replace(/\s/g, ''))
-    const baseT   = aslNarx > 0 ? Math.round(aslNarx * effectiveAptSize) : (narx > 0 ? Math.round(narx * effectiveAptSize) : 0)
-    const pct     = baseT > 0 && down > 0 ? Math.min(100, Math.floor((down / baseT) * 100)) : 0
+    const down     = Number(String(form.boshlangich || '').replace(/\s/g, ''))
+    const aslNarx  = Number(String(form.asl_narx_m2 || '').replace(/\s/g, ''))
+    const narx     = Number(String(form.narx_m2 || '').replace(/\s/g, ''))
+    const rawUmumiy = Number(String(form.umumiy || '').replace(/\s/g, ''))
+    const baseT    = rawUmumiy > 0
+      ? rawUmumiy
+      : (aslNarx > 0 ? Math.round(aslNarx * effectiveAptSize) : (narx > 0 ? Math.round(narx * effectiveAptSize) : 0))
+    const pct      = baseT > 0 && down > 0 ? Math.min(100, Math.floor((down / baseT) * 100)) : 0
     return (
       <div className="flex-1 rounded-2xl border-2 border-amber-200 bg-amber-50 px-5 py-4 flex flex-col justify-between">
         <div className="grid grid-cols-3 gap-4">
@@ -877,7 +809,10 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
         </button>
         <div className="w-px h-10 bg-border mx-1 shrink-0" />
         <button onClick={() => {
-          if (showCalc) { setCalc({ narxM2: '', boshlangich: '', oylar: '12', muddatStep: 0, focus: 'boshlangich' }); fetchCalcPrice() }
+          if (showCalc) {
+          setCalc({ narxM2: '', boshlangich: '', oylar: '12', muddatStep: 0, focus: calcLoadFromDB.current ? 'boshlangich' : 'narxM2' })
+          if (calcLoadFromDB.current) fetchCalcPrice()
+        }
           else { setBronForm(BRON_EMPTY); setSotishForm(SOTISH_EMPTY); setSendSms(false) }
         }} className="w-14 h-14 rounded-full flex items-center justify-center text-muted-foreground hover:bg-accent hover:text-foreground transition-colors shrink-0" title="Formani tozalash">
           <RotateCcw size={22} />
@@ -972,22 +907,6 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60" style={{ backdropFilter: 'blur(4px)' }}
       onClick={e => e.target === e.currentTarget && onClose()}>
-      {bonusPreview && (
-        <div className="fixed inset-0 z-70 flex items-center justify-center p-6 bg-black/75" onClick={() => setBonusPreview(null)}>
-          <div className="relative bg-white rounded-3xl overflow-hidden shadow-2xl max-w-sm w-full" onClick={e => e.stopPropagation()}>
-            {bonusPreview.image_path
-              ? <img src={bonusPreview.image_path} alt={bonusPreview.name} className="w-full aspect-square object-cover" />
-              : <div className="w-full aspect-square flex items-center justify-center bg-amber-50"><BonusItemPlaceholder name={bonusPreview.name} large /></div>}
-            <div className="px-5 py-4 flex items-center justify-between">
-              <p className="text-lg font-bold text-foreground">{bonusPreview.name}</p>
-              <span className="text-xs font-semibold text-amber-600 bg-amber-100 px-3 py-1 rounded-full">Bonus</span>
-            </div>
-            <button type="button" onClick={() => setBonusPreview(null)} className="absolute top-3 right-3 w-8 h-8 rounded-full bg-black/40 text-white flex items-center justify-center">
-              <X size={16} />
-            </button>
-          </div>
-        </div>
-      )}
       {innerContent}
     </div>
   )

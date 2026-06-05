@@ -36,13 +36,6 @@ const IP = {
   phone:
     'M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 13a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.62 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92',
   mapPin: ['M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0', 'M12 7a3 3 0 1 0 0 6 3 3 0 0 0 0-6'],
-  gift: [
-    'M20 12v10H4V12',
-    'M2 7h20v5H2z',
-    'M12 22V7',
-    'M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z',
-    'M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z',
-  ],
 }
 
 function Icon({ d, size = 10, color = P.mutedLt }) {
@@ -250,28 +243,6 @@ const s = StyleSheet.create({
   sRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   sText: { fontSize: 7, color: P.muted, lineHeight: 1.6, flex: 1 },
 
-  /* Bonus sidebar section */
-  bonusTitle: {
-    fontFamily: 'Roboto', fontWeight: 700,
-    fontSize: 7,
-    color: P.amber,
-    letterSpacing: 0.5,
-    marginBottom: 4,
-  },
-  bonusRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 4,
-  },
-  bonusDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: P.amber,
-    flexShrink: 0,
-  },
-  bonusName: { fontSize: 8, color: P.fg, fontFamily: 'Roboto', fontWeight: 700, flex: 1 },
 })
 
 /* ── Fingerprint + signature box ─────────────────────── */
@@ -341,7 +312,6 @@ export function ContractPDF({
   sourceName,
   qrDataUrl,
   logoSrc,
-  bonusItems = [],
 }) {
   const [, , apt] = (apartment.address ?? '').split('-')
   const aptNum = apt ?? apartment.address
@@ -378,8 +348,13 @@ export function ContractPDF({
   const oylar = parseInt(form.oylar) || 0
 
   // Chegirma
-  const chegirmaM2 = Number(String(form.chegirma_m2 || '').replace(/\s/g, '')) || 0
   const aslNarxM2 = Number(String(form.asl_narx_m2 || '').replace(/\s/g, '')) || 0
+  const explicitChegirmaM2 = Number(String(form.chegirma_m2 || '').replace(/\s/g, '')) || 0
+  // Fallback: agar chegirma_m2 yo'q bo'lsa, asl_narx_m2 - narx_m2 dan hisoblaymiz
+  const implicitChegirmaM2 = (!explicitChegirmaM2 && aslNarxM2 > 0 && rawNarxM2)
+    ? Math.max(0, aslNarxM2 - Number(rawNarxM2))
+    : 0
+  const chegirmaM2 = explicitChegirmaM2 || implicitChegirmaM2
   const hasChegirma = chegirmaM2 > 0 && aslNarxM2 > 0
   const tejamTotal = hasChegirma ? chegirmaM2 * apartment.size : 0
   const origTotal = hasChegirma ? Math.round(aslNarxM2 * apartment.size) : 0
@@ -627,22 +602,6 @@ export function ContractPDF({
               </View>
             </>
           ) : null}
-
-          {/* Bonus texnikalar */}
-          {bonusItems.length > 0 && (
-            <>
-              <View style={s.divider} />
-              <View style={s.section}>
-                <Text style={s.bonusTitle}>BONUS TEXNIKALAR</Text>
-                {bonusItems.map((item, i) => (
-                  <View key={i} style={s.bonusRow}>
-                    <View style={s.bonusDot} />
-                    <Text style={s.bonusName}>{item.name}</Text>
-                  </View>
-                ))}
-              </View>
-            </>
-          )}
 
           {/* QR code */}
           {qrDataUrl ? (

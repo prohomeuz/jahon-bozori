@@ -1,6 +1,5 @@
 import { getBolimViewBox, getAptRect, drawHighlight, drawWcHighlight, drawPairHighlight, imgToDataUrl } from '@/shared/lib/canvasHighlight'
 import { WC_OVERLAYS } from '../config/hojatxonaOverlays'
-import { BONUS_MAP, BONUS_BRACKETS } from '@/shared/config/bonusConfig'
 
 const allBlockImgs = import.meta.glob('@/assets/blocks/**/*.webp', { eager: true })
 
@@ -50,33 +49,11 @@ export async function downloadShartnomaPDF({ apartment, floor, blockId, bolimNum
   return blob
 }
 
-export async function downloadContractPDF({ apartment, floor, blockId, bolimNum, form, type, managerName, sourceName = '', pairApartment = null, bonusEnabled = true, contractDate = null }) {
+export async function downloadContractPDF({ apartment, floor, blockId, bolimNum, form, type, managerName, sourceName = '', pairApartment = null, contractDate = null }) {
   const { pdf } = await import('@react-pdf/renderer')
   const { ContractPDF } = await import('../ui/ContractPDF')
   const qrImg = await import('@/assets/qrcode.png')
   const qrDataUrl = qrImg.default
-
-  const effectiveSize = pairApartment
-    ? Number((apartment.size + pairApartment.size).toFixed(2))
-    : apartment.size
-
-  const chegirmaM2 = Number(String(form.chegirma_m2 || '').replace(/\s/g, '')) || 0
-  const aslNarxM2  = Number(String(form.asl_narx_m2 || '').replace(/\s/g, '')) || 0
-  let bonusDataItems = []
-  if (bonusEnabled) {
-    const downVal   = Number(String(form.boshlangich || '').replace(/\s/g, '')) || 0
-    const umumiyNum = Number(String(form.umumiy || '').replace(/\s/g, '')) || 0
-    // chegirma bor → asl narxdan, chegirma yo'q → joriy narxdan hisoblash
-    const baseM2    = chegirmaM2 > 0 && aslNarxM2 > 0
-      ? aslNarxM2
-      : Number(String(form.narx_m2 || '').replace(/\s/g, '')) || 0
-    const baseTotal = Math.round(baseM2 * effectiveSize)
-    const pctOfBase = baseTotal > 0 && downVal > 0
-      ? (umumiyNum > 0 && downVal >= umumiyNum ? 100 : Math.floor((downVal / baseTotal) * 100))
-      : 0
-    const bracket   = BONUS_BRACKETS.find(p => pctOfBase >= p) ?? null
-    bonusDataItems  = bracket ? (BONUS_MAP[bracket] ?? []).map(name => ({ name })) : []
-  }
 
   const [logoSrc, rawFloorImg] = await Promise.all([
     imgToDataUrl('/logo.png'),
@@ -106,7 +83,7 @@ export async function downloadContractPDF({ apartment, floor, blockId, bolimNum,
   }
 
   const pdfApartment = pairApartment
-    ? { ...apartment, size: effectiveSize, pairAddress: pairApartment.address }
+    ? { ...apartment, size: Number((apartment.size + pairApartment.size).toFixed(2)), pairAddress: pairApartment.address }
     : apartment
 
   const dateObj = contractDate instanceof Date ? contractDate : (contractDate ? new Date(contractDate) : new Date())
@@ -126,7 +103,6 @@ export async function downloadContractPDF({ apartment, floor, blockId, bolimNum,
       sourceName={sourceName}
       qrDataUrl={qrDataUrl}
       logoSrc={logoSrc}
-      bonusItems={bonusDataItems}
     />
   ).toBlob()
   return blob

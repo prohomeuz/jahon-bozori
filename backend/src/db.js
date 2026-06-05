@@ -105,11 +105,10 @@ try { db.exec(`CREATE TABLE IF NOT EXISTS telegram_subscribers (chat_id TEXT PRI
 try { db.exec(`CREATE TABLE IF NOT EXISTS backup_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)`) } catch {}
 // Sales locks — block/bolim/floor darajasida sotuv to'xtatish
 try { db.exec(`CREATE TABLE IF NOT EXISTS sales_locks (block TEXT NOT NULL, bolim INTEGER NOT NULL, floor INTEGER NOT NULL, reason TEXT NOT NULL, locked_at TEXT NOT NULL, locked_by TEXT NOT NULL, PRIMARY KEY (block, bolim, floor))`) } catch {}
-// Global settings — chegirma_enabled, bonus_enabled va boshqa tizim sozlamalari
+// Global settings — chegirma_enabled va boshqa tizim sozlamalari
 try {
   db.exec(`CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)`)
   db.exec(`INSERT OR IGNORE INTO settings (key, value) VALUES ('chegirma_enabled', '1')`)
-  db.exec(`INSERT OR IGNORE INTO settings (key, value) VALUES ('bonus_enabled', '1')`)
 } catch {}
 
 // Telegram yuborilgan xabarlar — bekor qilinganda o'chirish uchun
@@ -459,43 +458,6 @@ try {
     min_percent  INTEGER NOT NULL UNIQUE,
     discount_usd REAL    NOT NULL DEFAULT 0
   )`)
-  db.exec(`INSERT OR IGNORE INTO discount_brackets (min_percent, discount_usd) VALUES
-    (30,100),(40,150),(50,200),(60,250),(70,300),(100,400)`)
-} catch {}
-
-// Dynamic bonus brackets — admin panelidan sozlanadi
-try {
-  db.exec(`CREATE TABLE IF NOT EXISTS bonus_brackets (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    min_percent INTEGER NOT NULL UNIQUE
-  )`)
-  db.exec(`INSERT OR IGNORE INTO bonus_brackets (min_percent) VALUES
-    (30),(40),(50),(60),(70),(100)`)
-} catch {}
-
-// Bonus items per bracket (max 5, rasmli)
-try {
-  db.exec(`CREATE TABLE IF NOT EXISTS bonus_items (
-    id         INTEGER PRIMARY KEY AUTOINCREMENT,
-    bracket_id INTEGER NOT NULL REFERENCES bonus_brackets(id) ON DELETE CASCADE,
-    name       TEXT    NOT NULL,
-    image_path TEXT,
-    sort_order INTEGER NOT NULL DEFAULT 0,
-    UNIQUE (bracket_id, name)
-  )`)
-  const _seedItem = db.prepare(`
-    INSERT OR IGNORE INTO bonus_items (bracket_id, name, sort_order)
-    SELECT id, :name, :sort_order FROM bonus_brackets WHERE min_percent = :pct
-  `)
-  const seeds = [
-    [30,'Konditsioner',1],
-    [40,'Konditsioner',1],
-    [50,'Konditsioner',1],[50,'TV (43")',2],
-    [60,'Konditsioner',1],[60,'TV (43")',2],
-    [70,'Konditsioner',1],[70,'Muzlatgich',2],
-    [100,'Konditsioner',1],[100,'TV (43")',2],[100,'Muzlatgich',3],
-  ]
-  for (const [pct, name, sort_order] of seeds) _seedItem.run({ pct, name, sort_order })
 } catch {}
 
 // Sotuv shartnomasi raqamlari (HTKH20260504-001 format)
@@ -550,7 +512,7 @@ export const q = {
   `),
 
   // bookings
-  insertBooking:  db.prepare("INSERT INTO bookings (apartment_id,user_id,type,ism,familiya,boshlangich,oylar,umumiy,passport,manzil,phone,passport_place,narx_m2,chegirma_m2,asl_narx_m2,bonus_enabled,source_id,created_at) VALUES (:apartment_id,:user_id,:type,:ism,:familiya,:boshlangich,:oylar,:umumiy,:passport,:manzil,:phone,:passport_place,:narx_m2,:chegirma_m2,:asl_narx_m2,:bonus_enabled,:source_id,datetime('now', '+5 hours'))"),
+  insertBooking:  db.prepare("INSERT INTO bookings (apartment_id,user_id,type,ism,familiya,boshlangich,oylar,umumiy,passport,manzil,phone,passport_place,narx_m2,chegirma_m2,asl_narx_m2,source_id,created_at) VALUES (:apartment_id,:user_id,:type,:ism,:familiya,:boshlangich,:oylar,:umumiy,:passport,:manzil,:phone,:passport_place,:narx_m2,:chegirma_m2,:asl_narx_m2,:source_id,datetime('now', '+5 hours'))"),
   lastBooking:    db.prepare('SELECT b.*, u.name AS manager_name FROM bookings b LEFT JOIN users u ON b.user_id=u.id WHERE b.id=last_insert_rowid()'),
   bookingById:    db.prepare('SELECT b.*, u.telegram_id AS manager_tg_id, u.name AS manager_name FROM bookings b LEFT JOIN users u ON b.user_id=u.id WHERE b.id=:id'),
   allBookings:    db.prepare('SELECT b.*, u.name AS manager_name FROM bookings b LEFT JOIN users u ON b.user_id=u.id WHERE b.cancelled_at IS NULL ORDER BY b.created_at DESC LIMIT :limit OFFSET :offset'),
@@ -636,18 +598,6 @@ export const q = {
   insertDiscountBracket: db.prepare("INSERT INTO discount_brackets (min_percent, discount_usd) VALUES (:min_percent, :discount_usd)"),
   updateDiscountBracket: db.prepare("UPDATE discount_brackets SET min_percent=:min_percent, discount_usd=:discount_usd WHERE id=:id"),
   deleteDiscountBracket: db.prepare("DELETE FROM discount_brackets WHERE id=:id"),
-
-  // bonus brackets + items
-  allBonusBrackets:    db.prepare("SELECT id, min_percent FROM bonus_brackets ORDER BY min_percent ASC"),
-  bonusItemsByBracket: db.prepare("SELECT id, bracket_id, name, image_path, sort_order FROM bonus_items WHERE bracket_id=:bracket_id ORDER BY sort_order ASC"),
-  bonusItemById:       db.prepare("SELECT id, bracket_id, name, image_path FROM bonus_items WHERE id=:id"),
-  countBonusItems:     db.prepare("SELECT COUNT(*) AS n FROM bonus_items WHERE bracket_id=:bracket_id"),
-  insertBonusBracket:  db.prepare("INSERT INTO bonus_brackets (min_percent) VALUES (:min_percent)"),
-  updateBonusBracket:  db.prepare("UPDATE bonus_brackets SET min_percent=:min_percent WHERE id=:id"),
-  deleteBonusBracket:  db.prepare("DELETE FROM bonus_brackets WHERE id=:id"),
-  insertBonusItem:     db.prepare("INSERT INTO bonus_items (bracket_id, name, image_path, sort_order) VALUES (:bracket_id, :name, :image_path, (SELECT COALESCE(MAX(sort_order),0)+1 FROM bonus_items WHERE bracket_id=:bracket_id))"),
-  updateBonusItem:     db.prepare("UPDATE bonus_items SET name=:name, image_path=:image_path WHERE id=:id"),
-  deleteBonusItem:     db.prepare("DELETE FROM bonus_items WHERE id=:id"),
 
   totalByBlock:    db.prepare("SELECT COUNT(*) AS n FROM apartments WHERE block=:block"),
   snapshotByBlock: db.prepare(`
