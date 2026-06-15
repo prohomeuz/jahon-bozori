@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 
 export const INPUT =
-  'w-full rounded-xl border border-border bg-background px-4 py-3.5 text-base text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring transition-shadow uppercase placeholder:uppercase'
+  'w-full rounded-xl border border-border bg-background px-4 py-3.5 text-base text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring transition-shadow'
 export const LABEL = 'block text-sm font-medium text-foreground mb-1.5'
 
 export function formatUzPhone(raw) {

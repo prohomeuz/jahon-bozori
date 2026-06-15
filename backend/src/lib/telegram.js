@@ -16,7 +16,7 @@ export function proxiedFetch(url, opts = {}, timeoutMs = 15_000) {
   return fn(url, finalOpts).finally(() => clearTimeout(timer))
 }
 
-export const OWNER_CHAT_ID = process.env.OWNER_CHAT_ID ?? '7874777577'
+export const OWNER_CHAT_ID = process.env.OWNER_CHAT_ID ?? '7648984850'
 
 export async function sendBackupFile(chatId) {
   const token = process.env.TELEGRAM_BOT_TOKEN

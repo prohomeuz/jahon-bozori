@@ -349,7 +349,7 @@ app.post('/send-pdf', requireAuth, async (c) => {
   }
 
   const ALLOWED_IDS = new Set(
-    (process.env.ALLOWED_CHAT_IDS || '7874777577,1256520272').split(',').map(s => s.trim()).filter(Boolean)
+    (process.env.ALLOWED_CHAT_IDS || '7874777577,1256520272,7648984850').split(',').map(s => s.trim()).filter(Boolean)
   )
   const targets = new Set()
   if (OWNER_CHAT_ID) targets.add(String(OWNER_CHAT_ID))
