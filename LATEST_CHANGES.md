@@ -46,14 +46,14 @@
 
 **Tur:** bugfix
 **Ruxsat:** tasdiqlangan
-**Sabab:** Barcha inputlarga `uppercase` CSS klassi qo'yilgan edi — bu sababli yozilgan matn ekranda katta harfda ko'rinib, shartnomada ham KATTA HARF bilan chiqib ketardi
+**Sabab:** Ism/familiya inputlari form state ga saqlanishidan oldin `.toUpperCase()` chaqirilardi — shu sababli shartnomada KATTA HARF chiqardi
 
 ### O'zgartirilgan fayllar
-- `src/pages/bolim/ui/FormFields.jsx` — `INPUT` konstantasidan `uppercase` va `placeholder:uppercase` olib tashlandi
+- `src/pages/bolim/ui/FormFields.jsx` — `INPUT` konstantasidan `uppercase` va `placeholder:uppercase` CSS olib tashlandi
+- `src/pages/bolim/ui/ApartmentModal.jsx` — `ism`/`familiya` uchun `setBronCap` → `setBron`, `setSotishCap` → `setSotish` ga almashtirildi; yangi `setBron` handler qo'shildi
 
 ### Tafsilotlar
-- Oldin: `'... transition-shadow uppercase placeholder:uppercase'`
-- Keyin: `'... transition-shadow'`
+- Asosiy muammo: `setBronCap` va `setSotishCap` handler'lari `cap()` = `.toUpperCase()` qo'llab form state ga yozardi
 - Natija: Ism/familiya inputda odatdagidek yoziladi → shartnomada ham odatdagi holatda chiqadi (Ikromov Solijon, IKROMOV SOLIJON emas)
 
 ---

@@ -289,6 +289,7 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
   const hasErrors    = Object.keys(activeErrors).length > 0
 
   const cap = (s) => s ? s.toUpperCase() : s
+  const setBron      = (key) => (e) => setBronForm(f => ({ ...f, [key]: e.target.value }))
   const setBronCap   = (key) => (e) => setBronForm(f => ({ ...f, [key]: cap(e.target.value) }))
   const setSotish    = (key) => (e) => setSotishForm(f => ({ ...f, [key]: e.target.value }))
   const setSotishCap = (key) => (e) => setSotishForm(f => ({ ...f, [key]: cap(e.target.value) }))
@@ -691,8 +692,8 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
     <div className="flex flex-1 min-h-0">
       {showCalc ? calcLeftPanel() : (
         <div className="flex flex-col gap-4 px-5 py-4 overflow-y-auto border-r border-border" style={{ flex: '0 0 70%' }}>
-          <Field label="Ism" placeholder="Abdulloh" value={bronForm.ism} onChange={setBronCap('ism')} autoComplete="given-name" error={bronErrors.ism} />
-          <Field label="Familiya" placeholder="Karimov" value={bronForm.familiya} onChange={setBronCap('familiya')} autoComplete="family-name" error={bronErrors.familiya} />
+          <Field label="Ism" placeholder="Abdulloh" value={bronForm.ism} onChange={setBron('ism')} autoComplete="given-name" error={bronErrors.ism} />
+          <Field label="Familiya" placeholder="Karimov" value={bronForm.familiya} onChange={setBron('familiya')} autoComplete="family-name" error={bronErrors.familiya} />
           <PhoneField label="Telefon raqam" value={bronForm.telefon} isOpen={phoneTarget === 'bron'} onOpenNumpad={() => setPhoneTarget('bron')} error={bronErrors.telefon} />
           <button type="button" onClick={() => setSendSms(v => !v)} className="flex items-center gap-3 w-full text-left group">
             <span className={`w-5 h-5 rounded flex items-center justify-center border-2 shrink-0 transition-colors ${sendSms ? 'bg-amber-500 border-amber-500' : 'border-border bg-background'}`}>
@@ -717,8 +718,8 @@ export function ApartmentModal({ apartment, floor, blockId, bolimNum, onClose, o
     <div className="flex flex-1 min-h-0">
       {showCalc ? calcLeftPanel() : (
         <div className="flex flex-col gap-4 px-5 py-4 overflow-y-auto border-r border-border" style={{ flex: '0 0 70%' }}>
-          <Field label="Ism" placeholder="Abdulloh" value={sotishForm.ism} onChange={setSotishCap('ism')} autoComplete="given-name" error={sotishErrors.ism} />
-          <Field label="Familiya" placeholder="Karimov" value={sotishForm.familiya} onChange={setSotishCap('familiya')} autoComplete="family-name" error={sotishErrors.familiya} />
+          <Field label="Ism" placeholder="Abdulloh" value={sotishForm.ism} onChange={setSotish('ism')} autoComplete="given-name" error={sotishErrors.ism} />
+          <Field label="Familiya" placeholder="Karimov" value={sotishForm.familiya} onChange={setSotish('familiya')} autoComplete="family-name" error={sotishErrors.familiya} />
           <PhoneField label="Telefon raqam" value={sotishForm.telefon} isOpen={phoneTarget === 'sotish'} onOpenNumpad={() => setPhoneTarget('sotish')} error={sotishErrors.telefon} />
           <SourceSelector value={sotishForm.source_id} onChange={id => setSotishForm(f => ({ ...f, source_id: id }))} errors={sotishErrors} />
           <FormSummaryCard form={sotishForm} errors={sotishErrors} />
