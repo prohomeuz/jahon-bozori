@@ -34,14 +34,6 @@ const BLOCKS = [
     textY: 2703,
     delay: '2.6s',
   },
-  {
-    id: 'D',
-    label: 'D-BLOK',
-    points: '5405,2348 5405,2256 5312,2203 4598,2136 4571,2229 4651,2282',
-    textX: 4990,
-    textY: 2242,
-    delay: '3.9s',
-  },
 ]
 
 export default function HomePage() {
