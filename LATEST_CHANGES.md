@@ -42,6 +42,29 @@
 
 <!-- Yangi o'zgarishlar eng yuqoridan qo'shib boriladi -->
 
+## [2026-06-16] — D-BLOK genplanga va blok sahifasiga qo'shildi
+
+**Tur:** feature
+**Ruxsat:** tasdiqlangan
+**Sabab:** D-BLOK.html va d.html overlay fayllari asosida D blok genplanga joylashtirildi; bosganda alohida sahifada 5 ta bo'lim ko'rinadi
+
+### O'zgartirilgan fayllar
+- `src/assets/blocks/D-BLOK.webp` — d.html dagi rasm chiqarib olinib, 90° CW aylantirilgan landscape WebP (7021×4967)
+- `src/assets/blocks/D/1/`, `src/assets/blocks/D/2/` — bo'lim qavat rasmlari uchun papkalar yaratildi
+- `src/pages/home/ui/HomePage.jsx` — D blok polygon qo'shildi (genplan overlay)
+- `src/pages/block/config/buildings.js` — D blok viewBox va 5 ta bo'lim polygon qo'shildi
+- `src/pages/block/ui/BlockPage.jsx` — D-BLOK.webp import, BLOCK_META, nav tugmasi qo'shildi
+- `src/pages/bolim/ui/BolimPage.jsx` — D blok image map qo'shildi
+
+### Tafsilotlar
+- Genplan polygon: `5405,2348 5405,2256 5312,2203 4598,2136 4571,2229 4651,2282`
+- D blok viewBox: `0 0 7021 4967`
+- 5 ta bo'lim: 1-bo'lim, 2-bo'lim, 3-bo'lim, 4-bo'lim, 5-bo'lim
+- Bo'lim koordinatalar d.html rekt pozitsiyalaridan 90° CW aylantirib hisoblangan
+- Bo'lim qavat rasmlari (D/1/, D/2/) hali yo'q — keyinroq qo'shiladi
+
+---
+
 ## [2026-06-15] — Shartnomada ism katta harf muammosi tuzatildi
 
 **Tur:** bugfix

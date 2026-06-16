@@ -57,6 +57,8 @@ const bImages1 = import.meta.glob('@/assets/blocks/B/1/*.webp', { eager: true })
 const bImages2 = import.meta.glob('@/assets/blocks/B/2/*.webp', { eager: true })
 const cImages1 = import.meta.glob('@/assets/blocks/C/1/*.webp', { eager: true })
 const cImages2 = import.meta.glob('@/assets/blocks/C/2/*.webp', { eager: true })
+const dImages1 = import.meta.glob('@/assets/blocks/D/1/*.webp', { eager: true })
+const dImages2 = import.meta.glob('@/assets/blocks/D/2/*.webp', { eager: true })
 
 function getImg(map, num) {
   const entry = Object.entries(map).find(([k]) => k.split('/').pop().split('.')[0] === String(num))
@@ -207,8 +209,8 @@ export default function BolimPage() {
 
   const bolimNum = parseInt(num)
 
-  const imgMap1 = blockId === 'B' ? bImages1 : blockId === 'C' ? cImages1 : aImages1
-  const imgMap2 = blockId === 'B' ? bImages2 : blockId === 'C' ? cImages2 : aImages2
+  const imgMap1 = blockId === 'B' ? bImages1 : blockId === 'C' ? cImages1 : blockId === 'D' ? dImages1 : aImages1
+  const imgMap2 = blockId === 'B' ? bImages2 : blockId === 'C' ? cImages2 : blockId === 'D' ? dImages2 : aImages2
   const img1 = getImg(imgMap1, bolimNum)
   const img2 = getImg(imgMap2, bolimNum)
   const currentSrc = activeFloor === 1 ? img1 : img2
