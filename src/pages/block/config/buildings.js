@@ -50,10 +50,10 @@ export const BLOCK_BUILDINGS = {
     { id: 'M', label: "12-bo'lim", delay: '7.2s', textX: 925,  textY: 504,  points: '1157,524 1170,443 1144,391 745,391 748,445 750,529 774,529 777,518 792,518 795,531 829,531 831,516 849,516 855,534 904,531 907,511 954,511 959,531 1086,529 1089,516 1125,518 1125,526' },
   ],
   D: [
-    { id: 'A', label: "1-bo'lim", delay: '0.0s', textX: 5152, textY: 1224, points: '4923,722 5382,722 5382,1725 4923,1725' },
-    { id: 'B', label: "2-bo'lim", delay: '0.6s', textX: 5152, textY: 2348, points: '4923,1846 5382,1846 5382,2851 4923,2851' },
-    { id: 'C', label: "3-bo'lim", delay: '1.2s', textX: 5152, textY: 3515, points: '4923,2983 5382,2983 5382,4048 4923,4048' },
-    { id: 'D', label: "4-bo'lim", delay: '1.8s', textX: 3752, textY: 3946, points: '2822,3831 4683,3831 4683,4061 2822,4061' },
-    { id: 'E', label: "5-bo'lim", delay: '2.4s', textX: 4223, textY: 818,  points: '3764,746 4683,746 4683,891 3764,891' },
+    { id: 'A', label: "1-bo'lim", delay: '0.0s', textX: 1869, textY: 3744, points: '1639,3242 2098,3242 2098,4245 1639,4245' },
+    { id: 'B', label: "2-bo'lim", delay: '0.6s', textX: 1869, textY: 2619, points: '1639,2116 2098,2116 2098,3121 1639,3121' },
+    { id: 'C', label: "3-bo'lim", delay: '1.2s', textX: 1869, textY: 1452, points: '1639,919 2098,919 2098,1984 1639,1984' },
+    { id: 'D', label: "4-bo'lim", delay: '1.8s', textX: 3269, textY: 1021, points: '2338,906 4199,906 4199,1136 2338,1136' },
+    { id: 'E', label: "5-bo'lim", delay: '2.4s', textX: 2798, textY: 4149, points: '2338,4076 3257,4076 3257,4221 2338,4221' },
   ],
 }
