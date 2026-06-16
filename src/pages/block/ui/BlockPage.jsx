@@ -1,6 +1,7 @@
 import ABLOK from '@/assets/blocks/A-BLOK.webp'
 import BBLOK from '@/assets/blocks/B-BLOK.webp'
 import CBLOK from '@/assets/blocks/C-BLOK.webp'
+import DBLOK from '@/assets/blocks/D-BLOK.webp'
 import { useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router'
 import { usePan } from '@/pages/home/lib/usePan'
@@ -16,6 +17,7 @@ const BLOCK_META = {
   A: { label: 'A-BLOK', image: ABLOK },
   B: { label: 'B-BLOK', image: BBLOK },
   C: { label: 'C-BLOK', image: CBLOK },
+  D: { label: 'D-BLOK', image: DBLOK },
 }
 
 export default function BlockPage() {
@@ -141,7 +143,7 @@ export default function BlockPage() {
       </div>
 
       <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-10 flex items-center gap-3">
-        {['A', 'B', 'C'].map((bid) => (
+        {['A', 'B', 'C', 'D'].map((bid) => (
           <button
             key={bid}
             onClick={() => navigate(`/block/${bid}`)}
