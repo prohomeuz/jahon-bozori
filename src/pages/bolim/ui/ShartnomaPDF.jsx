@@ -152,6 +152,8 @@ export function ShartnomaPDF({ apartment, floor, blockId, bolimNum, form, contra
   const aptNum     = (apartment.address ?? '').split('-').pop()
   const pairAptNum = apartment.pairAddress ? apartment.pairAddress.split('-').pop() : null
   const aptLabel   = pairAptNum ? `${aptNum}-${pairAptNum}` : aptNum
+  const unitLabel   = apartment.is_wc ? 'hojatxona' : "do'kon"
+  const unitLabelZh = apartment.is_wc ? '卫生间' : '商铺'
 
   const total   = n(form.umumiy) || (n(form.narx_m2) > 0 && apartment.size > 0 ? Math.round(n(form.narx_m2) * apartment.size) : 0)
   const boshl   = n(form.boshlangich)
@@ -208,10 +210,10 @@ export function ShartnomaPDF({ apartment, floor, blockId, bolimNum, form, contra
           uz="1.2 Ushbu investitsiya loyihasini amalga oshirish uchun Quruvchi o'z vakolatlari doirasida tegishli qurilish tashkilotlarini jalb qiladi; Investor yuqoridagi birgalikda qurilayotgan loyihaga pul mablag'larini kiritishni va ushbu Shartnomada belgilangan shartlar va muddatlarda ko'chmas mulkka egalik huquqini olishni o'z zimmasiga oladi."
         />
         <View style={s.block}>
-          <Text style={s.zh} hyphenationCallback={cjkHyphen}><Text style={s.zhB}>1.3 </Text>{'项目房源：Farg\'ona viloyati, Farg\'ona tumani, Cheksho\'ra MFY, 148号地块建设的亚欧国际商贸中心项目，'}<U>{blockId}-区 {bolimNum}-栋 {floor}-层 {aptLabel}-号商铺，面积 {String(apartment.size)} 平方米</U>{'。'}</Text>
+          <Text style={s.zh} hyphenationCallback={cjkHyphen}><Text style={s.zhB}>1.3 </Text>{'项目房源：Farg\'ona viloyati, Farg\'ona tumani, Cheksho\'ra MFY, 148号地块建设的亚欧国际商贸中心项目，'}<U>{blockId}-区 {bolimNum}-栋 {floor}-层 {aptLabel}-号{unitLabelZh}，面积 {String(apartment.size)} 平方米</U>{'。'}</Text>
           <Text style={[s.uz, { marginTop: 1 }]}>
             1.3 Loyihadagi ko'chmas mulk: Farg'ona viloyati, Farg'ona tumani, Cheksho'ra MFY, 148-uchastkada quriladigan «Yevro-Osiyo xalqaro savdo markazi» loyihasidagi{' '}
-            <U>{blockId}-maydon</U>, <U>{bolimNum}-bino</U>, <U>{floor}-qavat</U>, <U>{aptLabel}-do'kon</U>, maydoni <U>{apartment.size}</U> kv.m.
+            <U>{blockId}-maydon</U>, <U>{bolimNum}-bino</U>, <U>{floor}-qavat</U>, <U>{aptLabel}-{unitLabel}</U>, maydoni <U>{apartment.size}</U> kv.m.
           </Text>
         </View>
         <View style={s.block}>
@@ -420,11 +422,11 @@ export function ShartnomaPDF({ apartment, floor, blockId, bolimNum, form, contra
           <Text style={[s.zh, { textAlign: 'center', marginBottom: 10 }]} hyphenationCallback={cjkHyphen}>合同号 {contractNum}  ·  {fmtD(cd)}</Text>
 
           <View style={s.block}>
-            <Text style={s.zh} hyphenationCallback={cjkHyphen}>{'本人 '}<U>{investorName}</U>{' 确认如下：\n依据'}<U>{fmtD(cd)}</U>{'第'}<U>{contractNum}</U>{'号《投资协议》，费尔干纳地区费尔干纳区 Cheksho\'ra MFY 的 148号地块上建设的"亚欧国际商贸中心"项目中的 '}<U>{blockId}-区 {bolimNum}-栋 {floor}-层 {aptLabel}-号商铺，面积 {String(apartment.size)} 平方米</U>{'，已由本人认购，本人将按协议约定支付全部投资款。'}</Text>
+            <Text style={s.zh} hyphenationCallback={cjkHyphen}>{'本人 '}<U>{investorName}</U>{' 确认如下：\n依据'}<U>{fmtD(cd)}</U>{'第'}<U>{contractNum}</U>{'号《投资协议》，费尔干纳地区费尔干纳区 Cheksho\'ra MFY 的 148号地块上建设的"亚欧国际商贸中心"项目中的 '}<U>{blockId}-区 {bolimNum}-栋 {floor}-层 {aptLabel}-号{unitLabelZh}，面积 {String(apartment.size)} 平方米</U>{'，已由本人认购，本人将按协议约定支付全部投资款。'}</Text>
             <Text style={[s.uz, { marginTop: 3 }]}>
               Men, <U>{investorName}</U>, quyidagilarni tasdiqlayman:{'\n'}
               <U>{cdStr}</U>-<U>{contractNum}</U>-sonli "Investitsiya shartnomasi"ga asosan, Farg'ona viloyati, Farg'ona tumani, Cheksho'ra MFY, 148-uchastkada qurilayotgan «Yevro-Osiyo xalqaro savdo markazi» loyihasidagi{' '}
-              <U>{blockId}-maydon</U>, <U>{bolimNum}-bino</U>, <U>{floor}-qavat</U>, <U>{aptLabel}-do'kon</U>, maydoni <U>{apartment.size}</U> kv.m, men tomonimdan sotib olingan va men ushbu Shartnomaga muvofiq barcha investitsiya to'lovlarini to'liq to'lash majburiyatini o'z zimmasiga olaman.
+              <U>{blockId}-maydon</U>, <U>{bolimNum}-bino</U>, <U>{floor}-qavat</U>, <U>{aptLabel}-{unitLabel}</U>, maydoni <U>{apartment.size}</U> kv.m, men tomonimdan sotib olingan va men ushbu Shartnomaga muvofiq barcha investitsiya to'lovlarini to'liq to'lash majburiyatini o'z zimmasiga olaman.
             </Text>
           </View>
 
