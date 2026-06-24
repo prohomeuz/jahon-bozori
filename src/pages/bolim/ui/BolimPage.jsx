@@ -4,12 +4,14 @@ import { useQuery, useQueryClient, keepPreviousData, useMutation } from '@tansta
 import { usePan } from '@/pages/home/lib/usePan'
 import { useGlobalZoom } from '@/shared/hooks/useGlobalZoom'
 import { useGestureGuard } from '@/shared/hooks/useGestureGuard'
+import { BLOCK_RASTA_BUILDINGS } from '@/pages/block/config/buildings'
 import { A_RECT_OVERLAYS } from '../config/aRectOverlays'
 import { A_FLOOR2_RECT_OVERLAYS } from '../config/aFloor2RectOverlays'
 import { B_RECT_OVERLAYS } from '../config/bRectOverlays'
 import { B_FLOOR2_RECT_OVERLAYS } from '../config/bFloor2RectOverlays'
 import { C_RECT_OVERLAYS } from '../config/cRectOverlays'
 import { C_FLOOR2_RECT_OVERLAYS } from '../config/cFloor2RectOverlays'
+import { D_RECT_OVERLAYS } from '../config/dRectOverlays'
 import { WC_OVERLAYS } from '../config/hojatxonaOverlays'
 import { ApartmentModal } from './ApartmentModal'
 import { AdminButton } from '@/shared/ui/AdminButton'
@@ -57,15 +59,15 @@ const bImages1 = import.meta.glob('@/assets/blocks/B/1/*.webp', { eager: true })
 const bImages2 = import.meta.glob('@/assets/blocks/B/2/*.webp', { eager: true })
 const cImages1 = import.meta.glob('@/assets/blocks/C/1/*.webp', { eager: true })
 const cImages2 = import.meta.glob('@/assets/blocks/C/2/*.webp', { eager: true })
-const dImages1 = import.meta.glob('@/assets/blocks/D/1/*.webp', { eager: true })
-const dImages2 = import.meta.glob('@/assets/blocks/D/2/*.webp', { eager: true })
+const dImages1 = import.meta.glob('@/assets/blocks/D/1/*.{webp,jpg,jpeg,png}', { eager: true })
+const dImagesRasta = import.meta.glob('@/assets/blocks/D/rasta/*.{webp,jpg,jpeg,png}', { eager: true })
 
 function getImg(map, num) {
   const entry = Object.entries(map).find(([k]) => k.split('/').pop().split('.')[0] === String(num))
   return entry ? entry[1].default : null
 }
 
-function PanZoomPane({ src, alt, overlay, aptByAddress, onSelect, ready, wcZone, onWcClick }) {
+function PanZoomPane({ src, alt, overlay, aptByAddress, onSelect, ready, wcZone, onWcClick, onRastaClick }) {
   const ref = useRef(null)
   const { scale } = useGlobalZoom(ref)
   const { pos } = usePan(ref)
@@ -136,14 +138,24 @@ function PanZoomPane({ src, alt, overlay, aptByAddress, onSelect, ready, wcZone,
                     status === 'SOLD'     ? '#b91c1c' :
                     status === 'NOT_SALE' ? '#6b7280' :
                     '#111'
+                  const isRastaRect = !!r.rasta
+                  const rastaBase  = 'rgba(251,191,36,0.18)'
+                  const rastaHover = 'rgba(251,191,36,0.35)'
                   const sharedProps = {
-                    fill: isHovered ? hoverColor : baseColor,
-                    stroke: strokeColor,
-                    strokeWidth: 4,
-                    style: { cursor: apt ? 'pointer' : 'default' },
+                    fill: isRastaRect
+                      ? (isHovered ? rastaHover : rastaBase)
+                      : (isHovered ? hoverColor : baseColor),
+                    stroke: isRastaRect ? 'rgba(251,191,36,0.7)' : strokeColor,
+                    strokeWidth: isRastaRect ? 6 : 4,
+                    strokeDasharray: isRastaRect ? '20 10' : undefined,
+                    style: { cursor: (apt || isRastaRect) ? 'pointer' : 'default' },
                     onMouseEnter: () => setHovered(r.id),
                     onMouseLeave: () => setHovered(null),
-                    onDoubleClick: () => !gesturedRef.current && apt && onSelect?.(apt),
+                    onDoubleClick: () => {
+                      if (gesturedRef.current) return
+                      if (isRastaRect) { onRastaClick?.(); return }
+                      apt && onSelect?.(apt)
+                    },
                   }
                   return r.d
                     ? <path key={r.id} {...sharedProps} d={r.d} />
@@ -208,9 +220,16 @@ export default function BolimPage() {
   const isBlocked = useBlockedState({ hasRealtimeApts: true })
 
   const bolimNum = parseInt(num)
+  const isRastaBolim = blockId === 'D' && bolimNum >= 6
 
-  const imgMap1 = blockId === 'B' ? bImages1 : blockId === 'C' ? cImages1 : blockId === 'D' ? dImages1 : aImages1
-  const imgMap2 = blockId === 'B' ? bImages2 : blockId === 'C' ? cImages2 : blockId === 'D' ? dImages2 : aImages2
+  const imgMap1 = blockId === 'B' ? bImages1
+    : blockId === 'C' ? cImages1
+    : blockId === 'D' ? (isRastaBolim ? dImagesRasta : dImages1)
+    : aImages1
+  const imgMap2 = blockId === 'B' ? bImages2
+    : blockId === 'C' ? cImages2
+    : blockId === 'D' ? (isRastaBolim ? {} : dImagesRasta)
+    : aImages2
   const img1 = getImg(imgMap1, bolimNum)
   const img2 = getImg(imgMap2, bolimNum)
   const currentSrc = activeFloor === 1 ? img1 : img2
@@ -237,7 +256,13 @@ export default function BolimPage() {
     queryFn: () => apiFetch(`/api/apartments?block=${blockId}&bolim=${bolimNum}&floor=${activeFloor}`).then(r => r.json()),
     placeholderData: keepPreviousData,
   })
-  const aptByAddress = Object.fromEntries(apts.map(a => [a.address.split('-').pop(), a]))
+  const aptByAddress = Object.fromEntries(apts.map(a => {
+    const parts = a.address.split('-')
+    // Rasta manzili: D-6-007-A (4 qism) → kalit "007A"
+    // Do'kon manzili: D-1-1001 (3 qism) → kalit "1001"
+    const key = parts.length >= 4 ? parts.slice(2).join('') : parts.pop()
+    return [key, a]
+  }))
 
   const { data: stats } = useQuery({
     queryKey: ['bolim-stats', blockId, bolimNum],
@@ -282,6 +307,7 @@ export default function BolimPage() {
     blockId === 'A' ? (A_RECT_OVERLAYS[bolimNum] ?? null) :
     blockId === 'B' ? (B_RECT_OVERLAYS[bolimNum] ?? null) :
     blockId === 'C' ? (C_RECT_OVERLAYS[bolimNum] ?? null) :
+    blockId === 'D' ? (D_RECT_OVERLAYS[bolimNum] ?? null) :
     null
   const overlay2 =
     blockId === 'A' ? (A_FLOOR2_RECT_OVERLAYS[bolimNum] ?? null) :
@@ -317,7 +343,12 @@ export default function BolimPage() {
           Orqaga
         </button>
         <span className="text-foreground font-semibold text-base">
-          {blockId?.toUpperCase()}-BLOK — {bolimNum}-BO'LIM
+          {blockId?.toUpperCase()}-BLOK —{' '}
+          {(() => {
+            if (blockId !== 'D') return `${bolimNum}-BO'LIM`
+            const rasta = BLOCK_RASTA_BUILDINGS.D?.find(r => r.bolim === bolimNum)
+            return rasta ? `${rasta.label} RASTA` : `${bolimNum}-DO'KON`
+          })()}
         </span>
         <div className="ml-auto">
           <AdminButton />
@@ -386,44 +417,46 @@ export default function BolimPage() {
         </button>
       </div>
 
-      {/* Qavat tanlash */}
-      <div className="fixed bottom-8 right-8 z-50 flex rounded-2xl overflow-hidden shadow-xl border border-border bg-background">
-        <button
-          onClick={() => setActiveFloor(1)}
-          className={[
-            'px-7 py-5 text-base font-bold tracking-widest transition-colors',
-            activeFloor === 1
-              ? 'bg-primary text-primary-foreground'
-              : 'text-muted-foreground hover:text-foreground hover:bg-muted',
-          ].join(' ')}
-        >
-          1-QAVAT
-        </button>
-        <div className="w-px bg-border" />
-        {hasFloor2 ? (
+      {/* Qavat tanlash — rasta uchun yashiriladi */}
+      {!isRastaBolim && (
+        <div className="fixed bottom-8 right-8 z-50 flex rounded-2xl overflow-hidden shadow-xl border border-border bg-background">
           <button
-            onClick={() => setActiveFloor(2)}
+            onClick={() => setActiveFloor(1)}
             className={[
               'px-7 py-5 text-base font-bold tracking-widest transition-colors',
-              activeFloor === 2
+              activeFloor === 1
                 ? 'bg-primary text-primary-foreground'
                 : 'text-muted-foreground hover:text-foreground hover:bg-muted',
             ].join(' ')}
           >
-            2-QAVAT
+            1-QAVAT
           </button>
-        ) : (
-          <button
-            disabled
-            className="px-7 py-5 text-base font-bold tracking-widest text-muted-foreground/40 cursor-not-allowed flex items-center gap-2"
-          >
-            2-QAVAT
-            <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-muted text-muted-foreground uppercase tracking-wider">
-              Tez kunda
-            </span>
-          </button>
-        )}
-      </div>
+          <div className="w-px bg-border" />
+          {hasFloor2 ? (
+            <button
+              onClick={() => setActiveFloor(2)}
+              className={[
+                'px-7 py-5 text-base font-bold tracking-widest transition-colors',
+                activeFloor === 2
+                  ? 'bg-primary text-primary-foreground'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-muted',
+              ].join(' ')}
+            >
+              2-QAVAT
+            </button>
+          ) : (
+            <button
+              disabled
+              className="px-7 py-5 text-base font-bold tracking-widest text-muted-foreground/40 cursor-not-allowed flex items-center gap-2"
+            >
+              2-QAVAT
+              <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-muted text-muted-foreground uppercase tracking-wider">
+                Tez kunda
+              </span>
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Kontent */}
       <div className="relative flex flex-col flex-1 overflow-hidden bg-background">
@@ -508,6 +541,7 @@ export default function BolimPage() {
     </div>
   )
 }
+
 
 const WC_STATUS_COLOR = {
   EMPTY:    { bg: 'bg-emerald-100', text: 'text-emerald-700', border: 'border-emerald-200', dot: 'bg-emerald-500' },

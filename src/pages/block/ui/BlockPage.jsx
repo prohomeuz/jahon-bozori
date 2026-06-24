@@ -7,7 +7,7 @@ import { useNavigate, useParams } from 'react-router'
 import { usePan } from '@/pages/home/lib/usePan'
 import { useGlobalZoom } from '@/shared/hooks/useGlobalZoom'
 import { useGestureGuard } from '@/shared/hooks/useGestureGuard'
-import { BLOCK_BUILDINGS, BLOCK_VIEW_BOX } from '../config/buildings'
+import { BLOCK_BUILDINGS, BLOCK_VIEW_BOX, BLOCK_RASTA_BUILDINGS } from '../config/buildings'
 import { imgCache } from '@/shared/lib/imgCache'
 import { AdminButton } from '@/shared/ui/AdminButton'
 import { useBlockedState } from '@/shared/hooks/useBlockedState'
@@ -29,6 +29,7 @@ export default function BlockPage() {
   const [imgLoaded, setImgLoaded] = useState(() => imgCache.has(meta?.image))
   const [hovered, setHovered] = useState(null)
   const buildings = BLOCK_BUILDINGS[blockId] ?? []
+  const rastas = BLOCK_RASTA_BUILDINGS[blockId] ?? []
   const viewBox = BLOCK_VIEW_BOX[blockId] ?? '0 0 1597 672'
   const vbScale = parseInt(viewBox.split(' ')[2]) / 1376
 
@@ -121,6 +122,57 @@ export default function BlockPage() {
                   pointerEvents="none"
                 >
                   {num}
+                </text>
+              </g>
+            )
+          })}
+          {rastas.map((r) => {
+            const isHov = hovered === r.id
+            return (
+              <g key={r.id}>
+                <polygon
+                  points={r.points}
+                  fill="none"
+                  stroke="rgba(255,255,255,0.45)"
+                  strokeWidth={4 * vbScale}
+                  strokeLinejoin="round"
+                  pointerEvents="none"
+                />
+                <polygon
+                  points={r.points}
+                  fill={isHov ? 'white' : 'black'}
+                  fillOpacity={isHov ? 0.08 : undefined}
+                  stroke="rgba(0,0,0,0.75)"
+                  strokeOpacity={1}
+                  strokeWidth={1}
+                  strokeLinejoin="round"
+                  className={isHov ? '' : 'block-pulse'}
+                  style={{ cursor: 'pointer', animationDelay: r.delay ?? '0s' }}
+                  onMouseEnter={() => setHovered(r.id)}
+                  onMouseLeave={() => setHovered(null)}
+                  onClick={() => { if (!gesturedRef.current) navigate(`/block/${blockId}/bolim/${r.bolim}`) }}
+                />
+                <circle
+                  cx={r.textX}
+                  cy={r.textY}
+                  r={Math.round(22 * vbScale)}
+                  fill="rgba(0,0,0,0.55)"
+                  stroke="rgba(255,255,255,0.25)"
+                  strokeWidth={1.5 * vbScale}
+                  pointerEvents="none"
+                />
+                <text
+                  x={r.textX}
+                  y={r.textY}
+                  textAnchor="middle"
+                  dominantBaseline="middle"
+                  fontSize={Math.round(14 * vbScale)}
+                  fontWeight="700"
+                  fontFamily="ui-monospace, monospace"
+                  fill="white"
+                  pointerEvents="none"
+                >
+                  {r.label}
                 </text>
               </g>
             )
