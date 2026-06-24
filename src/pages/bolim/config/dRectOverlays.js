@@ -114,8 +114,9 @@ export const D_RECT_OVERLAYS = {
     ],
   },
   // 4-do'kon
-  // Ustki qator (y≈2-5): 4001(x=98,chap) → 4013(x=1182,o'ng), keyin 4030,4029 burchak
-  // Pastki qator (y≈160): 4028(x=96,chap) → 4016(x=1182,o'ng), keyin 4015,4014 burchak
+  // Ustki qator (y≈2-5): 4001(x=98,chap) → 4013(x=1182,o'ng)
+  // Pastki qator (y≈160): 4028(x=96,chap) → 4016(x=1182,o'ng)
+  // Chap ustun (x=1-4): 4015(y=5), 4029(y=109), 4030(y=162), 4014(y=210)
   4: {
     viewBox: "0 0 1280 318",
     rects: [
@@ -132,7 +133,7 @@ export const D_RECT_OVERLAYS = {
       { id: "4011", x: 1003, y: 5,   width: 87,  height: 155 },
       { id: "4012", x: 1092, y: 2,   width: 90,  height: 157 },
       { id: "4013", x: 1182, y: 5,   width: 92,  height: 155 },
-      { id: "4030", x: 4,    y: 5,   width: 92,  height: 102 },
+      { id: "4015", x: 4,    y: 5,   width: 92,  height: 102 },
       { id: "4029", x: 1,    y: 109, width: 94,  height: 51  },
       { id: "4028", x: 96,   y: 160, width: 92,  height: 152 },
       { id: "4027", x: 188,  y: 160, width: 90,  height: 152 },
@@ -147,20 +148,20 @@ export const D_RECT_OVERLAYS = {
       { id: "4018", x: 1001, y: 160, width: 90,  height: 152 },
       { id: "4017", x: 1090, y: 160, width: 94,  height: 152 },
       { id: "4016", x: 1182, y: 160, width: 92,  height: 152 },
-      { id: "4015", x: 1,    y: 162, width: 92,  height: 46  },
+      { id: "4030", x: 1,    y: 162, width: 92,  height: 46  },
       { id: "4014", x: 4,    y: 210, width: 90,  height: 102 },
     ],
   },
-  // 5-do'kon
+  // 5-do'kon: chapdan o'ngga 5006, 5005, 5004, 5003, 5002, 5007
   5: {
     viewBox: "0 0 1280 391",
     rects: [
-      { id: "5001", x: 1054, y: 12, width: 215, height: 368 },
-      { id: "5002", x: 846, y: 15, width: 208, height: 363 },
-      { id: "5003", x: 640, y: 12, width: 203, height: 363 },
-      { id: "5004", x: 437, y: 12, width: 198, height: 363 },
-      { id: "5005", x: 233, y: 12, width: 198, height: 365 },
-      { id: "5006", x: 13, y: 12, width: 215, height: 368 },
+      { id: "5006", x: 13,   y: 12, width: 215, height: 368 },
+      { id: "5005", x: 233,  y: 12, width: 198, height: 365 },
+      { id: "5004", x: 437,  y: 12, width: 198, height: 363 },
+      { id: "5003", x: 640,  y: 12, width: 203, height: 363 },
+      { id: "5002", x: 846,  y: 15, width: 208, height: 363 },
+      { id: "5007", x: 1054, y: 12, width: 215, height: 368 },
     ],
   },
 
