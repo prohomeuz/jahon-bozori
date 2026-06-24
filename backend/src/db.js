@@ -1141,6 +1141,15 @@ try {
   }
 } catch {}
 
+// D-blok 1-5 do'konlar narxini 1800$/m² ga o'zgartirish (2026-06)
+try {
+  const _chk5 = db.prepare("SELECT 1 FROM prices WHERE block='D' AND bolim=1 AND floor=1 AND price=1800").get()
+  if (!_chk5) {
+    const _uprice = db.prepare("INSERT OR REPLACE INTO prices (block, bolim, floor, price) VALUES (?, ?, ?, 1800)")
+    for (let bolim = 1; bolim <= 5; bolim++) _uprice.run('D', bolim, 1)
+  }
+} catch {}
+
 // Sotuv shartnomasi raqamlari (HTKH20260504-001 format)
 db.exec(`CREATE TABLE IF NOT EXISTS contract_numbers (
   id      INTEGER PRIMARY KEY AUTOINCREMENT,
