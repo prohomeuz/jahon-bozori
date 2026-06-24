@@ -977,6 +977,27 @@ try {
   }
 } catch {}
 
+// B-blok 1-qavat B-9/B-12/B-13 ikkinchi qatorlar razmerlarini to'g'rilash (2026-06)
+try {
+  const _chk2 = db.prepare("SELECT 1 FROM apartments WHERE id='B-12-119' AND size=16.8").get()
+  if (!_chk2) {
+    const _u2 = db.prepare('UPDATE apartments SET size=? WHERE id=?')
+    const _fixes = [
+      ['B-9-119',22.22],['B-9-130',39.85],
+      ['B-12-119',16.8],['B-12-120',21.88],['B-12-121',22.29],['B-12-122',22.31],
+      ['B-12-123',22.31],['B-12-124',22.31],['B-12-125',22.31],['B-12-126',22.31],
+      ['B-12-127',20.53],['B-12-128',20.44],['B-12-129',22.97],['B-12-130',20.38],
+      ['B-12-131',22.31],['B-12-132',22.31],['B-12-133',22.31],['B-12-134',22.31],
+      ['B-12-135',22.67],['B-12-136',21.42],
+      ['B-13-118',21.34],['B-13-119',22.59],['B-13-120',22.22],['B-13-121',22.31],
+      ['B-13-122',22.31],['B-13-123',22.31],['B-13-124',20.38],['B-13-125',22.97],
+      ['B-13-126',22.2],['B-13-127',22.31],['B-13-128',22.31],['B-13-129',22.31],
+      ['B-13-130',22.22],['B-13-131',22.2],['B-13-132',21.72],
+    ]
+    for (const [id, size] of _fixes) _u2.run(size, id)
+  }
+} catch {}
+
 // Sotuv shartnomasi raqamlari (HTKH20260504-001 format)
 db.exec(`CREATE TABLE IF NOT EXISTS contract_numbers (
   id      INTEGER PRIMARY KEY AUTOINCREMENT,
