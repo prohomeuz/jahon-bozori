@@ -1,5 +1,7 @@
 // Canvas-based floor plan highlight utilities shared between bolim and admin pages.
 
+const _dLoader = () => import('@/pages/bolim/config/dRectOverlays').then(m => m.D_RECT_OVERLAYS)
+
 const OVERLAY_LOADERS = {
   A: [
     () => import('@/pages/bolim/config/aRectOverlays').then(m => m.A_RECT_OVERLAYS),
@@ -13,6 +15,7 @@ const OVERLAY_LOADERS = {
     () => import('@/pages/bolim/config/cRectOverlays').then(m => m.C_RECT_OVERLAYS),
     () => import('@/pages/bolim/config/cFloor2RectOverlays').then(m => m.C_FLOOR2_RECT_OVERLAYS),
   ],
+  D: [_dLoader, _dLoader],
 }
 
 export async function getBolimViewBox(blockId, floor, bolimNum) {
@@ -27,7 +30,9 @@ export async function getAptRect(blockId, floor, bolimNum, address) {
     const overlays = await OVERLAY_LOADERS[blockId]?.[floor === 2 ? 1 : 0]?.()
     const bolimData = overlays?.[bolimNum]
     if (!bolimData) return null
-    const rect = bolimData.rects?.find(r => r.id === address)
+    // D blok overlay ID-lari qisqa format: "1001", "001A" — address emas
+    const lookupId = blockId === 'D' ? address.split('-').slice(2).join('') : address
+    const rect = bolimData.rects?.find(r => r.id === lookupId || r.id === address)
     return rect ? { rect, viewBox: bolimData.viewBox } : null
   } catch { return null }
 }

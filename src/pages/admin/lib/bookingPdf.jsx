@@ -18,7 +18,10 @@ function loadImg(blockId, floor, bolimNum) {
 export async function downloadBookingPDF(b) {
   const [blockId, bolimStr, aptStr] = b.apartment_id.split('-')
   const bolimNum = parseInt(bolimStr)
-  const floor    = aptStr ? parseInt(aptStr[0]) : 1
+  // D blok: do'konlar (1-5) rasmlari D/1/ papkasida, rastalar D/rasta/ papkasida
+  const floor = blockId === 'D'
+    ? (bolimNum <= 5 ? 1 : 'rasta')
+    : (aptStr ? parseInt(aptStr[0]) : 1)
 
   let partnerBooking = null
   if (b.pair_group_id) {
