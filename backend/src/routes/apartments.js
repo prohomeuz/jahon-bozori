@@ -6,7 +6,43 @@ import { proxiedFetch } from '../lib/telegram.js'
 
 const app = new Hono()
 
-// ─── BOLIMS / FLOORS ───────────���────────────────────��────────────────────────
+// ─── ONE-TIME SIZE FIX (B block 2-qavat uglovoy) ────────────────────────────
+app.post('/apartments/fix-sizes', requireAuth, requireAdmin, (c) => {
+  const FIXES = [
+    { id: 'B-4-201',  size: 10.65 }, { id: 'B-4-219',  size: 11.92 },
+    { id: 'B-4-220',  size: 14.49 }, { id: 'B-4-239',  size: 14.75 },
+    { id: 'B-5-201',  size: 11.92 }, { id: 'B-5-217',  size: 10.65 },
+    { id: 'B-5-218',  size: 14.75 }, { id: 'B-5-235',  size: 14.49 },
+    { id: 'B-7-201',  size: 14.49 }, { id: 'B-7-219',  size: 11.92 },
+    { id: 'B-7-220',  size: 14.49 }, { id: 'B-7-238',  size: 14.75 },
+    { id: 'B-8-201',  size: 11.92 }, { id: 'B-8-217',  size: 14.49 },
+    { id: 'B-8-218',  size: 14.75 }, { id: 'B-8-234',  size: 14.49 },
+    { id: 'B-10-201', size: 10.65 }, { id: 'B-10-220', size: 11.92 },
+    { id: 'B-10-221', size: 14.49 }, { id: 'B-10-239', size: 14.75 },
+    { id: 'B-11-201', size: 11.92 }, { id: 'B-11-218', size: 10.65 },
+    { id: 'B-11-219', size: 14.75 }, { id: 'B-11-235', size: 14.49 },
+    { id: 'B-12-201', size: 15.03 }, { id: 'B-12-219', size: 12.20 },
+    { id: 'B-12-220', size: 15.03 }, { id: 'B-12-236', size: 15.03 },
+    { id: 'B-13-201', size: 12.20 }, { id: 'B-13-217', size: 15.15 },
+    { id: 'B-13-218', size: 15.03 }, { id: 'B-13-232', size: 15.15 },
+  ]
+  const upd = db.prepare('UPDATE apartments SET size=? WHERE id=?')
+  const results = []
+  db.exec('BEGIN')
+  try {
+    for (const { id, size } of FIXES) {
+      const r = upd.run(size, id)
+      results.push({ id, size, updated: r.changes > 0 })
+    }
+    db.exec('COMMIT')
+  } catch (e) {
+    db.exec('ROLLBACK')
+    return c.json({ error: e.message }, 500)
+  }
+  return c.json({ ok: true, results })
+})
+
+// ─── BOLIMS / FLOORS ───────────────────────────────────────────────────────
 
 app.get('/bolims', (c) => {
   const block = c.req.query('block')
