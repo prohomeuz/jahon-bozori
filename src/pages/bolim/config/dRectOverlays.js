@@ -113,46 +113,46 @@ export const D_RECT_OVERLAYS = {
       { id: "3017", x: 1674, y: 204, width: 107, height: 189 },
     ],
   },
-  // 4-do'kon (4.html dan aynan olingan)
-  // USTKI QATOR (y≈2-5) chap→o'ng: 4016,4017,...,4028
-  // PASTKI QATOR (y=160) chap→o'ng: 4013,4012,...,4001
-  // CHAP TOR USTUN: 4015(y=5), 4029(y=109), 4030(y=162), 4014(y=210)
+  // 4-do'kon (4dokonn.html dan olingan to'g'ri koordinatalar)
+  // PASTKI QATOR (y≈337): 4001(o'ng) → 4013(chap)
+  // USTKI QATOR  (y≈29):  4016(chap) → 4028(o'ng)
+  // CHAP USTUN: 4015(y=34), 4029(y=238), 4030(y=347), 4014(y=446)
   4: {
-    viewBox: "0 0 1280 318",
+    viewBox: "0 0 2620 684",
     rects: [
-      // USTKI QATOR — chap→o'ng (4016...4028)
-      { id: "4016", x: 98,   y: 5,   width: 87,  height: 157 },
-      { id: "4017", x: 185,  y: 2,   width: 90,  height: 157 },
-      { id: "4018", x: 279,  y: 5,   width: 90,  height: 155 },
-      { id: "4019", x: 371,  y: 2,   width: 90,  height: 157 },
-      { id: "4020", x: 461,  y: 2,   width: 87,  height: 155 },
-      { id: "4021", x: 550,  y: 2,   width: 90,  height: 155 },
-      { id: "4022", x: 642,  y: 2,   width: 87,  height: 157 },
-      { id: "4023", x: 730,  y: 2,   width: 90,  height: 157 },
-      { id: "4024", x: 821,  y: 2,   width: 87,  height: 157 },
-      { id: "4025", x: 911,  y: 5,   width: 90,  height: 155 },
-      { id: "4026", x: 1003, y: 5,   width: 87,  height: 155 },
-      { id: "4027", x: 1092, y: 2,   width: 90,  height: 157 },
-      { id: "4028", x: 1182, y: 5,   width: 92,  height: 155 },
-      // PASTKI QATOR — chap→o'ng (4013→4001)
-      { id: "4013", x: 96,   y: 160, width: 92,  height: 152 },
-      { id: "4012", x: 188,  y: 160, width: 90,  height: 152 },
-      { id: "4011", x: 277,  y: 160, width: 92,  height: 155 },
-      { id: "4010", x: 367,  y: 160, width: 90,  height: 155 },
-      { id: "4009", x: 459,  y: 160, width: 90,  height: 152 },
-      { id: "4008", x: 548,  y: 160, width: 90,  height: 152 },
-      { id: "4007", x: 638,  y: 160, width: 90,  height: 152 },
-      { id: "4006", x: 730,  y: 160, width: 90,  height: 152 },
-      { id: "4005", x: 819,  y: 160, width: 87,  height: 152 },
-      { id: "4004", x: 909,  y: 162, width: 92,  height: 148 },
-      { id: "4003", x: 1001, y: 160, width: 90,  height: 152 },
-      { id: "4002", x: 1090, y: 160, width: 94,  height: 152 },
-      { id: "4001", x: 1182, y: 160, width: 92,  height: 152 },
-      // CHAP TOR USTUN — yuqoridan pastga
-      { id: "4015", x: 4,    y: 5,   width: 92,  height: 102 },
-      { id: "4029", x: 1,    y: 109, width: 94,  height: 51  },
-      { id: "4030", x: 1,    y: 162, width: 92,  height: 46  },
-      { id: "4014", x: 4,    y: 210, width: 90,  height: 102 },
+      // PASTKI QATOR — o'ngdan chapga (4001...4013)
+      { id: "4001", x: 2402, y: 337, width: 189, height: 318 },
+      { id: "4002", x: 2218, y: 342, width: 184, height: 308 },
+      { id: "4003", x: 2034, y: 337, width: 184, height: 318 },
+      { id: "4004", x: 1851, y: 337, width: 184, height: 313 },
+      { id: "4005", x: 1672, y: 337, width: 174, height: 313 },
+      { id: "4006", x: 1494, y: 337, width: 179, height: 313 },
+      { id: "4007", x: 1305, y: 337, width: 189, height: 313 },
+      { id: "4008", x: 1121, y: 342, width: 184, height: 303 },
+      { id: "4009", x: 943,  y: 337, width: 179, height: 313 },
+      { id: "4010", x: 759,  y: 342, width: 179, height: 313 },
+      { id: "4011", x: 576,  y: 342, width: 179, height: 308 },
+      { id: "4012", x: 397,  y: 337, width: 179, height: 308 },
+      { id: "4013", x: 213,  y: 342, width: 184, height: 308 },
+      // USTKI QATOR — chapdan o'ngga (4016...4028)
+      { id: "4016", x: 213,  y: 34,  width: 179, height: 308 },
+      { id: "4017", x: 397,  y: 34,  width: 179, height: 308 },
+      { id: "4018", x: 581,  y: 34,  width: 179, height: 303 },
+      { id: "4019", x: 764,  y: 34,  width: 179, height: 303 },
+      { id: "4020", x: 948,  y: 34,  width: 174, height: 303 },
+      { id: "4021", x: 1126, y: 29,  width: 179, height: 308 },
+      { id: "4022", x: 1310, y: 29,  width: 174, height: 313 },
+      { id: "4023", x: 1484, y: 29,  width: 189, height: 308 },
+      { id: "4024", x: 1672, y: 29,  width: 184, height: 308 },
+      { id: "4025", x: 1861, y: 29,  width: 174, height: 308 },
+      { id: "4026", x: 2039, y: 29,  width: 179, height: 308 },
+      { id: "4027", x: 2223, y: 29,  width: 179, height: 308 },
+      { id: "4028", x: 2402, y: 29,  width: 189, height: 313 },
+      // CHAP USTUN — yuqoridan pastga
+      { id: "4015", x: 30,   y: 34,  width: 179, height: 203 },
+      { id: "4029", x: 30,   y: 238, width: 184, height: 104 },
+      { id: "4030", x: 30,   y: 347, width: 184, height: 99  },
+      { id: "4014", x: 30,   y: 446, width: 179, height: 203 },
     ],
   },
   // 5-do'kon: chapdan o'ngga 5006, 5005, 5004, 5003, 5002, 5007
