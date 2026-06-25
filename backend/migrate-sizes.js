@@ -1,8 +1,18 @@
 import 'dotenv/config'
-import { db } from './src/db.js'
+import { DatabaseSync } from 'node:sqlite'
+import { join, dirname } from 'path'
+import { fileURLToPath } from 'url'
 
-// B block 2-qavat uglovoy do'kon razmerlarini to'g'irlash
-// PDF "B区二层平面图 (2).pdf" dan olingan haqiqiy m² qiymatlar
+const __dirname = dirname(fileURLToPath(import.meta.url))
+const dbPath = process.env.DB_PATH ?? join(__dirname, '../db.sqlite')
+
+console.log('DB path:', dbPath)
+
+const db = new DatabaseSync(dbPath)
+
+db.exec('PRAGMA journal_mode = WAL')
+db.exec('PRAGMA foreign_keys = ON')
+
 const CORRECTIONS = [
   // B-4 bolim
   { id: 'B-4-201',  size: 10.65 },
@@ -46,7 +56,21 @@ const CORRECTIONS = [
   { id: 'B-13-232', size: 15.15 },
 ]
 
-const update = db.prepare('UPDATE apartments SET size = :size WHERE id = :id')
+// Avval DB dagi qiymatlarni ko'rsatamiz
+console.log('\n--- HOZIRGI QIYMATLAR ---')
+const check = db.prepare('SELECT id, size FROM apartments WHERE id = ?')
+for (const { id } of CORRECTIONS) {
+  const row = check.get(id)
+  if (row) {
+    console.log(`${id}: ${row.size}`)
+  } else {
+    console.log(`${id}: TOPILMADI`)
+  }
+}
+
+// Yangilash
+console.log('\n--- YANGILASH ---')
+const update = db.prepare('UPDATE apartments SET size = ? WHERE id = ?')
 
 let updated = 0
 let notFound = 0
@@ -54,12 +78,12 @@ let notFound = 0
 db.exec('BEGIN')
 try {
   for (const { id, size } of CORRECTIONS) {
-    const result = update.run({ id, size })
+    const result = update.run(size, id)
     if (result.changes > 0) {
-      console.log(`✓ ${id}: size = ${size}`)
+      console.log(`OK  ${id}: ${size}`)
       updated++
     } else {
-      console.log(`⚠ ${id}: topilmadi (skip)`)
+      console.log(`--- ${id}: topilmadi`)
       notFound++
     }
   }
