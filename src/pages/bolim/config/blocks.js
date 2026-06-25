@@ -2951,6 +2951,17 @@ export default {
         { address: 'D-3-009-C', size: 9, status: 'EMPTY' },
         { address: 'D-3-009-D', size: 9, status: 'EMPTY' },
       ],
+      // Bolim 19: D-6-007..010 (A va B tomonlari) — 1000×324 rasta
+      19: [
+        { address: 'D-6-007-A', size: 36, status: 'EMPTY' },
+        { address: 'D-6-007-B', size: 36, status: 'EMPTY' },
+        { address: 'D-6-008-A', size: 36, status: 'EMPTY' },
+        { address: 'D-6-008-B', size: 36, status: 'EMPTY' },
+        { address: 'D-6-009-A', size: 36, status: 'EMPTY' },
+        { address: 'D-6-009-B', size: 36, status: 'EMPTY' },
+        { address: 'D-6-010-A', size: 36, status: 'EMPTY' },
+        { address: 'D-6-010-B', size: 36, status: 'EMPTY' },
+      ],
     },
   },
 }

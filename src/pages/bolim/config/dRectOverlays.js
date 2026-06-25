@@ -168,9 +168,24 @@ export const D_RECT_OVERLAYS = {
     ],
   },
 
-  // ─── Rastalar (6-18) ───────────────────────────────────────────────────────
+  // ─── Rastalar (6-19) ───────────────────────────────────────────────────────
   // ID format: "{NNN}{S}" → aptByAddress kalit (masalan "007A", "001D")
   // viewBox = rasm pixel o'lchamlari
+
+  // 19-bolim (1000×324) — D-6-007..010 (A va B tomonlari)
+  19: {
+    viewBox: "0 0 1000 324",
+    rects: [
+      { id: "007A", x: 914, y: 11, width: 78, height: 306 },
+      { id: "007B", x: 838, y: 11, width: 74, height: 306 },
+      { id: "008A", x: 638, y: 11, width: 76, height: 306 },
+      { id: "008B", x: 562, y: 11, width: 74, height: 306 },
+      { id: "009A", x: 360, y: 11, width: 78, height: 306 },
+      { id: "009B", x: 284, y: 11, width: 74, height: 306 },
+      { id: "010A", x: 82,  y: 11, width: 78, height: 306 },
+      { id: "010B", x: 9,   y: 9,  width: 72, height: 308 },
+    ],
+  },
 
   // 6-bolim (452×1236) — D-6 rasta seksiya 1, 6 do'kon (001–006, A/B)
   6: {
