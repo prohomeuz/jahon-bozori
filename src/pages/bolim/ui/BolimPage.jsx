@@ -157,6 +157,28 @@ function PanZoomPane({ src, alt, overlay, aptByAddress, onSelect, ready, wcZone,
                       apt && onSelect?.(apt)
                     },
                   }
+                  // Katta rasta stall rects uchun raqam labeli (D-6 tipidagi 452x1236)
+                  if (!r.d && !isRastaRect && r.height > 100) {
+                    const cx = r.x + r.width / 2
+                    const cy = r.y + r.height / 2
+                    const fs = Math.min(r.width * 0.48, 38)
+                    return (
+                      <g key={r.id}>
+                        <rect {...sharedProps} x={r.x} y={r.y} width={r.width} height={r.height} />
+                        <text
+                          x={cx} y={cy}
+                          transform={`rotate(-90,${cx},${cy})`}
+                          textAnchor="middle" dominantBaseline="middle"
+                          fontSize={fs}
+                          fill="rgba(255,255,255,0.92)"
+                          fontWeight="bold"
+                          style={{ pointerEvents: 'none', userSelect: 'none' }}
+                        >
+                          {r.id}
+                        </text>
+                      </g>
+                    )
+                  }
                   return r.d
                     ? <path key={r.id} {...sharedProps} d={r.d} />
                     : <rect key={r.id} {...sharedProps} x={r.x} y={r.y} width={r.width} height={r.height} />
